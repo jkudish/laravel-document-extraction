@@ -288,3 +288,33 @@ it('reports failed snapshot cleanup and permits retry after the filesystem is re
         @rmdir($directory);
     }
 });
+
+it('reports cleanup failure when source capture fails before returning a snapshot', function (): void {
+    $before = glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [];
+    $directory = null;
+    $filesystems = $this->createMock(FilesystemFactory::class);
+    $filesystems->expects($this->once())->method('disk')->willReturnCallback(
+        function () use ($before, &$directory): never {
+            $created = array_values(array_diff(glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [], $before));
+            expect($created)->toHaveCount(1);
+            $directory = $created[0];
+            file_put_contents($directory.'/remaining-derivative', 'private derivative');
+
+            throw new RuntimeException('Simulated storage failure.');
+        },
+    );
+
+    try {
+        expect(fn () => SourceSnapshot::capture(SourceInput::storage('source', null), $filesystems, 100, 100))
+            ->toThrow(ExtractionException::class, 'cleanup');
+        assert(is_string($directory));
+        expect(is_file($directory.'/source'))->toBeFalse()
+            ->and(is_file($directory.'/remaining-derivative'))->toBeTrue();
+    } finally {
+        if (is_string($directory)) {
+            @unlink($directory.'/remaining-derivative');
+            @unlink($directory.'/source');
+            @rmdir($directory);
+        }
+    }
+});

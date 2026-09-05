@@ -115,8 +115,7 @@ final class SourceSnapshot
                 fclose($input);
             }
 
-            @unlink($path);
-            @rmdir($directory);
+            self::removeSnapshot($path);
 
             throw $exception;
         }
@@ -133,13 +132,7 @@ final class SourceSnapshot
             return;
         }
 
-        @unlink($this->path);
-        $directory = dirname($this->path);
-
-        if (! @rmdir($directory) && is_dir($directory)) {
-            throw SourceException::make('cleanup_failed', 'Private source snapshot cleanup could not be completed.');
-        }
-
+        self::removeSnapshot($this->path);
         $this->cleaned = true;
     }
 
@@ -149,6 +142,16 @@ final class SourceSnapshot
             $this->cleanup();
         } catch (SourceException) {
             // Explicit cleanup reports failure; destruction can only retry best-effort.
+        }
+    }
+
+    private static function removeSnapshot(string $path): void
+    {
+        @unlink($path);
+        $directory = dirname($path);
+
+        if (! @rmdir($directory) && is_dir($directory)) {
+            throw SourceException::make('cleanup_failed', 'Private source snapshot cleanup could not be completed.');
         }
     }
 
