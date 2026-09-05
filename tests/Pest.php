@@ -9,6 +9,7 @@ use Symfony\Component\Process\Process;
 pest()->extend(TestCase::class)->in('Feature');
 
 pest()->tia()
+    ->defaultBranch('main')
     ->directory('.pest/tia/'.nativeRuntimeFingerprint())
     ->watch([
         'composer.json' => 'tests',
