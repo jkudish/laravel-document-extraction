@@ -35,7 +35,9 @@ if ! git -C "$sandbox" show-ref --verify --quiet refs/heads/main; then
     git -C "$sandbox" branch main origin/main
 fi
 git -C "$sandbox" checkout --quiet -b "tia-proof-$$" "$(git -C "$root" rev-parse HEAD)"
-ln -s "$root/vendor" "$sandbox/vendor"
+# A symlink retains Composer's caller-root autoload paths, so copy-on-write the
+# installed tree to make Pest resolve the disposable checkout as its project.
+cp -a --reflink=auto "$root/vendor" "$sandbox/vendor"
 
 all_markers=$'config\nfixture\nimage\nnetwork\nprompt\nruntime\nschema'
 
