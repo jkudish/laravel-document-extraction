@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+php_bin="${PHP_BINARY:-php}"
+
+if [[ -n "$(git -C "$root" status --short)" ]]; then
+    echo "TIA proof requires a clean committed worktree." >&2
+    exit 1
+fi
+
+source_branch="$(git -C "$root" symbolic-ref --quiet --short HEAD || true)"
+
+if [[ -z "$source_branch" ]]; then
+    echo "TIA proof requires a named source branch, not detached HEAD." >&2
+    exit 1
+fi
+
+work="$(mktemp -d)"
+sandbox="$work/repository"
+proof_home="$work/home"
+log="$work/executed-tests.log"
+output="$work/pest-output.log"
+mkdir "$proof_home"
+
+cleanup() {
+    rm -rf "$work"
+}
+
+trap cleanup EXIT
+
+git clone --quiet --no-local --no-checkout "$root" "$sandbox"
+if ! git -C "$sandbox" show-ref --verify --quiet refs/heads/main; then
+    git -C "$sandbox" branch main origin/main
+fi
+git -C "$sandbox" checkout --quiet -b "tia-proof-$$" "$(git -C "$root" rev-parse HEAD)"
+# A symlink retains Composer's caller-root autoload paths, so copy-on-write the
+# installed tree to make Pest resolve the disposable checkout as its project.
+cp -a --reflink=auto "$root/vendor" "$sandbox/vendor"
+
+all_markers=$'config\nfixture\nimage\nnetwork\nprompt\nruntime\nschema'
+
+run_fresh() {
+    : >"$log"
+    (
+        cd "$sandbox"
+        env -i HOME="$proof_home" PATH=/usr/local/bin:/usr/bin:/bin APP_ENV=testing CI=1 \
+            TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" vendor/bin/pest --tia --fresh --colors=never >"$output"
+    )
+}
+
+run_tia() {
+    : >"$log"
+    (
+        cd "$sandbox"
+        env -i HOME="$proof_home" PATH=/usr/local/bin:/usr/bin:/bin APP_ENV=testing CI=1 \
+            TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" vendor/bin/pest --tia --colors=never >"$output"
+    )
+}
+
+assert_markers() {
+    local expected="$1"
+    local actual
+    actual="$(sort -u "$log")"
+
+    if [[ "$actual" != "$expected" ]]; then
+        cat "$output" >&2
+        printf 'Expected executed tests:\n%s\nActual executed tests:\n%s\n' "$expected" "$actual" >&2
+        exit 1
+    fi
+}
+
+run_fresh
+assert_markers "$all_markers"
+run_tia
+assert_markers ""
+echo "TIA replay proof passed: unchanged tests were replayed without execution."
+
+run_fresh
+sed -i "s/'timeout' => 120,/'timeout' => 60 + 60,/" "$sandbox/config/extraction.php"
+run_tia
+assert_markers $'config\nimage\nnetwork'
+git -C "$sandbox" restore -- config/extraction.php
+echo "TIA config invalidation proof passed."
+
+run_fresh
+printf '\n' >>"$sandbox/tests/Fixtures/source.txt"
+run_tia
+assert_markers "$all_markers"
+git -C "$sandbox" restore -- tests/Fixtures/source.txt
+echo "TIA fixture invalidation proof passed."
+
+run_fresh
+printf '\n' >>"$sandbox/resources/prompts/extraction.txt"
+run_tia
+assert_markers 'prompt'
+git -C "$sandbox" restore -- resources/prompts/extraction.txt
+echo "TIA prompt invalidation proof passed."
+
+run_fresh
+printf '\n' >>"$sandbox/resources/schemas/document.json"
+run_tia
+assert_markers 'schema'
+git -C "$sandbox" restore -- resources/schemas/document.json
+echo "TIA schema invalidation proof passed."
+
+run_fresh
+printf '\n' >>"$sandbox/composer.lock"
+run_tia
+assert_markers "$all_markers"
+git -C "$sandbox" restore -- composer.lock
+echo "TIA lock fingerprint invalidation proof passed."
+
+run_fresh
+: >"$log"
+(
+    cd "$sandbox"
+    env -i HOME="$proof_home" PATH=/usr/local/bin:/usr/bin:/bin APP_ENV=testing CI=1 \
+        TIA_PROOF_LOG="$log" LDE_TIA_RUNTIME_SALT="native-drift-proof-$(date +%s%N)-$$" PAO_DISABLE=1 \
+        "$php_bin" vendor/bin/pest --tia --colors=never >"$output"
+)
+assert_markers "$all_markers"
+echo "TIA native-runtime partition proof passed."

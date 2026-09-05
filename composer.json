@@ -1,0 +1,86 @@
+{
+    "name": "jkudish/laravel-document-extraction",
+    "description": "Laravel-native document text and schema extraction with provenance and AI cost tracking.",
+    "keywords": [
+        "document extraction",
+        "laravel",
+        "ocr"
+    ],
+    "license": "MIT",
+    "type": "library",
+    "require": {
+        "php": "^8.4",
+        "ext-fileinfo": "*",
+        "ext-imagick": "*",
+        "illuminate/image": "^13.23",
+        "illuminate/json-schema": "^13.23",
+        "illuminate/process": "^13.23",
+        "illuminate/support": "^13.23",
+        "intervention/image": "^4.3",
+        "jkudish/laravel-ai-pricing": "^0.1.0",
+        "laravel/ai": "^0.11.2",
+        "opis/json-schema": "^2.6",
+        "spatie/pdf-to-text": "^1.55"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.11",
+        "laravel/pao": "^1.1",
+        "laravel/pint": "^1.30",
+        "orchestra/testbench": "^11.2",
+        "pestphp/pest": "^5.1",
+        "pestphp/pest-plugin-laravel": "^5.0",
+        "pestphp/pest-plugin-phpstan": "^5.2",
+        "phpstan/phpstan": "^2.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Jkudish\\DocumentExtraction\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Jkudish\\DocumentExtraction\\Dev\\": "scripts/",
+            "Jkudish\\DocumentExtraction\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "analyse": "@php scripts/pr-workflow analyse",
+        "format": "@php vendor/bin/pint",
+        "format:test": "@php vendor/bin/pint --test",
+        "pr:check": "@php scripts/pr-workflow check",
+        "pr:signoff": "@php scripts/pr-workflow signoff",
+        "test": "@php vendor/bin/pest --no-tia",
+        "test:safeguards": "@php vendor/bin/pest tests/Unit/PrWorkflowTest.php tests/Unit/FoundationProofSafetyTest.php --no-tia",
+        "test:tia": "@php vendor/bin/pest --tia",
+        "test:tia:fresh": "@php vendor/bin/pest --tia --fresh",
+        "test:pao:proof": "bash scripts/prove-pao",
+        "test:tia:proof": "bash scripts/prove-tia",
+        "verify": [
+            "@composer validate --strict",
+            "@composer check-platform-reqs",
+            "@composer audit --locked",
+            "@format:test",
+            "@analyse",
+            "@test"
+        ],
+        "test:matrix": "bash scripts/test-matrix"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "sort-packages": true
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Jkudish\\DocumentExtraction\\DocumentExtractionServiceProvider"
+            ],
+            "aliases": {
+                "Extraction": "Jkudish\\DocumentExtraction\\Facades\\Extraction"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
