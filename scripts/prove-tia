@@ -60,7 +60,7 @@ echo "TIA config invalidation proof passed."
 run_fresh
 printf '\n' >>"$root/tests/Fixtures/source.txt"
 run_tia
-assert_markers 'fixture'
+assert_markers "$all_markers"
 git -C "$root" restore -- tests/Fixtures/source.txt
 echo "TIA fixture invalidation proof passed."
 
