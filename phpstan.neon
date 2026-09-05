@@ -6,5 +6,5 @@ parameters:
     level: 10
     paths:
         - src
+        - scripts/PrWorkflow
         - tests
-    tmpDir: .phpstan

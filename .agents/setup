@@ -6,6 +6,14 @@ export DEBIAN_FRONTEND=noninteractive
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sudo_cmd=()
+download_directory="$(mktemp -d)"
+chmod 700 "$download_directory"
+
+cleanup() {
+    rm -rf "$download_directory"
+}
+
+trap cleanup EXIT
 
 cd "$root"
 
@@ -27,9 +35,8 @@ if [[ ! -f /usr/share/keyrings/debsuryorg-archive-keyring.gpg ]]; then
     "${sudo_cmd[@]}" apt-get install -y ca-certificates curl lsb-release
     curl --fail --silent --show-error --location \
         https://packages.sury.org/debsuryorg-archive-keyring.deb \
-        --output /tmp/debsuryorg-archive-keyring.deb
-    "${sudo_cmd[@]}" dpkg -i /tmp/debsuryorg-archive-keyring.deb
-    rm -f /tmp/debsuryorg-archive-keyring.deb
+        --output "$download_directory/debsuryorg-archive-keyring.deb"
+    "${sudo_cmd[@]}" dpkg -i "$download_directory/debsuryorg-archive-keyring.deb"
 fi
 
 source_line="deb [signed-by=/usr/share/keyrings/debsuryorg-archive-keyring.gpg] https://packages.sury.org/php/ bookworm main"
@@ -57,17 +64,15 @@ fi
 if ! command -v composer >/dev/null 2>&1; then
     echo "Installing Composer with its published SHA-384 signature..."
     expected_signature="$(curl --fail --silent --show-error https://composer.github.io/installer.sig)"
-    curl --fail --silent --show-error https://getcomposer.org/installer --output /tmp/composer-setup.php
-    actual_signature="$(php8.5 -r "echo hash_file('sha384', '/tmp/composer-setup.php');")"
+    curl --fail --silent --show-error https://getcomposer.org/installer --output "$download_directory/composer-setup.php"
+    actual_signature="$(php8.5 -r 'echo hash_file("sha384", $argv[1]);' "$download_directory/composer-setup.php")"
 
     if [[ "$expected_signature" != "$actual_signature" ]]; then
-        rm -f /tmp/composer-setup.php
         echo "Composer installer signature mismatch." >&2
         exit 1
     fi
 
-    "${sudo_cmd[@]}" php8.5 /tmp/composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
-    rm -f /tmp/composer-setup.php
+    "${sudo_cmd[@]}" php8.5 "$download_directory/composer-setup.php" --quiet --install-dir=/usr/local/bin --filename=composer
 fi
 
 echo "Installing locked Composer dependencies..."

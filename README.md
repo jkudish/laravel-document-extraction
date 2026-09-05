@@ -27,7 +27,16 @@ Imagick, PCOV, Poppler, and signature-verified Composer before installing the lo
 
 The setup script uses the signed Sury PHP repository and is idempotent. See
 [`docs/verification.md`](docs/verification.md) for full, TIA, PAO, and four-cell compatibility
-verification commands.
+verification commands, plus the local exact-SHA PR receipt and signoff protocol.
+
+## Pull request verification
+
+`composer pr:check` runs the complete uncached package plan without GitHub/provider credentials and
+publishes a private exact-SHA receipt only after the candidate remains clean and stable. A separate
+`composer pr:signoff -- --approved-sha FULL_SHA` command requires explicit approval, a matching open
+PR, and a dedicated status-only GitHub token before an unforced signoff and exact-SHA readback. This
+local self-attestation is intentionally not hosted CI, cryptographic signing, merge authority, or a
+release action. See [`docs/verification.md`](docs/verification.md#exact-sha-pull-request-workflow).
 
 ## Configuration
 

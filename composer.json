@@ -39,20 +39,25 @@
     },
     "autoload-dev": {
         "psr-4": {
+            "Jkudish\\DocumentExtraction\\Dev\\": "scripts/",
             "Jkudish\\DocumentExtraction\\Tests\\": "tests/"
         }
     },
     "scripts": {
-        "analyse": "@php vendor/bin/phpstan analyse --memory-limit=1G",
+        "analyse": "@php scripts/pr-workflow analyse",
         "format": "@php vendor/bin/pint",
         "format:test": "@php vendor/bin/pint --test",
+        "pr:check": "@php scripts/pr-workflow check",
+        "pr:signoff": "@php scripts/pr-workflow signoff",
         "test": "@php vendor/bin/pest --no-tia",
+        "test:safeguards": "@php vendor/bin/pest tests/Unit/PrWorkflowTest.php tests/Unit/FoundationProofSafetyTest.php --no-tia",
         "test:tia": "@php vendor/bin/pest --tia",
         "test:tia:fresh": "@php vendor/bin/pest --tia --fresh",
         "test:pao:proof": "bash scripts/prove-pao",
         "test:tia:proof": "bash scripts/prove-tia",
         "verify": [
             "@composer validate --strict",
+            "@composer check-platform-reqs",
             "@composer audit --locked",
             "@format:test",
             "@analyse",

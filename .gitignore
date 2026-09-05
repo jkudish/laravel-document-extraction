@@ -1,6 +1,6 @@
 /vendor/
+/.env*
 /.pest/
-/.phpstan/
 /.phpunit.cache/
 /.phpunit.result.cache
 /.amp/portals/*

@@ -10,27 +10,41 @@ if [[ -n "$(git -C "$root" status --short)" ]]; then
     exit 1
 fi
 
-log="$(mktemp)"
-output="$(mktemp)"
+source_branch="$(git -C "$root" symbolic-ref --quiet --short HEAD || true)"
+
+if [[ -z "$source_branch" ]]; then
+    echo "TIA proof requires a named source branch, not detached HEAD." >&2
+    exit 1
+fi
+
+work="$(mktemp -d)"
+sandbox="$work/repository"
+log="$work/executed-tests.log"
+output="$work/pest-output.log"
 
 cleanup() {
-    git -C "$root" restore -- composer.lock config/extraction.php resources/prompts/extraction.txt \
-        resources/schemas/document.json tests/Fixtures/source.txt 2>/dev/null || true
-    rm -f "$log" "$output"
+    rm -rf "$work"
 }
 
 trap cleanup EXIT
+
+git clone --quiet --no-local --no-checkout "$root" "$sandbox"
+if ! git -C "$sandbox" show-ref --verify --quiet refs/heads/main; then
+    git -C "$sandbox" branch main origin/main
+fi
+git -C "$sandbox" checkout --quiet -b "tia-proof-$$" "$(git -C "$root" rev-parse HEAD)"
+ln -s "$root/vendor" "$sandbox/vendor"
 
 all_markers=$'config\nfixture\nimage\nnetwork\nprompt\nruntime\nschema'
 
 run_fresh() {
     : >"$log"
-    TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" "$root/vendor/bin/pest" --tia --fresh --colors=never >"$output"
+    TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" "$sandbox/vendor/bin/pest" --tia --fresh --colors=never >"$output"
 }
 
 run_tia() {
     : >"$log"
-    TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" "$root/vendor/bin/pest" --tia --colors=never >"$output"
+    TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" "$sandbox/vendor/bin/pest" --tia --colors=never >"$output"
 }
 
 assert_markers() {
@@ -52,43 +66,43 @@ assert_markers ""
 echo "TIA replay proof passed: unchanged tests were replayed without execution."
 
 run_fresh
-sed -i "s/'timeout' => 120,/'timeout' => 60 + 60,/" "$root/config/extraction.php"
+sed -i "s/'timeout' => 120,/'timeout' => 60 + 60,/" "$sandbox/config/extraction.php"
 run_tia
 assert_markers $'config\nimage\nnetwork'
-git -C "$root" restore -- config/extraction.php
+git -C "$sandbox" restore -- config/extraction.php
 echo "TIA config invalidation proof passed."
 
 run_fresh
-printf '\n' >>"$root/tests/Fixtures/source.txt"
+printf '\n' >>"$sandbox/tests/Fixtures/source.txt"
 run_tia
 assert_markers "$all_markers"
-git -C "$root" restore -- tests/Fixtures/source.txt
+git -C "$sandbox" restore -- tests/Fixtures/source.txt
 echo "TIA fixture invalidation proof passed."
 
 run_fresh
-printf '\n' >>"$root/resources/prompts/extraction.txt"
+printf '\n' >>"$sandbox/resources/prompts/extraction.txt"
 run_tia
 assert_markers 'prompt'
-git -C "$root" restore -- resources/prompts/extraction.txt
+git -C "$sandbox" restore -- resources/prompts/extraction.txt
 echo "TIA prompt invalidation proof passed."
 
 run_fresh
-printf '\n' >>"$root/resources/schemas/document.json"
+printf '\n' >>"$sandbox/resources/schemas/document.json"
 run_tia
 assert_markers 'schema'
-git -C "$root" restore -- resources/schemas/document.json
+git -C "$sandbox" restore -- resources/schemas/document.json
 echo "TIA schema invalidation proof passed."
 
 run_fresh
-printf '\n' >>"$root/composer.lock"
+printf '\n' >>"$sandbox/composer.lock"
 run_tia
 assert_markers "$all_markers"
-git -C "$root" restore -- composer.lock
+git -C "$sandbox" restore -- composer.lock
 echo "TIA lock fingerprint invalidation proof passed."
 
 run_fresh
 : >"$log"
 TIA_PROOF_LOG="$log" LDE_TIA_RUNTIME_SALT="native-drift-proof-$(date +%s%N)-$$" PAO_DISABLE=1 \
-    "$php_bin" "$root/vendor/bin/pest" --tia --colors=never >"$output"
+    "$php_bin" "$sandbox/vendor/bin/pest" --tia --colors=never >"$output"
 assert_markers "$all_markers"
 echo "TIA native-runtime partition proof passed."

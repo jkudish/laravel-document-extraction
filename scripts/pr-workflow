@@ -1,0 +1,63 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Jkudish\DocumentExtraction\Dev\PrWorkflow\NativeCommandRunner;
+use Jkudish\DocumentExtraction\Dev\PrWorkflow\Workflow;
+use Jkudish\DocumentExtraction\Dev\PrWorkflow\WorkflowException;
+
+$root = dirname(__DIR__);
+require $root.'/vendor/autoload.php';
+
+$arguments = array_values(array_filter(
+    array_slice($argv, 1),
+    static fn (string $argument): bool => $argument !== '--',
+));
+$operation = array_shift($arguments);
+$options = [];
+
+while ($arguments !== []) {
+    $name = array_shift($arguments);
+    $value = array_shift($arguments);
+
+    if (! is_string($name) || ! str_starts_with($name, '--') || ! is_string($value)) {
+        fwrite(STDERR, "Every workflow option requires a value.\n");
+        exit(2);
+    }
+
+    $options[substr($name, 2)] = $value;
+}
+
+$workflow = new Workflow($root, new NativeCommandRunner($root));
+
+try {
+    if ($operation === 'analyse') {
+        $workflow->analyse();
+        exit(0);
+    }
+
+    if ($operation === 'check') {
+        $result = $workflow->check($options['base'] ?? 'main');
+        fwrite(STDOUT, "Verified exact SHA: {$result['sha']}\nPrivate receipt: {$result['receiptPath']}\n");
+        exit(0);
+    }
+
+    if ($operation === 'signoff') {
+        $approvedSha = $options['approved-sha'] ?? null;
+
+        if (! is_string($approvedSha)) {
+            throw new WorkflowException('pr:signoff requires --approved-sha with a full SHA.');
+        }
+
+        $sha = $workflow->signoff($approvedSha);
+        fwrite(STDOUT, "Signed off and read back exact SHA: {$sha}\n");
+        exit(0);
+    }
+
+    fwrite(STDERR, "Usage: scripts/pr-workflow analyse | check [--base BRANCH] | signoff --approved-sha FULL_SHA\n");
+    exit(2);
+} catch (WorkflowException $exception) {
+    fwrite(STDERR, 'PR workflow refused: '.$exception->getMessage()."\n");
+    exit(1);
+}

@@ -8,13 +8,15 @@ composer validate --strict
 composer check-platform-reqs
 composer audit --locked
 vendor/bin/pint --test
-vendor/bin/phpstan analyse
+composer analyse
 vendor/bin/pest --no-tia
 ```
 
-`composer verify` runs the same code-quality gates except `check-platform-reqs`, which should be
-run separately for the intended production installation. No command makes model calls or requires
-provider credentials.
+`composer verify` runs the same single-environment gates, including `check-platform-reqs`. No
+command makes model calls or requires provider credentials. `composer analyse` launches Larastan
+through a disposable allowlisted environment; use that route rather than invoking PHPStan directly
+from a credential-bearing shell. PHPStan cache is confined to that temporary environment and
+removed afterward, not written under the repository.
 
 ## Development acceleration
 
@@ -30,10 +32,13 @@ TIA state is ignored under `.pest/`. Pest watches package configuration, fixture
 prompts, and Composer inputs. The TIA directory is additionally partitioned by PHP, Imagick codec,
 and Poppler runtime fingerprints so native runtime drift cannot replay another environment's
 results. Run `composer test:tia:proof` to exercise baseline, replay, watched-input invalidation,
-lock invalidation, and simulated native drift.
+lock invalidation, and simulated native drift. The proof refuses detached HEAD and runs destructive
+invalidation mutations on a named branch in a disposable local clone, never in the caller worktree.
 
 PAO only optimizes test output for recognized agents. `composer test:pao:proof` forces PAO for one
-passing run and one temporary intentional failure, and proves that the failure remains non-zero.
+passing run and one temporary intentional failure, and proves that the failure remains non-zero. Its
+generated failure file lives under private ignored `.pest/proofs`, outside normal test discovery;
+cleanup owns only the unique file it created.
 
 ## Compatibility matrix
 
@@ -64,5 +69,85 @@ the required facade, manager, service provider, Intervention Image 4 Imagick dri
 `illuminate/json-schema` version required by Laravel AI v0.11.2.
 
 Exact-SHA verification receipts and `composer pr:check` / `composer pr:signoff` are intentionally
-reserved for PlanMode task #3441. The `composer verify` command is the package-quality extension
-point that those safeguards can invoke; this foundation does not claim signoff or release proof.
+implemented as package-only PHP tooling; they add no Node, application, database, frontend, hosted
+CI, deployment, or release machinery.
+
+## Exact-SHA pull request workflow
+
+The invariant is: **current clean HEAD + successful receipt for that SHA and ordered plan + explicit
+approval of that full SHA + open PR whose head and base match the receipt**. A new commit, changed
+plan, changed Composer lock, changed native/PHP runtime, advanced remote base, dirty file, missing
+matrix cell, or altered receipt fails closed.
+
+### Verify a committed candidate
+
+Fetch the intended PR base, commit all candidate changes, then run:
+
+```sh
+git fetch origin main
+composer pr:check
+```
+
+For a stacked PR, name its actual base:
+
+```sh
+git fetch origin work/3435-foundation
+composer pr:check -- --base work/3435-foundation
+```
+
+`pr:check` compares the exact local `origin/<base>` SHA with `git ls-remote`, captures clean `HEAD`,
+and runs this ordered plan in a disposable private home with ambient GitHub tokens and model/provider
+secrets omitted:
+
+1. Composer install, strict validation, full platform checks, and locked audit.
+2. Pint `--test` and Larastan level 10 across `src`, PR tooling, and tests.
+3. The full native Pest suite with `--no-tia`.
+4. TIA invalidation and PAO failure-preservation proofs.
+5. PHP 8.4/8.5 × Laravel 13.23.0/current compatibility matrix with machine evidence.
+6. Dedicated offline safeguard tests and shell syntax checks.
+
+Only after a second clean-tree and unchanged-HEAD check does it atomically publish JSON under Git
+administrative storage:
+
+```text
+$(git rev-parse --git-path laravel-document-extraction/pr-check/<sha>.json)
+```
+
+The directory is private and the receipt is mode `0600`. The receipt binds repository/origin,
+candidate and fetched-base SHAs, ordered-plan hash/policy, Composer lock/package hashes, actual PHP,
+Composer, Imagick/ImageMagick, PCOV and Poppler versions, and every completed matrix cell. Receipts
+are local to one checkout/orb and must not be copied to attest another candidate or environment.
+An offline synthetic-canary regression exercises the supported PHPStan child process and rejects any
+credential canary in command output, the receipt, or the generated disposable analysis cache.
+
+### Sign off an explicitly approved SHA
+
+Install `basecamp/gh-signoff` and supply a dedicated `GH_SIGNOFF_TOKEN`. For a fine-grained token,
+the narrow repository permissions are **Commit statuses: read/write**, **Pull requests: read**, and
+mandatory metadata read; no Contents write or Administration permission is required. Do not replace
+this token with ambient `GH_TOKEN`.
+
+After a human or already-authorized delivery gate identifies the exact verified full SHA:
+
+```sh
+GH_SIGNOFF_TOKEN=... composer pr:signoff -- --approved-sha <40-lowercase-hex-sha>
+```
+
+The command revalidates the clean exact HEAD, private receipt, current plan/lock/runtime, and fresh
+remote base; uses only the dedicated token as `GH_TOKEN` for `gh`; requires the extension and an open
+PR with matching head/base; rechecks HEAD immediately before `gh signoff --commit <sha>`; never
+forces; then queries `repos/<owner>/<repo>/commits/<sha>/status` and requires the `signoff` context to
+be successful for that exact SHA.
+
+`GH_SIGNOFF_TOKEN` is intentionally not installed by `.agents/setup`. Without it, signoff refuses
+before any GitHub status mutation. Verification and receipt creation remain fully usable offline
+apart from dependency downloads and remote-base freshness.
+
+### Trust boundary
+
+This follows Agentsy's trusted-token self-attestation pattern. The receipt's strict schema and
+evidence hash catch accidental/partial alteration, but a local actor able to rewrite a receipt can
+also recompute its unkeyed hash. It is not hostile tamper-proof evidence, a cryptographic signature,
+independent CI, branch protection, merge authorization, publication, or release approval. Failed
+status readback after `gh signoff` means the remote mutation may already have occurred and must be
+investigated; the tool does not pretend it can roll back an append-only GitHub commit status.
