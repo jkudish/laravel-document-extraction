@@ -13,10 +13,10 @@ pest()->tia()
     ->directory('.pest/tia/'.nativeRuntimeFingerprint())
     ->watch([
         'composer.json' => 'tests',
-        'config/**/*.php' => 'tests/Feature/ServiceProviderTest.php',
-        'resources/prompts/**/*' => 'tests/Unit/PromptTest.php',
-        'resources/schemas/**/*' => 'tests/Unit/SchemaFileTest.php',
-        'tests/Fixtures/**/*' => 'tests/Unit/FixtureTest.php',
+        'config/*.php' => 'tests/Feature/ServiceProviderTest.php',
+        'resources/prompts/*' => 'tests/Unit/PromptTest.php',
+        'resources/schemas/*' => 'tests/Unit/SchemaFileTest.php',
+        'tests/Fixtures/*' => 'tests/Unit/FixtureTest.php',
     ]);
 
 function recordTiaExecution(string $test): void
