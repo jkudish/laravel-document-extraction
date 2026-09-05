@@ -41,6 +41,10 @@ final class FakeCommandRunner implements CommandRunner
 
     public ?string $failingCommandContains = null;
 
+    public string $failureOutput = 'simulated failure';
+
+    public bool $candidateDescendsFromBase = true;
+
     /** @var list<string> */
     public array $headResponses = [];
 
@@ -55,7 +59,7 @@ final class FakeCommandRunner implements CommandRunner
         $joined = implode(' ', $command);
 
         if ($this->failingCommandContains !== null && str_contains($joined, $this->failingCommandContains)) {
-            return new CommandResult(19, '', 'simulated failure');
+            return new CommandResult(19, '', $this->failureOutput);
         }
 
         if ($command === ['git', 'rev-parse', '--verify', 'HEAD']) {
@@ -76,6 +80,10 @@ final class FakeCommandRunner implements CommandRunner
 
         if ($command === ['git', 'remote', 'get-url', 'origin']) {
             return new CommandResult(0, $this->origin.PHP_EOL);
+        }
+
+        if ($command === ['git', 'merge-base', '--is-ancestor', $this->remoteBaseSha, 'HEAD']) {
+            return new CommandResult($this->candidateDescendsFromBase ? 0 : 1);
         }
 
         if (count($command) === 4

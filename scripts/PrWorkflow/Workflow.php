@@ -22,6 +22,9 @@ final class Workflow
     /** @var callable(): string */
     private $clock;
 
+    /** @var callable(string, bool): void */
+    private $output;
+
     private readonly VerificationPlan $plan;
 
     private readonly ReceiptStore $receipts;
@@ -29,6 +32,7 @@ final class Workflow
     /**
      * @param  array<string, string>|null  $environment
      * @param  (callable(): string)|null  $clock
+     * @param  (callable(string, bool): void)|null  $output
      */
     public function __construct(
         private readonly string $repositoryRoot,
@@ -36,9 +40,13 @@ final class Workflow
         ?array $environment = null,
         ?callable $clock = null,
         private readonly bool $emitOutput = true,
+        ?callable $output = null,
     ) {
         $this->environment = $environment ?? $this->ambientEnvironment();
         $this->clock = $clock ?? static fn (): string => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
+        $this->output = $output ?? static function (string $contents, bool $stderr): void {
+            fwrite($stderr ? STDERR : STDOUT, $contents);
+        };
         $this->plan = new VerificationPlan($repositoryRoot);
         $this->receipts = new ReceiptStore($repositoryRoot, $runner);
     }
@@ -50,6 +58,7 @@ final class Workflow
     {
         $this->assertBaseName($base);
         $sha = $this->head();
+        $this->receipts->invalidate($sha);
         $this->assertClean();
         $baseEvidence = $this->freshBase($base);
         $repository = $this->repositoryEvidence();
@@ -65,7 +74,7 @@ final class Workflow
                 );
 
                 /** @var non-empty-list<string> $command */
-                $this->runRequired($command, $verificationEnvironment, 'Verification step '.$step['id']);
+                $this->runRequired($command, $verificationEnvironment, 'Verification step '.$step['id'], true);
             }
 
             $matrix = $this->readMatrixEvidence($matrixPath);
@@ -218,6 +227,7 @@ final class Workflow
                 [PHP_BINARY, 'vendor/bin/phpstan', 'analyse', '--memory-limit=1G', '--no-progress'],
                 SafeEnvironment::verification($this->environment, $temporaryHome, $temporaryHome.'/unused-matrix.json'),
                 'Larastan analysis',
+                true,
             );
         } finally {
             $this->removeDirectory($temporaryHome);
@@ -336,6 +346,12 @@ final class Workflow
         if ($local !== $remote) {
             throw new WorkflowException('origin/'.$base.' is stale; fetch the remote base before verification.');
         }
+
+        $this->runRequired(
+            ['git', 'merge-base', '--is-ancestor', $remote, 'HEAD'],
+            null,
+            'Candidate ancestry check',
+        );
 
         return ['name' => $base, 'localRef' => $localRef, 'remoteRef' => $remoteRef, 'sha' => $remote];
     }
@@ -696,17 +712,21 @@ PHP;
      * @param  non-empty-list<string>  $command
      * @param  array<string, string>|null  $environment
      */
-    private function runRequired(array $command, ?array $environment, string $label): CommandResult
-    {
+    private function runRequired(
+        array $command,
+        ?array $environment,
+        string $label,
+        bool $publishOutput = false,
+    ): CommandResult {
         $result = $this->runner->run($command, $environment);
 
-        if ($this->emitOutput) {
+        if ($this->emitOutput && $publishOutput) {
             if ($result->stdout !== '') {
-                fwrite(STDOUT, $result->stdout);
+                ($this->output)($result->stdout, false);
             }
 
             if ($result->stderr !== '') {
-                fwrite(STDERR, $result->stderr);
+                ($this->output)($result->stderr, true);
             }
         }
 

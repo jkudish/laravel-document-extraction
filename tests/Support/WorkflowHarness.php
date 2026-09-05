@@ -12,6 +12,8 @@ final readonly class WorkflowHarness
 
     public Workflow $workflow;
 
+    public FakeOutput $output;
+
     /** @var array<string, string> */
     public array $environment;
 
@@ -19,6 +21,7 @@ final readonly class WorkflowHarness
     {
         $canaries = self::canaries();
         $this->runner = new FakeCommandRunner($temporaryDirectory.'/receipts');
+        $this->output = new FakeOutput;
         $this->environment = [
             'PATH' => (string) getenv('PATH'),
             'HOME' => (string) getenv('HOME'),
@@ -31,7 +34,8 @@ final readonly class WorkflowHarness
             $this->runner,
             $this->environment,
             static fn (): string => '2026-09-05T09:00:00Z',
-            false,
+            true,
+            $this->output,
         );
     }
 

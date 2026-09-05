@@ -105,6 +105,15 @@ final readonly class ReceiptStore
         return $receipt;
     }
 
+    public function invalidate(string $sha): void
+    {
+        $path = $this->path($sha);
+
+        if ((is_file($path) || is_link($path)) && ! unlink($path)) {
+            throw new WorkflowException('Unable to invalidate the previous verification receipt.');
+        }
+    }
+
     public function path(string $sha): string
     {
         $result = $this->runner->run([

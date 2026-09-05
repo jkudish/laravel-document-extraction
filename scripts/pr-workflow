@@ -4,34 +4,19 @@
 declare(strict_types=1);
 
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\NativeCommandRunner;
+use Jkudish\DocumentExtraction\Dev\PrWorkflow\CliArguments;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\Workflow;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\WorkflowException;
 
 $root = dirname(__DIR__);
 require $root.'/vendor/autoload.php';
 
-$arguments = array_values(array_filter(
-    array_slice($argv, 1),
-    static fn (string $argument): bool => $argument !== '--',
-));
-$operation = array_shift($arguments);
-$options = [];
-
-while ($arguments !== []) {
-    $name = array_shift($arguments);
-    $value = array_shift($arguments);
-
-    if (! is_string($name) || ! str_starts_with($name, '--') || ! is_string($value)) {
-        fwrite(STDERR, "Every workflow option requires a value.\n");
-        exit(2);
-    }
-
-    $options[substr($name, 2)] = $value;
-}
-
-$workflow = new Workflow($root, new NativeCommandRunner($root));
-
 try {
+    $command = CliArguments::parse(array_slice($argv, 1));
+    $operation = $command['operation'];
+    $options = $command['options'];
+    $workflow = new Workflow($root, new NativeCommandRunner($root));
+
     if ($operation === 'analyse') {
         $workflow->analyse();
         exit(0);
@@ -44,13 +29,7 @@ try {
     }
 
     if ($operation === 'signoff') {
-        $approvedSha = $options['approved-sha'] ?? null;
-
-        if (! is_string($approvedSha)) {
-            throw new WorkflowException('pr:signoff requires --approved-sha with a full SHA.');
-        }
-
-        $sha = $workflow->signoff($approvedSha);
+        $sha = $workflow->signoff($options['approved-sha']);
         fwrite(STDOUT, "Signed off and read back exact SHA: {$sha}\n");
         exit(0);
     }

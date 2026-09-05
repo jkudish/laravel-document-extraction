@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Jkudish\DocumentExtraction\Dev\PrWorkflow\CliArguments;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\NativeCommandRunner;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\SafeEnvironment;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\WorkflowException;
@@ -148,6 +149,18 @@ it('does not issue a receipt for a stale base', function (): void {
     }
 })->group('pr-workflow');
 
+it('does not issue a receipt when the candidate does not descend from the verified base', function (): void {
+    $harness = workflowHarness();
+    $harness->runner->candidateDescendsFromBase = false;
+
+    try {
+        expect(fn () => $harness->check())->toThrow(WorkflowException::class, 'ancestry check failed')
+            ->and(glob($harness->temporaryDirectory.'/receipts/*.json') ?: [])->toBe([]);
+    } finally {
+        $harness->remove();
+    }
+})->group('pr-workflow');
+
 it('does not issue a receipt after a failed plan step', function (): void {
     $harness = workflowHarness();
     $harness->runner->failingCommandContains = 'vendor/bin/phpstan';
@@ -159,6 +172,41 @@ it('does not issue a receipt after a failed plan step', function (): void {
         $harness->remove();
     }
 })->group('pr-workflow');
+
+it('invalidates an existing same-SHA receipt before a failing recheck', function (): void {
+    $harness = workflowHarness();
+
+    try {
+        $result = $harness->check();
+        expect(is_file($result['receiptPath']))->toBeTrue();
+        $harness->runner->failingCommandContains = 'composer audit';
+
+        expect(fn () => $harness->check())->toThrow(WorkflowException::class, 'composer-audit failed')
+            ->and(is_file($result['receiptPath']))->toBeFalse()
+            ->and(fn () => $harness->workflow->signoff($harness->runner->sha))
+            ->toThrow(WorkflowException::class, 'No private verification receipt')
+            ->and($harness->runner->signoffCalls())->toBe(0);
+    } finally {
+        $harness->remove();
+    }
+})->group('pr-workflow');
+
+it('rejects unknown and duplicate CLI options before workflow execution', function (array $arguments): void {
+    /** @var list<string> $arguments */
+    $harness = workflowHarness();
+
+    try {
+        expect(fn () => CliArguments::parse($arguments))->toThrow(WorkflowException::class)
+            ->and($harness->runner->signoffCalls())->toBe(0);
+    } finally {
+        $harness->remove();
+    }
+})->with([
+    'force option' => [['signoff', '--approved-sha', str_repeat('1', 40), '--force', 'yes']],
+    'duplicate approval' => [['signoff', '--approved-sha', str_repeat('1', 40), '--approved-sha', str_repeat('1', 40)]],
+    'base on signoff' => [['signoff', '--approved-sha', str_repeat('1', 40), '--base', 'main']],
+    'option on analyse' => [['analyse', '--force', 'yes']],
+])->group('pr-workflow');
 
 it('does not issue a receipt when matrix evidence is missing', function (): void {
     $harness = workflowHarness();
@@ -351,10 +399,12 @@ it('fails closed when a pre-mutation GitHub lookup fails', function (): void {
     try {
         $harness->check();
         $harness->runner->failingCommandContains = 'gh pr view';
+        $harness->runner->failureOutput = implode('-', ['synthetic', 'token', 'bound', 'failure']);
 
         expect(fn () => $harness->workflow->signoff($harness->runner->sha))
             ->toThrow(WorkflowException::class, 'pull request check failed')
-            ->and($harness->runner->signoffCalls())->toBe(0);
+            ->and($harness->runner->signoffCalls())->toBe(0)
+            ->and($harness->output->contents)->not->toContain($harness->runner->failureOutput);
     } finally {
         $harness->remove();
     }

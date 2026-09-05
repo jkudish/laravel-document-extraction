@@ -106,10 +106,12 @@ CI, deployment, or release machinery.
 
 ## Exact-SHA pull request workflow
 
-The invariant is: **current clean HEAD + successful receipt for that SHA and ordered plan + explicit
-approval of that full SHA + open PR whose head and base match the receipt**. A new commit, changed
-plan, changed Composer lock, changed native/PHP runtime, advanced remote base, dirty file, missing
-matrix cell, or altered receipt fails closed.
+The invariant is: **current clean HEAD descended from the verified base + successful receipt for that
+SHA and ordered plan + explicit approval of that full SHA + open PR whose head and base match the
+receipt**. A new commit, changed plan, changed Composer lock, changed native/PHP runtime, advanced
+remote base, dirty file, missing matrix cell, or altered receipt fails closed. Starting a new check
+first invalidates any prior receipt for the same SHA, so an interrupted or failed recheck cannot
+leave old success evidence attestable.
 
 ### Verify a committed candidate
 
@@ -127,9 +129,9 @@ git fetch origin work/3435-foundation
 composer pr:check -- --base work/3435-foundation
 ```
 
-`pr:check` compares the exact local `origin/<base>` SHA with `git ls-remote`, captures clean `HEAD`,
-and runs this ordered plan in a disposable private home with ambient GitHub tokens and model/provider
-secrets omitted:
+`pr:check` compares the exact local `origin/<base>` SHA with `git ls-remote`, proves that exact base is
+an ancestor of the candidate, captures clean `HEAD`, and runs this ordered plan in a disposable
+private home with ambient GitHub tokens and model/provider secrets omitted:
 
 1. Composer install, strict validation, full platform checks, and locked audit.
 2. Pint `--test` and Larastan level 10 across `src`, PR tooling, and tests.
@@ -170,6 +172,11 @@ remote base; uses only the dedicated token as `GH_TOKEN` for `gh`; requires the 
 PR with matching head/base; rechecks HEAD immediately before `gh signoff --commit <sha>`; never
 forces; then queries `repos/<owner>/<repo>/commits/<sha>/status` and requires the `signoff` context to
 be successful for that exact SHA.
+
+CLI options are operation-specific. Unknown options—including `--force`—and duplicate options are
+rejected before workflow execution. Output from ambient Git and every dedicated-token GitHub command
+is suppressed; only the allowlisted secret-free verification steps and safe analysis route publish
+their ordinary output.
 
 `GH_SIGNOFF_TOKEN` is intentionally not installed by `.agents/setup`. Without it, signoff refuses
 before any GitHub status mutation. Verification and receipt creation remain fully usable offline
