@@ -6,7 +6,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # PHP must not inherit provider credentials even during readiness checks.
 if [[ "${LDE_RESUME_ISOLATED:-}" != 1 ]]; then
-    exec env -i HOME="$HOME" PATH=/usr/local/bin:/usr/bin:/bin \
+    exec env -i HOME=/nonexistent PATH=/usr/local/bin:/usr/bin:/bin \
         LDE_RESUME_ISOLATED=1 /bin/bash "$0" "$@"
 fi
 

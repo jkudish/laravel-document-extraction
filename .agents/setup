@@ -18,6 +18,10 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sudo_cmd=()
 downloads="$(mktemp -d)"
 trap 'rm -rf -- "$downloads"' EXIT
+# Avoid automatic curl/Git reads of the user's credential-bearing dotfiles.
+mkdir "$downloads/home"
+export HOME="$downloads/home"
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 SECONDS=0
 
 cd "$root"
