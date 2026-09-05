@@ -19,8 +19,10 @@ fi
 
 work="$(mktemp -d)"
 sandbox="$work/repository"
+proof_home="$work/home"
 log="$work/executed-tests.log"
 output="$work/pest-output.log"
+mkdir "$proof_home"
 
 cleanup() {
     rm -rf "$work"
@@ -41,7 +43,8 @@ run_fresh() {
     : >"$log"
     (
         cd "$sandbox"
-        TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" vendor/bin/pest --tia --fresh --colors=never >"$output"
+        env -i HOME="$proof_home" PATH=/usr/local/bin:/usr/bin:/bin APP_ENV=testing CI=1 \
+            TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" vendor/bin/pest --tia --fresh --colors=never >"$output"
     )
 }
 
@@ -49,7 +52,8 @@ run_tia() {
     : >"$log"
     (
         cd "$sandbox"
-        TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" vendor/bin/pest --tia --colors=never >"$output"
+        env -i HOME="$proof_home" PATH=/usr/local/bin:/usr/bin:/bin APP_ENV=testing CI=1 \
+            TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" vendor/bin/pest --tia --colors=never >"$output"
     )
 }
 
@@ -110,7 +114,8 @@ run_fresh
 : >"$log"
 (
     cd "$sandbox"
-    TIA_PROOF_LOG="$log" LDE_TIA_RUNTIME_SALT="native-drift-proof-$(date +%s%N)-$$" PAO_DISABLE=1 \
+    env -i HOME="$proof_home" PATH=/usr/local/bin:/usr/bin:/bin APP_ENV=testing CI=1 \
+        TIA_PROOF_LOG="$log" LDE_TIA_RUNTIME_SALT="native-drift-proof-$(date +%s%N)-$$" PAO_DISABLE=1 \
         "$php_bin" vendor/bin/pest --tia --colors=never >"$output"
 )
 assert_markers "$all_markers"
