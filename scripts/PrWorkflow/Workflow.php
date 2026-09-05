@@ -224,7 +224,7 @@ final class Workflow
 
         try {
             return $this->runRequired(
-                [PHP_BINARY, 'vendor/bin/phpstan', 'analyse', '--memory-limit=1G', '--no-progress'],
+                [PHP_BINARY, 'vendor/bin/phpstan', 'analyse', '--level=10', '--memory-limit=1G', '--no-progress'],
                 SafeEnvironment::verification($this->environment, $temporaryHome, $temporaryHome.'/unused-matrix.json'),
                 'Larastan analysis',
                 true,

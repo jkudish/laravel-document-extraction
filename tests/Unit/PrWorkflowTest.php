@@ -76,6 +76,7 @@ it('writes a private exact-SHA receipt after the complete isolated ordered plan'
 
         expect($steps)->toContain(
             'composer install --no-interaction --prefer-dist --no-progress',
+            PHP_BINARY.' vendor/bin/phpstan analyse --level=10 --memory-limit=1G --no-progress',
             PHP_BINARY.' vendor/bin/pest --no-tia --colors=never',
             'bash scripts/test-matrix',
             PHP_BINARY.' vendor/bin/pest tests/Unit/PrWorkflowTest.php tests/Unit/FoundationProofSafetyTest.php --no-tia --colors=never',
@@ -107,7 +108,7 @@ it('keeps synthetic credentials out of receipts output and generated analysis ca
             $analysisHome.'/matrix.json',
         );
         $analysis = (new NativeCommandRunner(dirname(__DIR__, 2)))->run(
-            [PHP_BINARY, 'vendor/bin/phpstan', 'analyse', '--memory-limit=1G', '--no-progress'],
+            [PHP_BINARY, 'vendor/bin/phpstan', 'analyse', '--level=10', '--memory-limit=1G', '--no-progress'],
             $environment,
         );
         $output = $analysis->stdout.$analysis->stderr;

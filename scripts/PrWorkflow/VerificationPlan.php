@@ -21,7 +21,7 @@ final readonly class VerificationPlan
             ['id' => 'composer-platform', 'command' => ['composer', 'check-platform-reqs']],
             ['id' => 'composer-audit', 'command' => ['composer', 'audit', '--locked', '--no-interaction']],
             ['id' => 'pint', 'command' => ['{php}', 'vendor/bin/pint', '--test']],
-            ['id' => 'larastan', 'command' => ['{php}', 'vendor/bin/phpstan', 'analyse', '--memory-limit=1G', '--no-progress']],
+            ['id' => 'larastan', 'command' => ['{php}', 'vendor/bin/phpstan', 'analyse', '--level=10', '--memory-limit=1G', '--no-progress']],
             ['id' => 'pest-full', 'command' => ['{php}', 'vendor/bin/pest', '--no-tia', '--colors=never']],
             ['id' => 'tia-proof', 'command' => ['bash', 'scripts/prove-tia']],
             ['id' => 'pao-proof', 'command' => ['bash', 'scripts/prove-pao']],

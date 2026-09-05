@@ -59,7 +59,7 @@ for php_version in 8.4 8.5; do
             "$php_bin" "$composer_bin" check-platform-reqs
             "$php_bin" -r 'require "vendor/autoload.php"; printf("PHP=%s Laravel=%s AI=%s Image=bundled-in-framework-%s Testbench=%s Pest=%s\n", PHP_VERSION, Illuminate\Foundation\Application::VERSION, Composer\InstalledVersions::getPrettyVersion("laravel/ai"), Composer\InstalledVersions::getPrettyVersion("laravel/framework"), Composer\InstalledVersions::getPrettyVersion("orchestra/testbench"), Composer\InstalledVersions::getPrettyVersion("pestphp/pest"));'
             PAO_DISABLE=1 "$php_bin" vendor/bin/pest --no-tia --colors=never
-            "$php_bin" vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+            "$php_bin" vendor/bin/phpstan analyse --level=10 --memory-limit=1G --no-progress
             "$php_bin" -r '
                 require "vendor/autoload.php";
                 $version = static fn (string $package): string => (string) Composer\InstalledVersions::getPrettyVersion($package);
