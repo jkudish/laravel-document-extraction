@@ -126,6 +126,58 @@ it('keeps synthetic credentials out of receipts output and generated analysis ca
     }
 })->group('pr-workflow');
 
+it('removes the dedicated token from default children without stripping ambient Git authentication', function (): void {
+    $runner = new NativeCommandRunner(dirname(__DIR__, 2));
+    $dedicatedCanary = 'synthetic-native-dedicated-token';
+    $gitAskpass = '/synthetic/git-askpass';
+    $previousDedicatedToken = getenv('GH_SIGNOFF_TOKEN');
+    $previousGitAskpass = getenv('GIT_ASKPASS');
+
+    try {
+        putenv('GH_SIGNOFF_TOKEN='.$dedicatedCanary);
+        putenv('GIT_ASKPASS='.$gitAskpass);
+
+        $defaultChild = $runner->run([
+            PHP_BINARY,
+            '-r',
+            <<<'PHP'
+exit(getenv('GH_SIGNOFF_TOKEN') === false
+    && getenv('GIT_ASKPASS') === '/synthetic/git-askpass' ? 0 : 42);
+PHP,
+        ]);
+        $githubEnvironment = SafeEnvironment::github(
+            [
+                'PATH' => (string) getenv('PATH'),
+                'HOME' => (string) getenv('HOME'),
+            ],
+            $dedicatedCanary,
+            'jkudish/laravel-document-extraction',
+        );
+        $githubChild = $runner->run([
+            PHP_BINARY,
+            '-r',
+            <<<'PHP'
+exit(getenv('GH_SIGNOFF_TOKEN') === false
+    && getenv('GH_TOKEN') === 'synthetic-native-dedicated-token'
+    && getenv('GH_HOST') === 'github.com'
+    && getenv('GH_REPO') === 'jkudish/laravel-document-extraction' ? 0 : 43);
+PHP,
+        ], $githubEnvironment);
+
+        expect($defaultChild->exitCode)->toBe(0)
+            ->and($defaultChild->output())->toBe('')
+            ->and($githubChild->exitCode)->toBe(0)
+            ->and($githubChild->output())->toBe('');
+    } finally {
+        $previousDedicatedToken === false
+            ? putenv('GH_SIGNOFF_TOKEN')
+            : putenv('GH_SIGNOFF_TOKEN='.$previousDedicatedToken);
+        $previousGitAskpass === false
+            ? putenv('GIT_ASKPASS')
+            : putenv('GIT_ASKPASS='.$previousGitAskpass);
+    }
+})->group('pr-workflow');
+
 it('does not issue a receipt for a dirty tree', function (): void {
     $harness = workflowHarness();
     $harness->runner->status = ' M config/extraction.php'.PHP_EOL;

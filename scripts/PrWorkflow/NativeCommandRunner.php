@@ -12,6 +12,12 @@ final readonly class NativeCommandRunner implements CommandRunner
 
     public function run(array $command, ?array $environment = null): CommandResult
     {
+        if ($environment === null) {
+            $environment = getenv();
+        }
+
+        unset($environment['GH_SIGNOFF_TOKEN']);
+
         $stdoutPath = tempnam(sys_get_temp_dir(), 'lde-pr-stdout-');
         $stderrPath = tempnam(sys_get_temp_dir(), 'lde-pr-stderr-');
 
