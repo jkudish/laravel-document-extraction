@@ -23,13 +23,6 @@ dedicated Composer home/cache at `~/.cache/lde-composer`. No shell activation is
 needed: binaries are installed in standard paths. PHP patch versions follow the
 signed Debian Sury repository; verification records the actual installed versions.
 
-Until the foundation reaches `main`, the Amp project pre-setup bridge caches a pinned
-foundation checkout and its installed dependencies outside the working tree at
-`~/.cache/lde-orb-bootstrap`. It leaves the README-only `main` unchanged. After checking
-out an implementation branch, run `.agents/setup` to materialize its locked dependencies
-from the warm Composer cache. Once `main` contains `.agents/setup`, the bridge is a no-op
-and Amp runs the repository lifecycle normally.
-
 ## Full checks
 
 The package has no hosted CI. Local full verification is authoritative and always disables Test
@@ -92,8 +85,8 @@ The September 5, 2026 verification exercised this resolved matrix:
 | 8.5.10 | 13.23.0 | 0.11.2 | 11.2.0 | 5.1.3 |
 | 8.5.10 | 13.30.1 | 0.11.2 | 11.2.0 | 5.1.3 |
 
-All four cells passed the native Imagick image smoke test, the full 7-test / 32-assertion suite,
-and Larastan level 10. The locked current environment additionally resolved Laravel AI Pricing
+All four cells passed the native Imagick image smoke test, the full uncached Pest suite, and
+Larastan level 10. The locked current environment additionally resolved Laravel AI Pricing
 0.1.0, Intervention Image 4.3.2, Opis JSON Schema 2.6.0, and Spatie PDF-to-text 1.55.0. Native
 evidence was Imagick extension 3.8.1 over ImageMagick 6.9.11-60, PCOV 1.0.12, Poppler 22.12.0,
 and Composer 2.10.3.
