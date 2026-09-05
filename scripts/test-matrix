@@ -2,9 +2,28 @@
 
 set -euo pipefail
 
+if [[ "${LDE_MATRIX_ISOLATED:-}" != 1 ]]; then
+    isolated_home="$(mktemp -d)"
+    trap 'rm -rf -- "$isolated_home"' EXIT
+    mkdir -p "$isolated_home/.composer/cache" "$isolated_home/.cache" "$isolated_home/tmp"
+
+    set +e
+    env -i HOME="$isolated_home" PATH=/usr/local/bin:/usr/bin:/bin \
+        COMPOSER_HOME="$isolated_home/.composer" COMPOSER_CACHE_DIR="$isolated_home/.composer/cache" \
+        XDG_CACHE_HOME="$isolated_home/.cache" TMPDIR="$isolated_home/tmp" \
+        APP_ENV=testing CI=1 PAO_DISABLE=1 LDE_MATRIX_ISOLATED=1 \
+        LDE_MATRIX_EVIDENCE="${LDE_MATRIX_EVIDENCE:-}" /bin/bash "$0" "$@"
+    status=$?
+    set -e
+
+    exit "$status"
+fi
+
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 composer_bin="$(command -v composer)"
 work="$(mktemp -d)"
+cells="$work/cells.ndjson"
+: >"$cells"
 
 cleanup() {
     rm -rf "$work"
@@ -40,9 +59,58 @@ for php_version in 8.4 8.5; do
             "$php_bin" "$composer_bin" check-platform-reqs
             "$php_bin" -r 'require "vendor/autoload.php"; printf("PHP=%s Laravel=%s AI=%s Image=bundled-in-framework-%s Testbench=%s Pest=%s\n", PHP_VERSION, Illuminate\Foundation\Application::VERSION, Composer\InstalledVersions::getPrettyVersion("laravel/ai"), Composer\InstalledVersions::getPrettyVersion("laravel/framework"), Composer\InstalledVersions::getPrettyVersion("orchestra/testbench"), Composer\InstalledVersions::getPrettyVersion("pestphp/pest"));'
             PAO_DISABLE=1 "$php_bin" vendor/bin/pest --no-tia --colors=never
-            "$php_bin" vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+            "$php_bin" vendor/bin/phpstan analyse --level=10 --memory-limit=1G --no-progress
+            "$php_bin" -r '
+                require "vendor/autoload.php";
+                $version = static fn (string $package): string => (string) Composer\InstalledVersions::getPrettyVersion($package);
+                echo json_encode([
+                    "phpTarget" => $argv[1],
+                    "laravelTarget" => $argv[2],
+                    "php" => PHP_VERSION,
+                    "laravel" => Illuminate\Foundation\Application::VERSION,
+                    "laravelAi" => $version("laravel/ai"),
+                    "pricing" => $version("jkudish/laravel-ai-pricing"),
+                    "interventionImage" => $version("intervention/image"),
+                    "opisJsonSchema" => $version("opis/json-schema"),
+                    "pdfToText" => $version("spatie/pdf-to-text"),
+                    "testbench" => $version("orchestra/testbench"),
+                    "pest" => $version("pestphp/pest"),
+                    "imagick" => phpversion("imagick") ?: "missing",
+                    "pcov" => phpversion("pcov") ?: "missing",
+                    "imageApi" => is_subclass_of(
+                        Illuminate\Support\Facades\Image::class,
+                        Illuminate\Support\Facades\Facade::class,
+                    ) && method_exists(Illuminate\Image\ImageManager::class, "fromBytes"),
+                    "checks" => ["platform" => true, "pestNoTia" => true, "larastanLevel" => 10],
+                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES).PHP_EOL;
+            ' "$php_version" "$laravel" >>"$cells"
         )
     done
 done
+
+if [[ -n "${LDE_MATRIX_EVIDENCE:-}" ]]; then
+    php8.5 -r '
+        $lines = file($argv[1], FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+        if ($lines === false || count($lines) !== 4) {
+            fwrite(STDERR, "Matrix evidence requires exactly four cells.\n");
+            exit(1);
+        }
+
+        $cells = array_map(
+            static fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR),
+            $lines,
+        );
+        $json = json_encode(["version" => 1, "cells" => $cells], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES).PHP_EOL;
+        $temporary = $argv[2].".".getmypid().".tmp";
+
+        if (file_put_contents($temporary, $json, LOCK_EX) !== strlen($json) || ! rename($temporary, $argv[2])) {
+            @unlink($temporary);
+            fwrite(STDERR, "Unable to publish matrix evidence.\n");
+            exit(1);
+        }
+    ' "$cells" "$LDE_MATRIX_EVIDENCE"
+    chmod 600 "$LDE_MATRIX_EVIDENCE"
+fi
 
 echo "All four PHP/Laravel matrix combinations passed."

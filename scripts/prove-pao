@@ -4,17 +4,20 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 php_bin="${PHP_BINARY:-php}"
-proof_test="$(mktemp --tmpdir="$root/tests" --suffix=.php PaoFailureProof-XXXXXX)"
-success_output="$(mktemp)"
-failure_output="$(mktemp)"
+mkdir -p "$root/.pest"
+proof_directory="$(mktemp -d --tmpdir="$root/.pest" PaoProof-XXXXXX)"
+proof_test="$proof_directory/PaoFailureProof.php"
+success_output="$proof_directory/success.output"
+failure_output="$proof_directory/failure.output"
 
 cleanup() {
     rm -f "$proof_test" "$success_output" "$failure_output"
+    rmdir "$proof_directory" 2>/dev/null || true
 }
 
 trap cleanup EXIT
 
-PAO_FORCE=1 "$php_bin" "$root/vendor/bin/pest" --no-tia --colors=never >"$success_output" 2>&1
+env -u PAO_DISABLE PAO_FORCE=1 "$php_bin" "$root/vendor/bin/pest" --no-tia --colors=never >"$success_output" 2>&1
 
 if ! grep -Eq '"result"[[:space:]]*:[[:space:]]*"passed"' "$success_output"; then
     cat "$success_output" >&2
@@ -33,7 +36,7 @@ it('proves PAO preserves a Pest failure', function (): void {
 PHP
 
 set +e
-PAO_FORCE=1 "$php_bin" "$root/vendor/bin/pest" "$proof_test" --no-tia --colors=never >"$failure_output" 2>&1
+env -u PAO_DISABLE PAO_FORCE=1 "$php_bin" "$root/vendor/bin/pest" "$proof_test" --no-tia --colors=never >"$failure_output" 2>&1
 failure_status=$?
 set -e
 
