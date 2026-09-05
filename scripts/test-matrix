@@ -2,6 +2,23 @@
 
 set -euo pipefail
 
+if [[ "${LDE_MATRIX_ISOLATED:-}" != 1 ]]; then
+    isolated_home="$(mktemp -d)"
+    trap 'rm -rf -- "$isolated_home"' EXIT
+    mkdir -p "$isolated_home/.composer/cache" "$isolated_home/.cache" "$isolated_home/tmp"
+
+    set +e
+    env -i HOME="$isolated_home" PATH=/usr/local/bin:/usr/bin:/bin \
+        COMPOSER_HOME="$isolated_home/.composer" COMPOSER_CACHE_DIR="$isolated_home/.composer/cache" \
+        XDG_CACHE_HOME="$isolated_home/.cache" TMPDIR="$isolated_home/tmp" \
+        APP_ENV=testing CI=1 PAO_DISABLE=1 LDE_MATRIX_ISOLATED=1 \
+        LDE_MATRIX_EVIDENCE="${LDE_MATRIX_EVIDENCE:-}" /bin/bash "$0" "$@"
+    status=$?
+    set -e
+
+    exit "$status"
+fi
+
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 composer_bin="$(command -v composer)"
 work="$(mktemp -d)"

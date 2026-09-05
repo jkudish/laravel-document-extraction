@@ -78,7 +78,9 @@ cleanup owns only the unique file it created.
 each with Laravel 13.23.0 and the newest Laravel allowed by `^13.23`. Every cell runs production
 and development platform checks, full `--no-tia` tests, and Larastan level 10 across `src` and `tests`.
 Illuminate Image is supplied by the pinned framework's replacement of `illuminate/image`;
-the cell log identifies that bundled framework version explicitly.
+the cell log identifies that bundled framework version explicitly. The matrix wrapper starts itself
+in a disposable allowlisted environment, including its Composer and PHPStan caches, and removes that
+environment on exit.
 
 The September 5, 2026 verification exercised this resolved matrix:
 
