@@ -4,7 +4,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 php_bin="${PHP_BINARY:-php}"
-proof_test="$root/tests/PaoFailureProof.php"
+proof_test="$(mktemp --tmpdir="$root/tests" --suffix=.php PaoFailureProof-XXXXXX)"
 success_output="$(mktemp)"
 failure_output="$(mktemp)"
 

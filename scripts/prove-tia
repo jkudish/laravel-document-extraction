@@ -4,6 +4,12 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 php_bin="${PHP_BINARY:-php}"
+
+if [[ -n "$(git -C "$root" status --short)" ]]; then
+    echo "TIA proof requires a clean committed worktree." >&2
+    exit 1
+fi
+
 log="$(mktemp)"
 output="$(mktemp)"
 
@@ -14,11 +20,6 @@ cleanup() {
 }
 
 trap cleanup EXIT
-
-if [[ -n "$(git -C "$root" status --short)" ]]; then
-    echo "TIA proof requires a clean committed worktree." >&2
-    exit 1
-fi
 
 all_markers=$'config\nfixture\nimage\nnetwork\nprompt\nruntime\nschema'
 
