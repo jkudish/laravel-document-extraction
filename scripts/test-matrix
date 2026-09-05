@@ -34,10 +34,11 @@ for php_version in 8.4 8.5; do
         echo "=== PHP $php_version / Laravel $laravel ($framework_constraint) ==="
         (
             cd "$target"
+            export COMPOSER_ROOT_VERSION=dev-main
             "$php_bin" "$composer_bin" require --dev "laravel/framework:$framework_constraint" \
                 --with-all-dependencies --no-interaction --prefer-dist --no-progress
             "$php_bin" "$composer_bin" check-platform-reqs --no-dev
-            "$php_bin" -r 'printf("PHP=%s Laravel=%s AI=%s Image=%s Testbench=%s Pest=%s\n", PHP_VERSION, Illuminate\\Foundation\\Application::VERSION, Composer\\InstalledVersions::getPrettyVersion("laravel/ai"), Composer\\InstalledVersions::getPrettyVersion("illuminate/image"), Composer\\InstalledVersions::getPrettyVersion("orchestra/testbench"), Composer\\InstalledVersions::getPrettyVersion("pestphp/pest"));'
+            "$php_bin" -r 'require "vendor/autoload.php"; printf("PHP=%s Laravel=%s AI=%s Image=%s Testbench=%s Pest=%s\n", PHP_VERSION, Illuminate\Foundation\Application::VERSION, Composer\InstalledVersions::getPrettyVersion("laravel/ai"), Illuminate\Foundation\Application::VERSION, Composer\InstalledVersions::getPrettyVersion("orchestra/testbench"), Composer\InstalledVersions::getPrettyVersion("pestphp/pest"));'
             PAO_DISABLE=1 "$php_bin" vendor/bin/pest --no-tia --colors=never
             "$php_bin" vendor/bin/phpstan analyse --memory-limit=1G --no-progress
         )
