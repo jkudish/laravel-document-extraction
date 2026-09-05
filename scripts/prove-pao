@@ -18,7 +18,7 @@ cleanup() {
 
 trap cleanup EXIT
 
-PAO_FORCE=1 "$php_bin" "$root/vendor/bin/pest" --no-tia --colors=never >"$success_output" 2>&1
+env -u PAO_DISABLE PAO_FORCE=1 "$php_bin" "$root/vendor/bin/pest" --no-tia --colors=never >"$success_output" 2>&1
 
 if ! grep -Eq '"result"[[:space:]]*:[[:space:]]*"passed"' "$success_output"; then
     cat "$success_output" >&2
@@ -37,7 +37,7 @@ it('proves PAO preserves a Pest failure', function (): void {
 PHP
 
 set +e
-PAO_FORCE=1 "$php_bin" "$root/vendor/bin/pest" "$proof_test" --no-tia --colors=never >"$failure_output" 2>&1
+env -u PAO_DISABLE PAO_FORCE=1 "$php_bin" "$root/vendor/bin/pest" "$proof_test" --no-tia --colors=never >"$failure_output" 2>&1
 failure_status=$?
 set -e
 

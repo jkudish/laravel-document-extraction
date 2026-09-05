@@ -99,6 +99,10 @@ it('keeps PAO failure fixtures outside discovery and cannot delete a caller-owne
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >>"$FAKE_CALL_LOG"
+if [[ -n "${PAO_DISABLE:-}" ]]; then
+    printf 'PAO_DISABLE reached the explicit PAO proof.\n' >&2
+    exit 24
+fi
 if [[ "$*" == *"/.pest/proofs/PaoFailureProof-"* ]]; then
     printf '{"result":"failed"}\n'
     exit 23
@@ -112,7 +116,7 @@ BASH);
         $process = new Process(
             ['bash', $temporary.'/scripts/prove-pao'],
             $temporary,
-            ['PHP_BINARY' => $fakePhp, 'FAKE_CALL_LOG' => $callLog],
+            ['PHP_BINARY' => $fakePhp, 'FAKE_CALL_LOG' => $callLog, 'PAO_DISABLE' => '1'],
         );
         $process->run();
         $calls = (string) file_get_contents($callLog);
