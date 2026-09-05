@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Illuminate\Image\ImageManager;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Image as NativeImage;
 use Jkudish\DocumentExtraction\DocumentExtraction;
 use Jkudish\DocumentExtraction\Facades\Extraction;
 
@@ -39,7 +39,7 @@ it('boots the package provider and exposes the complete benchmark configuration'
 it('uses the native Illuminate Image API with the Imagick driver', function (): void {
     recordTiaExecution('image');
 
-    $image = app(ImageManager::class)->fromBytes(
+    $image = NativeImage::fromBytes(
         (string) base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', true),
     );
 
