@@ -41,6 +41,21 @@ passing run and one temporary intentional failure, and proves that the failure r
 each with Laravel 13.23.0 and the newest Laravel allowed by `^13.23`. Every cell runs production
 platform checks, full `--no-tia` tests, and Larastan level 10 across `src` and `tests`.
 
+The September 5, 2026 verification exercised this resolved matrix:
+
+| PHP | Laravel | Laravel AI | Testbench | Pest |
+| --- | --- | --- | --- | --- |
+| 8.4.25 | 13.23.0 | 0.11.2 | 11.2.0 | 5.1.3 |
+| 8.4.25 | 13.30.1 | 0.11.2 | 11.2.0 | 5.1.3 |
+| 8.5.10 | 13.23.0 | 0.11.2 | 11.2.0 | 5.1.3 |
+| 8.5.10 | 13.30.1 | 0.11.2 | 11.2.0 | 5.1.3 |
+
+All four cells passed the native Imagick image smoke test, the full 7-test / 32-assertion suite,
+and Larastan level 10. The locked current environment additionally resolved Laravel AI Pricing
+0.1.0, Intervention Image 4.3.2, Opis JSON Schema 2.6.0, and Spatie PDF-to-text 1.55.0. Native
+evidence was Imagick extension 3.8.1 over ImageMagick 6.9.11-60, PCOV 1.0.12, Poppler 22.12.0,
+and Composer 2.10.3.
+
 The package requires Laravel 13.23 or newer. The complete native Illuminate Image API first exists
 in Laravel 13.20 and its plural `config/images.php` convention first exists in 13.21, so 13.23 has
 the required facade, manager, service provider, Intervention Image 4 Imagick driver, and
