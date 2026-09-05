@@ -4,6 +4,12 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# PHP must not inherit provider credentials even during readiness checks.
+if [[ "${LDE_RESUME_ISOLATED:-}" != 1 ]]; then
+    exec env -i HOME="$HOME" PATH=/usr/local/bin:/usr/bin:/bin \
+        LDE_RESUME_ISOLATED=1 /bin/bash "$0" "$@"
+fi
+
 for command in php8.4 php8.5 composer pdfimages pdfinfo pdftoppm pdftotext; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Missing $command; run .agents/setup." >&2

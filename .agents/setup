@@ -2,10 +2,23 @@
 
 set -euo pipefail
 
+# Setup is snapshotted for reuse: never pass provider/user credentials to installers
+# or Composer plugins. Use a dedicated Composer home with no user auth/config.
+if [[ "${LDE_SETUP_ISOLATED:-}" != 1 ]]; then
+    exec env -i HOME="$HOME" PATH=/usr/local/bin:/usr/bin:/bin \
+        LDE_SETUP_ISOLATED=1 /bin/bash "$0" "$@"
+fi
+
 export DEBIAN_FRONTEND=noninteractive
+export COMPOSER_HOME="$HOME/.cache/lde-composer"
+export COMPOSER_CACHE_DIR="$COMPOSER_HOME/cache"
+umask 077
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sudo_cmd=()
+downloads="$(mktemp -d)"
+trap 'rm -rf -- "$downloads"' EXIT
+SECONDS=0
 
 cd "$root"
 
@@ -25,18 +38,19 @@ if [[ ! -f /usr/share/keyrings/debsuryorg-archive-keyring.gpg ]]; then
     echo "Installing the signed Debian Sury PHP repository..."
     "${sudo_cmd[@]}" apt-get update
     "${sudo_cmd[@]}" apt-get install -y ca-certificates curl lsb-release
-    curl --fail --silent --show-error --location \
+    curl --fail --silent --show-error --location --retry 2 --max-time 60 \
         https://packages.sury.org/debsuryorg-archive-keyring.deb \
-        --output /tmp/debsuryorg-archive-keyring.deb
-    "${sudo_cmd[@]}" dpkg -i /tmp/debsuryorg-archive-keyring.deb
-    rm -f /tmp/debsuryorg-archive-keyring.deb
+        --output "$downloads/keyring.deb"
+    "${sudo_cmd[@]}" dpkg -i "$downloads/keyring.deb"
 fi
 
 source_line="deb [signed-by=/usr/share/keyrings/debsuryorg-archive-keyring.gpg] https://packages.sury.org/php/ bookworm main"
 
-if [[ ! -f /etc/apt/sources.list.d/php.list ]] || ! grep -Fqx "$source_line" /etc/apt/sources.list.d/php.list; then
+if [[ ! -f /etc/apt/sources.list.d/php.list ]] || ! "${sudo_cmd[@]}" grep -Fqx "$source_line" /etc/apt/sources.list.d/php.list; then
     printf '%s\n' "$source_line" | "${sudo_cmd[@]}" tee /etc/apt/sources.list.d/php.list >/dev/null
 fi
+# Repository configuration is public; do not apply the private download umask.
+"${sudo_cmd[@]}" chmod 0644 /etc/apt/sources.list.d/php.list
 
 missing_packages=()
 
@@ -53,24 +67,27 @@ if (( ${#missing_packages[@]} > 0 )); then
 fi
 
 "${sudo_cmd[@]}" update-alternatives --set php /usr/bin/php8.5 >/dev/null
+echo "System dependencies ready (${SECONDS}s)."
 
-if ! command -v composer >/dev/null 2>&1; then
+composer_version=2.10.3
+if ! command -v composer >/dev/null 2>&1 || \
+    [[ "$(composer --version --no-ansi 2>/dev/null | awk '{print $3}')" != "$composer_version" ]]; then
     echo "Installing Composer with its published SHA-384 signature..."
-    expected_signature="$(curl --fail --silent --show-error https://composer.github.io/installer.sig)"
-    curl --fail --silent --show-error https://getcomposer.org/installer --output /tmp/composer-setup.php
-    actual_signature="$(php8.5 -r "echo hash_file('sha384', '/tmp/composer-setup.php');")"
+    expected_signature="$(curl --fail --silent --show-error --retry 2 --max-time 60 https://composer.github.io/installer.sig)"
+    curl --fail --silent --show-error --retry 2 --max-time 60 https://getcomposer.org/installer --output "$downloads/composer-setup.php"
+    actual_signature="$(php8.5 -r 'echo hash_file("sha384", $argv[1]);' "$downloads/composer-setup.php")"
 
     if [[ "$expected_signature" != "$actual_signature" ]]; then
-        rm -f /tmp/composer-setup.php
         echo "Composer installer signature mismatch." >&2
         exit 1
     fi
 
-    "${sudo_cmd[@]}" php8.5 /tmp/composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
-    rm -f /tmp/composer-setup.php
+    "${sudo_cmd[@]}" php8.5 "$downloads/composer-setup.php" --quiet \
+        --version="$composer_version" --install-dir=/usr/local/bin --filename=composer
 fi
 
+echo "Composer ready (${SECONDS}s)."
 echo "Installing locked Composer dependencies..."
 php8.5 "$(command -v composer)" install --no-interaction --prefer-dist --no-progress
 
-echo "Setup complete: $(php8.4 -r 'echo PHP_VERSION;') / $(php8.5 -r 'echo PHP_VERSION;'), $(composer --version --no-ansi 2>/dev/null | head -n 1)"
+echo "Setup complete (${SECONDS}s): $(php8.4 -r 'echo PHP_VERSION;') / $(php8.5 -r 'echo PHP_VERSION;'), $(composer --version --no-ansi 2>/dev/null | head -n 1)"
