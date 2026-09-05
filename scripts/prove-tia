@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+php_bin="${PHP_BINARY:-php}"
+log="$(mktemp)"
+output="$(mktemp)"
+
+cleanup() {
+    git -C "$root" restore -- composer.lock config/extraction.php resources/prompts/extraction.txt \
+        resources/schemas/document.json tests/Fixtures/source.txt 2>/dev/null || true
+    rm -f "$log" "$output"
+}
+
+trap cleanup EXIT
+
+if [[ -n "$(git -C "$root" status --short)" ]]; then
+    echo "TIA proof requires a clean committed worktree." >&2
+    exit 1
+fi
+
+all_markers=$'config\nfixture\nimage\nnetwork\nprompt\nruntime\nschema'
+
+run_fresh() {
+    : >"$log"
+    TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" "$root/vendor/bin/pest" --tia --fresh --colors=never >"$output"
+}
+
+run_tia() {
+    : >"$log"
+    TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" "$root/vendor/bin/pest" --tia --colors=never >"$output"
+}
+
+assert_markers() {
+    local expected="$1"
+    local actual
+    actual="$(sort -u "$log")"
+
+    if [[ "$actual" != "$expected" ]]; then
+        cat "$output" >&2
+        printf 'Expected executed tests:\n%s\nActual executed tests:\n%s\n' "$expected" "$actual" >&2
+        exit 1
+    fi
+}
+
+run_fresh
+assert_markers "$all_markers"
+run_tia
+assert_markers ""
+echo "TIA replay proof passed: unchanged tests were replayed without execution."
+
+run_fresh
+printf '\n// TIA proof\n' >>"$root/config/extraction.php"
+run_tia
+assert_markers $'config\nimage\nnetwork'
+git -C "$root" restore -- config/extraction.php
+echo "TIA config invalidation proof passed."
+
+run_fresh
+printf 'changed\n' >"$root/tests/Fixtures/source.txt"
+run_tia
+assert_markers 'fixture'
+git -C "$root" restore -- tests/Fixtures/source.txt
+echo "TIA fixture invalidation proof passed."
+
+run_fresh
+printf 'changed\n' >"$root/resources/prompts/extraction.txt"
+run_tia
+assert_markers 'prompt'
+git -C "$root" restore -- resources/prompts/extraction.txt
+echo "TIA prompt invalidation proof passed."
+
+run_fresh
+printf '{"type":"object"}\n' >"$root/resources/schemas/document.json"
+run_tia
+assert_markers 'schema'
+git -C "$root" restore -- resources/schemas/document.json
+echo "TIA schema invalidation proof passed."
+
+run_fresh
+printf '\n' >>"$root/composer.lock"
+run_tia
+assert_markers "$all_markers"
+git -C "$root" restore -- composer.lock
+echo "TIA lock fingerprint invalidation proof passed."
+
+run_fresh
+: >"$log"
+TIA_PROOF_LOG="$log" LDE_TIA_RUNTIME_SALT='native-drift-proof' PAO_DISABLE=1 \
+    "$php_bin" "$root/vendor/bin/pest" --tia --colors=never >"$output"
+assert_markers "$all_markers"
+echo "TIA native-runtime partition proof passed."

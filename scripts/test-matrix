@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+composer_bin="$(command -v composer)"
+work="$(mktemp -d)"
+
+cleanup() {
+    rm -rf "$work"
+}
+
+trap cleanup EXIT
+
+if [[ -n "$(git -C "$root" status --short)" ]]; then
+    echo "Matrix verification requires a clean committed worktree." >&2
+    exit 1
+fi
+
+for php_version in 8.4 8.5; do
+    php_bin="$(command -v "php${php_version}")"
+
+    for laravel in minimum current; do
+        target="$work/php-${php_version}-laravel-${laravel}"
+        mkdir -p "$target"
+        git -C "$root" archive HEAD | tar -x -C "$target"
+
+        if [[ "$laravel" == minimum ]]; then
+            framework_constraint='13.23.0'
+        else
+            framework_constraint='^13.23'
+        fi
+
+        echo "=== PHP $php_version / Laravel $laravel ($framework_constraint) ==="
+        (
+            cd "$target"
+            "$php_bin" "$composer_bin" require --dev "laravel/framework:$framework_constraint" \
+                --with-all-dependencies --no-interaction --prefer-dist --no-progress
+            "$php_bin" "$composer_bin" check-platform-reqs --no-dev
+            "$php_bin" -r 'printf("PHP=%s Laravel=%s AI=%s Image=%s Testbench=%s Pest=%s\n", PHP_VERSION, Illuminate\\Foundation\\Application::VERSION, Composer\\InstalledVersions::getPrettyVersion("laravel/ai"), Composer\\InstalledVersions::getPrettyVersion("illuminate/image"), Composer\\InstalledVersions::getPrettyVersion("orchestra/testbench"), Composer\\InstalledVersions::getPrettyVersion("pestphp/pest"));'
+            PAO_DISABLE=1 "$php_bin" vendor/bin/pest --no-tia --colors=never
+            "$php_bin" vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+        )
+    done
+done
+
+echo "All four PHP/Laravel matrix combinations passed."
