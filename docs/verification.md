@@ -39,7 +39,9 @@ passing run and one temporary intentional failure, and proves that the failure r
 
 `composer test:matrix` builds four isolated installations from committed `HEAD`: PHP 8.4 and 8.5,
 each with Laravel 13.23.0 and the newest Laravel allowed by `^13.23`. Every cell runs production
-platform checks, full `--no-tia` tests, and Larastan level 10 across `src` and `tests`.
+and development platform checks, full `--no-tia` tests, and Larastan level 10 across `src` and `tests`.
+Illuminate Image is supplied by the pinned framework's replacement of `illuminate/image`;
+the cell log identifies that bundled framework version explicitly.
 
 The September 5, 2026 verification exercised this resolved matrix:
 
