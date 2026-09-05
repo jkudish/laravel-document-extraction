@@ -51,28 +51,28 @@ assert_markers ""
 echo "TIA replay proof passed: unchanged tests were replayed without execution."
 
 run_fresh
-printf '\n// TIA proof\n' >>"$root/config/extraction.php"
+sed -i "s/'timeout' => 120,/'timeout' => 60 + 60,/" "$root/config/extraction.php"
 run_tia
 assert_markers $'config\nimage\nnetwork'
 git -C "$root" restore -- config/extraction.php
 echo "TIA config invalidation proof passed."
 
 run_fresh
-printf 'changed\n' >"$root/tests/Fixtures/source.txt"
+printf '\n' >>"$root/tests/Fixtures/source.txt"
 run_tia
 assert_markers 'fixture'
 git -C "$root" restore -- tests/Fixtures/source.txt
 echo "TIA fixture invalidation proof passed."
 
 run_fresh
-printf 'changed\n' >"$root/resources/prompts/extraction.txt"
+printf '\n' >>"$root/resources/prompts/extraction.txt"
 run_tia
 assert_markers 'prompt'
 git -C "$root" restore -- resources/prompts/extraction.txt
 echo "TIA prompt invalidation proof passed."
 
 run_fresh
-printf '{"type":"object"}\n' >"$root/resources/schemas/document.json"
+printf '\n' >>"$root/resources/schemas/document.json"
 run_tia
 assert_markers 'schema'
 git -C "$root" restore -- resources/schemas/document.json
