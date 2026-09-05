@@ -87,7 +87,7 @@ echo "TIA lock fingerprint invalidation proof passed."
 
 run_fresh
 : >"$log"
-TIA_PROOF_LOG="$log" LDE_TIA_RUNTIME_SALT='native-drift-proof' PAO_DISABLE=1 \
+TIA_PROOF_LOG="$log" LDE_TIA_RUNTIME_SALT="native-drift-proof-$(date +%s%N)-$$" PAO_DISABLE=1 \
     "$php_bin" "$root/vendor/bin/pest" --tia --colors=never >"$output"
 assert_markers "$all_markers"
 echo "TIA native-runtime partition proof passed."
