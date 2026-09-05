@@ -39,12 +39,18 @@ all_markers=$'config\nfixture\nimage\nnetwork\nprompt\nruntime\nschema'
 
 run_fresh() {
     : >"$log"
-    TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" "$sandbox/vendor/bin/pest" --tia --fresh --colors=never >"$output"
+    (
+        cd "$sandbox"
+        TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" vendor/bin/pest --tia --fresh --colors=never >"$output"
+    )
 }
 
 run_tia() {
     : >"$log"
-    TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" "$sandbox/vendor/bin/pest" --tia --colors=never >"$output"
+    (
+        cd "$sandbox"
+        TIA_PROOF_LOG="$log" PAO_DISABLE=1 "$php_bin" vendor/bin/pest --tia --colors=never >"$output"
+    )
 }
 
 assert_markers() {
@@ -102,7 +108,10 @@ echo "TIA lock fingerprint invalidation proof passed."
 
 run_fresh
 : >"$log"
-TIA_PROOF_LOG="$log" LDE_TIA_RUNTIME_SALT="native-drift-proof-$(date +%s%N)-$$" PAO_DISABLE=1 \
-    "$php_bin" "$sandbox/vendor/bin/pest" --tia --colors=never >"$output"
+(
+    cd "$sandbox"
+    TIA_PROOF_LOG="$log" LDE_TIA_RUNTIME_SALT="native-drift-proof-$(date +%s%N)-$$" PAO_DISABLE=1 \
+        "$php_bin" vendor/bin/pest --tia --colors=never >"$output"
+)
 assert_markers "$all_markers"
 echo "TIA native-runtime partition proof passed."
