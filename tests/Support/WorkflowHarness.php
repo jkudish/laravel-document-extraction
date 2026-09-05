@@ -27,6 +27,8 @@ final readonly class WorkflowHarness
             'HOME' => (string) getenv('HOME'),
             'GH_TOKEN' => $canaries['ambient'],
             'GH_SIGNOFF_TOKEN' => $withToken ? $canaries['dedicated'] : '',
+            'GH_HOST' => 'adversarial.invalid',
+            'GH_REPO' => 'attacker/redirected-repository',
             'OPENAI_API_KEY' => $canaries['provider'],
         ];
         $this->workflow = new Workflow(

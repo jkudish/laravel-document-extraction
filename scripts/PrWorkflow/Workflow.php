@@ -167,7 +167,8 @@ final class Workflow
             throw new WorkflowException('GH_SIGNOFF_TOKEN is required for exact-SHA signoff.');
         }
 
-        $githubEnvironment = SafeEnvironment::github($this->environment, $token);
+        $slug = $this->requiredString($repository, 'slug', 'receipt repository');
+        $githubEnvironment = SafeEnvironment::github($this->environment, $token, $slug);
         $extension = $this->runRequired(['gh', 'extension', 'list'], $githubEnvironment, 'GitHub signoff extension check');
 
         if (preg_match('/(^|\s)basecamp\/gh-signoff(?:\s|$)/m', $extension->stdout) !== 1) {
@@ -201,7 +202,6 @@ final class Workflow
             'Exact-SHA signoff',
         );
 
-        $slug = $this->requiredString($repository, 'slug', 'receipt repository');
         $readback = $this->decodeObject(
             $this->runRequired(
                 ['gh', 'api', 'repos/'.$slug.'/commits/'.$approvedSha.'/status'],

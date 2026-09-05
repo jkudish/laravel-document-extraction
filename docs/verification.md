@@ -173,6 +173,10 @@ PR with matching head/base; rechecks HEAD immediately before `gh signoff --commi
 forces; then queries `repos/<owner>/<repo>/commits/<sha>/status` and requires the `signoff` context to
 be successful for that exact SHA.
 
+Every GitHub subprocess pins `GH_HOST=github.com` and `GH_REPO` to the slug parsed from the validated
+receipt/origin. Ambient host and default-repository configuration cannot redirect the dedicated
+token or commit-status write.
+
 CLI options are operation-specific. Unknown options—including `--force`—and duplicate options are
 rejected before workflow execution. Output from ambient Git and every dedicated-token GitHub command
 is suppressed; only the allowlisted secret-free verification steps and safe analysis route publish

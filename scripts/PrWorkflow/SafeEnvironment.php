@@ -38,11 +38,16 @@ final class SafeEnvironment
      * @param  array<string, string>  $ambient
      * @return array<string, string>
      */
-    public static function github(array $ambient, string $token): array
+    public static function github(array $ambient, string $token, string $repository): array
     {
-        $environment = ['GH_TOKEN' => $token, 'GH_PROMPT_DISABLED' => '1'];
+        $environment = [
+            'GH_TOKEN' => $token,
+            'GH_PROMPT_DISABLED' => '1',
+            'GH_HOST' => 'github.com',
+            'GH_REPO' => $repository,
+        ];
 
-        foreach (['PATH', 'HOME', 'XDG_CONFIG_HOME', 'GH_CONFIG_DIR', 'GH_HOST', 'SSL_CERT_FILE', 'SSL_CERT_DIR'] as $name) {
+        foreach (['PATH', 'HOME', 'XDG_CONFIG_HOME', 'GH_CONFIG_DIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR'] as $name) {
             if (isset($ambient[$name])) {
                 $environment[$name] = $ambient[$name];
             }

@@ -203,6 +203,8 @@ it('rejects unknown and duplicate CLI options before workflow execution', functi
     }
 })->with([
     'force option' => [['signoff', '--approved-sha', str_repeat('1', 40), '--force', 'yes']],
+    'short force option' => [['signoff', '--approved-sha', str_repeat('1', 40), '-f']],
+    'assigned force option' => [['signoff', '--approved-sha', str_repeat('1', 40), '--force=true']],
     'duplicate approval' => [['signoff', '--approved-sha', str_repeat('1', 40), '--approved-sha', str_repeat('1', 40)]],
     'base on signoff' => [['signoff', '--approved-sha', str_repeat('1', 40), '--base', 'main']],
     'option on analyse' => [['analyse', '--force', 'yes']],
@@ -245,6 +247,8 @@ it('posts and reads back only the approved exact SHA with the dedicated token', 
 
         foreach ($harness->runner->githubCalls() as $call) {
             expect($call['environment'])->toHaveKey('GH_TOKEN', WorkflowHarness::canaries()['dedicated'])
+                ->and($call['environment'])->toHaveKey('GH_HOST', 'github.com')
+                ->and($call['environment'])->toHaveKey('GH_REPO', 'jkudish/laravel-document-extraction')
                 ->and($call['environment'])->not->toHaveKeys(['GH_SIGNOFF_TOKEN', 'OPENAI_API_KEY']);
         }
 
