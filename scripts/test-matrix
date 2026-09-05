@@ -77,8 +77,10 @@ for php_version in 8.4 8.5; do
                     "pest" => $version("pestphp/pest"),
                     "imagick" => phpversion("imagick") ?: "missing",
                     "pcov" => phpversion("pcov") ?: "missing",
-                    "imageApi" => class_exists(Illuminate\Support\Facades\Image::class)
-                        && method_exists(Illuminate\Support\Facades\Image::class, "fromBytes"),
+                    "imageApi" => is_subclass_of(
+                        Illuminate\Support\Facades\Image::class,
+                        Illuminate\Support\Facades\Facade::class,
+                    ) && method_exists(Illuminate\Image\ImageManager::class, "fromBytes"),
                     "checks" => ["platform" => true, "pestNoTia" => true, "larastanLevel" => 10],
                 ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES).PHP_EOL;
             ' "$php_version" "$laravel" >>"$cells"
