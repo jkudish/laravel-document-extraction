@@ -4,12 +4,11 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 php_bin="${PHP_BINARY:-php}"
-proof_directory="$root/.pest/proofs"
-mkdir -p "$proof_directory"
-chmod 700 "$proof_directory"
-proof_test="$(mktemp --tmpdir="$proof_directory" --suffix=.php PaoFailureProof-XXXXXX)"
-success_output="$(mktemp)"
-failure_output="$(mktemp)"
+mkdir -p "$root/.pest"
+proof_directory="$(mktemp -d --tmpdir="$root/.pest" PaoProof-XXXXXX)"
+proof_test="$proof_directory/PaoFailureProof.php"
+success_output="$proof_directory/success.output"
+failure_output="$proof_directory/failure.output"
 
 cleanup() {
     rm -f "$proof_test" "$success_output" "$failure_output"

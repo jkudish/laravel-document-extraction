@@ -69,8 +69,9 @@ invalidation mutations on a named branch in a disposable local clone, never in t
 
 PAO only optimizes test output for recognized agents. `composer test:pao:proof` forces PAO for one
 passing run and one temporary intentional failure, and proves that the failure remains non-zero. Its
-generated failure file lives under private ignored `.pest/proofs`, outside normal test discovery;
-cleanup owns only the unique file it created.
+generated failure file and captured output live in a uniquely owned private directory under ignored
+`.pest`, outside normal test discovery. Cleanup removes only files and the directory created by that
+proof run; it never changes or removes caller-owned `.pest` children.
 
 ## Compatibility matrix
 
