@@ -134,13 +134,22 @@ final class SourceSnapshot
         }
 
         @unlink($this->path);
-        @rmdir(dirname($this->path));
+        $directory = dirname($this->path);
+
+        if (! @rmdir($directory) && is_dir($directory)) {
+            throw SourceException::make('cleanup_failed', 'Private source snapshot cleanup could not be completed.');
+        }
+
         $this->cleaned = true;
     }
 
     public function __destruct()
     {
-        $this->cleanup();
+        try {
+            $this->cleanup();
+        } catch (SourceException) {
+            // Explicit cleanup reports failure; destruction can only retry best-effort.
+        }
     }
 
     /** @param resource $destination */

@@ -8,6 +8,8 @@ use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Jkudish\DocumentExtraction\Exceptions\ExtractionException;
+use Jkudish\DocumentExtraction\Source\SourceInput;
+use Jkudish\DocumentExtraction\Source\SourceSnapshot;
 use Jkudish\DocumentExtraction\Tests\Support\RecordingDocumentExtraction;
 
 function sourceRecorder(): RecordingDocumentExtraction
@@ -253,6 +255,36 @@ it('rejects URL wrappers directories and special local files safely', function (
         }
     } finally {
         @unlink($fifo);
+        @rmdir($directory);
+    }
+});
+
+it('reports failed snapshot cleanup and permits retry after the filesystem is repaired', function (): void {
+    $snapshot = SourceSnapshot::capture(
+        SourceInput::contents('private source', 'text/plain'),
+        app(FilesystemFactory::class),
+        100,
+        100,
+    );
+    $directory = dirname($snapshot->path);
+    // A parser derivative still present prevents removing the owned directory.
+    $derivative = $directory.'/remaining-derivative';
+    file_put_contents($derivative, 'private derivative');
+
+    try {
+        expect(fn () => $snapshot->cleanup())->toThrow(ExtractionException::class, 'cleanup')
+            ->and(is_file($snapshot->path))->toBeFalse()
+            ->and(is_dir($directory))->toBeTrue()
+            ->and(is_file($derivative))->toBeTrue();
+
+        unlink($derivative);
+        $snapshot->cleanup();
+        $snapshot->cleanup();
+
+        expect(is_dir($directory))->toBeFalse();
+    } finally {
+        @unlink($derivative);
+        @unlink($snapshot->path);
         @rmdir($directory);
     }
 });

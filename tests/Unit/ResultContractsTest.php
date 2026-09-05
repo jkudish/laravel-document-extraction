@@ -170,3 +170,62 @@ it('does not retain structured data on a technical failure', function (): void {
     expect(fn () => new DocumentResult(data: ['unsafe' => true], complete: false, error: $error))
         ->toThrow(InvalidArgumentException::class);
 });
+
+it('reports empty detection as incomplete without fabricating a document', function (): void {
+    $result = new ExtractionResult(
+        documents: [],
+        sourceSha256: str_repeat('a', 64),
+        mediaType: 'application/pdf',
+        pageCount: 1,
+        detectionMode: true,
+    );
+
+    expect($result->complete())->toBeFalse()
+        ->and($result->documents)->toBeEmpty()
+        ->and($result->data)->toBeNull();
+});
+
+it('rejects overlapping original pages across detected documents', function (): void {
+    expect(fn () => new ExtractionResult(
+        documents: [
+            new DocumentResult(pages: [1, 2], text: 'first'),
+            new DocumentResult(pages: [2], text: 'second'),
+        ],
+        sourceSha256: str_repeat('a', 64),
+        mediaType: 'application/pdf',
+        pageCount: 2,
+        detectionMode: true,
+    ))->toThrow(InvalidArgumentException::class, 'overlap');
+});
+
+it('consolidates document and page errors without duplicating the same failure', function (): void {
+    $documentError = new ExtractionError('provider_failed', 'Document processing failed.', [1]);
+    $pageError = new ExtractionError('provider_failed', 'Page processing failed.', [2]);
+    $result = new ExtractionResult(
+        documents: [new DocumentResult(pages: [1, 2], complete: false, error: $documentError)],
+        pages: [new PageResult(2, complete: false, error: $pageError)],
+        errors: [$documentError],
+        sourceSha256: str_repeat('a', 64),
+        mediaType: 'application/pdf',
+        pageCount: 2,
+    );
+
+    expect($result->errors->all())->toBe([$documentError, $pageError])
+        ->and($result->complete())->toBeFalse();
+});
+
+it('validates nested error provenance against the original source', function (string $owner): void {
+    $error = new ExtractionError('provider_failed', 'Processing failed.', [2]);
+
+    expect(fn () => new ExtractionResult(
+        documents: [new DocumentResult(
+            pages: [1],
+            complete: false,
+            error: $owner === 'document' ? $error : null,
+        )],
+        pages: $owner === 'page' ? [new PageResult(1, complete: false, error: $error)] : [],
+        sourceSha256: str_repeat('a', 64),
+        mediaType: 'application/pdf',
+        pageCount: 1,
+    ))->toThrow(InvalidArgumentException::class, 'source page count');
+})->with(['document', 'page']);

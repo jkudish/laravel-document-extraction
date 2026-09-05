@@ -61,6 +61,12 @@ final readonly class ExtractionResult
         $this->calls = collect($calls)->values();
         $this->errors = collect($errors)->values();
 
+        foreach ($this->documents->concat($this->pages) as $outcome) {
+            if ($outcome->error !== null && ! $this->errors->containsStrict($outcome->error)) {
+                $this->errors->push($outcome->error);
+            }
+        }
+
         if (! $detectionMode && $this->documents->count() !== 1) {
             throw new InvalidArgumentException('Ordinary extraction results require exactly one document result.');
         }
@@ -89,6 +95,7 @@ final readonly class ExtractionResult
     public function complete(): bool
     {
         return $this->coverageComplete
+            && $this->documents->isNotEmpty()
             && $this->errors->isEmpty()
             && $this->documents->every(static fn (DocumentResult $document): bool => $document->complete())
             && $this->pages->every(static fn (PageResult $page): bool => $page->complete());
@@ -114,6 +121,7 @@ final readonly class ExtractionResult
     private function validatePageProvenance(): void
     {
         $resultPages = [];
+        $documentPages = [];
 
         foreach ($this->documents as $document) {
             if ($this->pageCount === null && $document->pages !== null) {
@@ -128,6 +136,12 @@ final readonly class ExtractionResult
                 if ($this->pageCount !== null && $page > $this->pageCount) {
                     throw new InvalidArgumentException('Document page provenance exceeds the source page count.');
                 }
+
+                if (isset($documentPages[$page])) {
+                    throw new InvalidArgumentException('Document page provenance must not overlap between documents.');
+                }
+
+                $documentPages[$page] = true;
             }
         }
 
