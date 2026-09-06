@@ -8,6 +8,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Http\UploadedFile;
+use Jkudish\DocumentExtraction\AI\NativeAiProcessor;
 use Jkudish\DocumentExtraction\Exceptions\ConfigurationException;
 use Jkudish\DocumentExtraction\Exceptions\ProcessingUnavailableException;
 use Jkudish\DocumentExtraction\Preparation\Deadline;
@@ -65,7 +66,7 @@ class DocumentExtraction
 
     public function execute(ExtractionInvocation $invocation): ExtractionResult
     {
-        $this->validateInvocation($invocation);
+        $agent = $this->validateInvocation($invocation);
 
         $limits = $invocation->configuration['limits'];
         $deadline = Deadline::afterSeconds($limits['invocation_deadline']);
@@ -85,14 +86,17 @@ class DocumentExtraction
                 );
             }
 
-            return $this->process($invocation, $snapshot);
+            return $this->process($invocation, $snapshot, $agent);
         } finally {
             $snapshot->cleanup();
         }
     }
 
-    protected function process(ExtractionInvocation $invocation, SourceSnapshot $snapshot): ExtractionResult
-    {
+    protected function process(
+        ExtractionInvocation $invocation,
+        SourceSnapshot $snapshot,
+        (Agent&HasStructuredOutput)|null $agent,
+    ): ExtractionResult {
         $workspace = PreparationWorkspace::create(
             $snapshot->path,
             $snapshot->size,
@@ -107,7 +111,7 @@ class DocumentExtraction
                 $invocation->configuration,
             );
 
-            return $this->processPrepared($invocation, $snapshot, $prepared);
+            return $this->processPrepared($invocation, $snapshot, $prepared, $agent);
         } finally {
             $workspace->cleanup();
         }
@@ -117,19 +121,19 @@ class DocumentExtraction
         ExtractionInvocation $invocation,
         SourceSnapshot $snapshot,
         PreparedDocument $prepared,
+        (Agent&HasStructuredOutput)|null $agent = null,
     ): ExtractionResult {
-        if ($invocation->operation === TerminalOperation::Extract) {
-            throw ProcessingUnavailableException::make(
-                'ai_processing_unavailable',
-                'Structured AI extraction is not implemented in this package phase.',
-            );
-        }
-
         if ($invocation->detectDocuments) {
             throw ProcessingUnavailableException::make(
                 'ai_processing_unavailable',
                 'Document detection is not implemented in this package phase.',
             );
+        }
+
+        $processor = $this->container->make(NativeAiProcessor::class);
+
+        if ($invocation->operation === TerminalOperation::Extract) {
+            return $processor->extract($invocation, $snapshot, $prepared, $agent);
         }
 
         if ($prepared->pageCount === null) {
@@ -142,10 +146,7 @@ class DocumentExtraction
         }
 
         if ($prepared->requiresAi() && ! $invocation->withoutAi) {
-            throw ProcessingUnavailableException::make(
-                'ai_processing_unavailable',
-                'OCR execution is not implemented in this package phase; visual pages were prepared safely.',
-            );
+            return $processor->text($invocation, $snapshot, $prepared);
         }
 
         $selectedPages = $prepared->selectedPages ?? [];
@@ -201,10 +202,10 @@ class DocumentExtraction
         );
     }
 
-    protected function validateInvocation(ExtractionInvocation $invocation): void
+    protected function validateInvocation(ExtractionInvocation $invocation): (Agent&HasStructuredOutput)|null
     {
         if ($invocation->agent === null) {
-            return;
+            return null;
         }
 
         $agent = $this->resolveAgent($invocation->agent);
@@ -222,6 +223,8 @@ class DocumentExtraction
                 'Extraction agents with conversation history are not supported.',
             );
         }
+
+        return $agent;
     }
 
     private function pending(SourceInput $source): PendingExtraction
@@ -243,15 +246,16 @@ class DocumentExtraction
 
         $this->validateProvider($configuration['provider'] ?? null, 'provider');
         $this->validateOptionalString($configuration['model'] ?? null, 'model');
-        $this->validatePositiveInteger($configuration['timeout'] ?? null, 'timeout');
+        $this->validateOptionalPositiveInteger($configuration['timeout'] ?? null, 'timeout');
         $configuration['provider'] = $configuration['provider'] ?? null;
         $configuration['model'] = $configuration['model'] ?? null;
+        $configuration['timeout'] = $configuration['timeout'] ?? null;
 
-        foreach (['options', 'middleware'] as $key) {
-            if (! is_array($configuration[$key] ?? null)) {
-                throw ConfigurationException::make('invalid_configuration', "Extraction configuration [{$key}] must be an array.");
-            }
+        if (! is_array($configuration['middleware'] ?? null)) {
+            throw ConfigurationException::make('invalid_configuration', 'Extraction configuration [middleware] must be an array.');
         }
+
+        $this->validateProviderOptions($configuration['options'] ?? null, 'options');
 
         foreach (['ocr', 'detection'] as $purpose) {
             $settings = $configuration[$purpose] ?? null;
@@ -262,12 +266,11 @@ class DocumentExtraction
 
             $this->validateProvider($settings['provider'] ?? null, "{$purpose}.provider");
             $this->validateOptionalString($settings['model'] ?? null, "{$purpose}.model");
+            $this->validateOptionalPositiveInteger($settings['timeout'] ?? null, "{$purpose}.timeout");
             $settings['provider'] = $settings['provider'] ?? null;
             $settings['model'] = $settings['model'] ?? null;
-
-            if (! is_array($settings['options'] ?? null)) {
-                throw ConfigurationException::make('invalid_configuration', "Extraction configuration [{$purpose}.options] must be an array.");
-            }
+            $settings['timeout'] = $settings['timeout'] ?? null;
+            $this->validateProviderOptions($settings['options'] ?? null, "{$purpose}.options");
 
             if (is_array($settings['provider'] ?? null) && ($settings['model'] ?? null) !== null) {
                 throw ConfigurationException::make('invalid_configuration', "Extraction configuration [{$purpose}] cannot combine a provider list with a separate model.");
@@ -427,6 +430,29 @@ class DocumentExtraction
     {
         if (! is_int($value) || $value < 1) {
             throw ConfigurationException::make('invalid_configuration', "Extraction configuration [{$key}] must be a positive integer.");
+        }
+    }
+
+    private function validateOptionalPositiveInteger(mixed $value, string $key): void
+    {
+        if ($value !== null && (! is_int($value) || $value < 1)) {
+            throw ConfigurationException::make('invalid_configuration', "Extraction configuration [{$key}] must be a positive integer or null.");
+        }
+    }
+
+    private function validateProviderOptions(mixed $options, string $key): void
+    {
+        if (! is_array($options)) {
+            throw ConfigurationException::make('invalid_configuration', "Extraction configuration [{$key}] must be an array.");
+        }
+
+        foreach ($options as $provider => $values) {
+            if (! is_string($provider) || trim($provider) === '' || ! is_array($values)) {
+                throw ConfigurationException::make(
+                    'invalid_configuration',
+                    "Extraction configuration [{$key}] must contain provider-name keys with option arrays.",
+                );
+            }
         }
     }
 

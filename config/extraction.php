@@ -12,12 +12,14 @@ return [
     'ocr' => [
         'provider' => null,
         'model' => null,
+        'timeout' => null,
         'options' => [],
     ],
 
     'detection' => [
         'provider' => null,
         'model' => null,
+        'timeout' => null,
         'options' => [],
     ],
 

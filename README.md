@@ -3,9 +3,10 @@
 Laravel-native document text and schema extraction with provenance and AI cost tracking.
 
 > [!IMPORTANT]
-> Bounded direct-text, PDF, and image preparation is implemented. OCR and schema-model execution
-> are the next package stage: inputs that need AI are prepared and then fail explicitly with
-> `ProcessingUnavailableException`; they are never returned as complete extraction results.
+> Bounded direct-text, PDF, and image preparation, native OCR, and schema-model execution are
+> implemented. Document detection, complete Laravel AI Pricing records, benchmark integration, and
+> production hardening remain later package stages; current AI calls are explicitly unpriced rather
+> than reported as zero-cost.
 
 ## Foundation
 
@@ -48,16 +49,27 @@ release action. See [`docs/verification.md`](docs/verification.md#exact-sha-pull
 
 ## Configuration
 
-The package provider is auto-discovered and publishes `config/extraction.php`. The foundation keeps
-the accepted provider, model, purpose overrides, middleware/options, timeout, and bounded resource
-limit keys stable for production extraction and benchmark integration.
+The package provider is auto-discovered and publishes `config/extraction.php`. Provider, model, and
+timeout resolution is terminal call > purpose (`ocr`) > package root > native application-agent
+method/attribute > Laravel AI default. The pending request snapshots these values and never mutates
+Laravel's global configuration. A configured provider array is passed to Laravel AI's native
+failover unchanged; models belong in its provider map and cannot be combined with a separate model.
+
+Package-owned OCR and inline-schema agents read `extraction.options` and purpose-specific options,
+keyed by provider name, and `extraction.middleware`. A purpose provider's option array replaces its
+root provider option array rather than being deep-merged. An application agent supplied through
+`using()` owns its native `providerOptions()` and `middleware()` behavior; package options are not
+injected through a parallel mechanism that Laravel AI does not expose.
 
 Preparation defaults are 100 MB per source, 100 physical pages, 50 million decoded pixels per
-rendered page/frame, 30 seconds per parser operation, 600 seconds for snapshot plus preparation,
-10 MB retained UTF-8 output, and 512 MB active package-owned source/derivative storage. Native work
-runs in a sanitized isolated PHP worker with a PHP memory limit, Linux address-space/file-size
-limits, and absolute argv-array paths. The separate 20 MB inline-attachment limit is applied by the
-downstream model-request stage; it is not a source-admission or image-resize rule.
+rendered page/frame, 30 seconds per parser operation, 600 seconds for the complete invocation, 120
+seconds per AI attempt, 128 AI attempts, 10 MB retained UTF-8 output, and 512 MB active
+package-owned source/derivative storage. Native work runs in a sanitized isolated PHP worker with a
+PHP memory limit, Linux address-space/file-size limits, and absolute argv-array paths. The separate
+20 MB inline-attachment limit is enforced before base64 encoding for each AI request; it is not a
+source-admission or image-resize rule. Model/provider request and context limits may be lower and
+fail explicitly—there is no silent truncation, generic arbitrary-schema chunking, or strategy-changing
+downsampling.
 
 `prlimit --fsize` limits each native-created file, while the package checks aggregate owned bytes
 between incremental operations. For a hard cumulative cap on scratch files created *during* a
@@ -96,6 +108,73 @@ arguments follow Laravel AI's native `Lab|array|string|null` routing shape. Inva
 configuration is rejected before source bytes are read. Configuration is copied when the pending
 request is created and never mutates Laravel's global configuration.
 
+## Native OCR and structured extraction
+
+OCR runs once per prepared visual page and preserves original page provenance. A failed provider
+call produces an explicit incomplete `PageResult` while successful page text remains available.
+Structured extraction sends prepared visual PDF/image pages directly to a native Laravel AI agent;
+it does not require an OCR-then-schema pass. Text-like inputs provide their bounded normalized text.
+
+Inline schemas use Laravel's native `JsonSchema` types:
+
+```php
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+
+$result = Extraction::fromPath($path)
+    ->instructions('Extract only facts present in the invoice.')
+    ->schema(fn (JsonSchema $schema) => [
+        'invoice' => $schema->string()->nullable()->required(),
+        'total' => $schema->string()->nullable()->required(),
+        'lines' => $schema->array()->items(
+            $schema->object([
+                'description' => $schema->string()->required(),
+                'amount' => $schema->string()->required(),
+            ])
+        )->required(),
+    ])
+    ->extract(provider: 'openai', model: 'gpt-5');
+
+$result->data;
+```
+
+Reusable extraction agents are ordinary application agents implementing `Agent` and
+`HasStructuredOutput`:
+
+```php
+$result = Extraction::fromPath($path)
+    ->using(PurchaseDocumentAgent::class)
+    ->extract();
+```
+
+The actual resolved application agent is invoked, preserving its instructions, schema, attributes,
+provider options, and ordinary middleware. Agents with nonempty tools or saved conversation history
+are rejected before source egress; those capabilities are not silently stripped. Extraction-agent
+middleware must not directly call `prompt()` on that same agent object before forwarding the outer
+extraction invocation. This is this package's supported boundary—not a general Laravel prohibition—and
+the package does not claim every such violation can be detected before the nested call reaches a
+provider. Nested calls on another agent are supported and remain unattributed to extraction.
+
+For every attempt, the package compiles the exact native schema passed to the provider, rejects an
+invalid schema or external reference before dispatch, then validates the returned step text against
+that same Opis draft 2020-12 schema before converting it to a PHP array. Malformed/truncated JSON,
+wrong types, missing required values, additional properties, and root lists fail locally. This does
+not trust Laravel AI's normalized structured `[]` as proof that raw JSON was valid, so valid empty
+objects remain distinguishable from lists when the provider path preserves response text.
+
+OpenAI Responses and Anthropic native structured-output HTTP paths are covered with offline protocol
+fixtures. Provider modes that synthesize structured output as a tool call can erase empty-object
+identity inside the current Laravel AI SDK (notably opt-out Anthropic structured tools and Bedrock
+tool-style structured output); an empty object on those modes is therefore rejected rather than
+inferred from normalized `[]`. Use the provider's native text-preserving structured mode when an
+empty root object is valid.
+
+Only Laravel AI exceptions implementing its native failover contract advance to a configured
+fallback. Invalid JSON/schema output, package budget/limit failures, and programming errors do not
+retry or invoke a model-based repair pass. The shared deadline includes snapshotting, preparation,
+and every fallback attempt; each provider timeout is clamped to the remaining invocation time.
+Global AI limits throw `AiExecutionException`. If work already produced safe page/call evidence,
+the exception's `partialResult` retains it while processing stops.
+
 ## Preparation behavior and formats
 
 - TXT, CSV, HTML, JSON, and XML are returned deterministically as bounded UTF-8 text with line
@@ -116,8 +195,8 @@ request is created and never mutates Laravel's global configuration.
 PDF text and explicit `ocr_required` page coverage for anything unprocessed; it never invents blank
 or complete pages. The decoded-pixel limit is checked before an image decode or PDF render. It does
 not reject a large-geometry PDF when only its bounded text layer is read. Structured extraction
-prepares normalized visual pages, but AI/schema execution, call/pricing evidence, and document
-detection remain downstream package stages.
+prepares normalized visual pages and invokes native schema extraction without a mandatory OCR pass.
+Document detection remains a downstream package stage.
 
 ## Result contract
 
@@ -126,7 +205,10 @@ source identity, normalized media type, nullable page count, cost summary, and `
 ordinary mode, `data` and `text` are read-only accessors derived from the single `DocumentResult`.
 In document-detection mode they remain `null`; callers inspect every document instead of silently
 receiving the first group. Failed structured documents retain no unvalidated data, and unpaginated
-content never receives invented page numbers.
+content never receives invented page numbers. Current native call records provide stage, page,
+provider/model, outcome, and duration as the minimal evidence seam for this stage. Full usage,
+effective-identity, and Laravel AI Pricing aggregation is intentionally deferred; every AI call is
+listed as unpriced and cost completeness is false instead of fabricating zero spend.
 
 ## Testing with the facade fake
 

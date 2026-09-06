@@ -19,8 +19,8 @@ it('boots the package provider and exposes the complete benchmark configuration'
             'timeout' => 120,
             'options' => [],
             'middleware' => [],
-            'ocr' => ['provider' => null, 'model' => null, 'options' => []],
-            'detection' => ['provider' => null, 'model' => null, 'options' => []],
+            'ocr' => ['provider' => null, 'model' => null, 'timeout' => null, 'options' => []],
+            'detection' => ['provider' => null, 'model' => null, 'timeout' => null, 'options' => []],
             'preparation' => [
                 'render_dpi' => 150,
                 'native_memory_bytes' => 1_073_741_824,
