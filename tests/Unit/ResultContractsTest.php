@@ -169,7 +169,10 @@ it('distinguishes replayed evidence from new spend and strips pricing from publi
         ->and($simulated->calls->first()?->usage)->toBeNull()
         ->and($simulated->cost->knownByCurrency)->toBeEmpty()
         ->and($simulated->cost->unpricedCalls->all())->toBe(['extraction-id:1'])
-        ->and($simulated->cost->complete)->toBeFalse();
+        ->and($simulated->cost->complete)->toBeFalse()
+        ->and($simulated->asRecorded())->toBe($simulated)
+        ->and($simulated->calls->first()?->asRecorded()->evidenceOrigin)->toBe(EvidenceOrigin::Simulated)
+        ->and($simulated->cost->asRecorded()->evidenceOrigin)->toBe(EvidenceOrigin::Simulated);
 });
 
 it('rejects ambiguous or impossible page provenance', function (Closure $make): void {

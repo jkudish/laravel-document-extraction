@@ -73,6 +73,10 @@ final readonly class CostSummary implements Arrayable, JsonSerializable
 
     public function asRecorded(): self
     {
+        if ($this->evidenceOrigin === EvidenceOrigin::Simulated) {
+            return $this;
+        }
+
         return new self(
             knownByCurrency: $this->knownByCurrency,
             unpricedCalls: $this->unpricedCalls,

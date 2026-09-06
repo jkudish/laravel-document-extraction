@@ -136,6 +136,10 @@ final readonly class CallRecord implements Arrayable, JsonSerializable
 
     public function asRecorded(): self
     {
+        if ($this->evidenceOrigin === EvidenceOrigin::Simulated) {
+            return $this;
+        }
+
         return new self(
             stage: $this->stage,
             outcome: $this->outcome,

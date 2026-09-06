@@ -129,6 +129,10 @@ final readonly class ExtractionResult
 
     public function asRecorded(): self
     {
+        if ($this->evidenceOrigin === EvidenceOrigin::Simulated) {
+            return $this;
+        }
+
         return new self(
             documents: $this->documents,
             sourceSha256: $this->sourceSha256,
