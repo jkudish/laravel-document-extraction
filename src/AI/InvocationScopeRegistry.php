@@ -39,9 +39,7 @@ final class InvocationScopeRegistry
             return null;
         }
 
-        $scope->observePrompt($invocationId);
-
-        return $scope;
+        return $scope->observePrompt($invocationId) ? $scope : null;
     }
 
     public function starting(

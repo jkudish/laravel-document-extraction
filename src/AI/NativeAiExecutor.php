@@ -35,7 +35,7 @@ final readonly class NativeAiExecutor
             function () use ($scope, $agent, $prompt, $attachments, $provider, $model, $timeout): NativeAiResult {
                 $response = $agent->prompt($prompt, $attachments, $provider, $model, $timeout);
 
-                return $scope->finish($response->invocationId);
+                return $scope->finish($response);
             },
         );
 

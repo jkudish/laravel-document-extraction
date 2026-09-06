@@ -152,28 +152,45 @@ are rejected before source egress; those capabilities are not silently stripped.
 middleware must not directly call `prompt()` on that same agent object before forwarding the outer
 extraction invocation. This is this package's supported boundary—not a general Laravel prohibition—and
 the package does not claim every such violation can be detected before the nested call reaches a
-provider. Nested calls on another agent are supported and remain unattributed to extraction.
+provider. Nested calls on another agent, and same-agent calls after forwarding returns, are supported
+and remain unattributed to extraction. Middleware may also return a cached response without forwarding;
+that response is validated without inventing a provider call. Response JSON text is authoritative:
+post-processing middleware must update `text`, not only Laravel AI's normalized `structured` array.
 
 For every attempt, the package compiles the exact native schema passed to the provider, rejects an
 invalid schema or external reference before dispatch, then validates the returned step text against
 that same Opis draft 2020-12 schema before converting it to a PHP array. Malformed/truncated JSON,
-wrong types, missing required values, additional properties, and root lists fail locally. This does
+provider-declared incomplete responses, wrong types, missing required values, additional properties,
+and root lists fail locally. This does
 not trust Laravel AI's normalized structured `[]` as proof that raw JSON was valid, so valid empty
 objects remain distinguishable from lists when the provider path preserves response text.
 
-OpenAI Responses and Anthropic native structured-output HTTP paths are covered with offline protocol
-fixtures. Provider modes that synthesize structured output as a tool call can erase empty-object
-identity inside the current Laravel AI SDK (notably opt-out Anthropic structured tools and Bedrock
-tool-style structured output); an empty object on those modes is therefore rejected rather than
-inferred from normalized `[]`. Use the provider's native text-preserving structured mode when an
-empty root object is valid.
+The schema contract starts at Laravel's native types, not arbitrary JSON Schema input. Unsupported
+keywords discarded by Laravel's `JsonSchema::fromArray()` cannot be recovered or enforced here;
+use native type methods (for example, a single-value enum rather than an unsupported `const`).
+Provider-specific native wire adaptations, such as Anthropic's schema sanitizer, do not weaken
+local validation against the original compiled native schema.
+
+OpenAI Responses, Anthropic native structured output, and Anthropic synthetic structured-tool HTTP
+paths are covered with offline protocol fixtures. For Anthropic structured tools, the package reads
+the bounded original HTTP JSON to preserve object/list identity before Laravel AI's normalization.
+The current Bedrock structured gateway exposes no equivalent lossless response, so structured
+extraction rejects that provider before dispatch; native Bedrock OCR/text is not excluded by this
+structured-output restriction. Other providers require a JSON-text-preserving native gateway;
+these fixtures are not a live-provider or every-provider compatibility claim.
+
+Provider options are read once per attempt. Metadata and ordinary provider tuning are preserved,
+but options cannot override generated messages, schemas, tools, routing, or conversation state.
+Final post-middleware local/inline image attachments are frozen and checked against the pre-base64
+byte limit before dispatch. Remote or otherwise unbounded middleware attachments are rejected.
 
 Only Laravel AI exceptions implementing its native failover contract advance to a configured
 fallback. Invalid JSON/schema output, package budget/limit failures, and programming errors do not
 retry or invoke a model-based repair pass. The shared deadline includes snapshotting, preparation,
-and every fallback attempt; each provider timeout is clamped to the remaining invocation time.
-Global AI limits throw `AiExecutionException`. If work already produced safe page/call evidence,
-the exception's `partialResult` retains it while processing stops.
+every fallback attempt, and response middleware; each provider timeout is clamped to the remaining
+invocation time, and late returns are rejected. Global AI limits throw `AiExecutionException`.
+If work already produced safe page/call evidence, AI-limit and configuration exceptions retain it
+in `partialResult` while processing stops.
 
 ## Preparation behavior and formats
 

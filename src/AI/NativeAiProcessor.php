@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Jkudish\DocumentExtraction\AI;
 
 use Jkudish\DocumentExtraction\Exceptions\AiExecutionException;
+use Jkudish\DocumentExtraction\Exceptions\ConfigurationException;
 use Jkudish\DocumentExtraction\ExtractionInvocation;
 use Jkudish\DocumentExtraction\Preparation\PreparedDocument;
 use Jkudish\DocumentExtraction\Preparation\PreparedPage;
@@ -96,7 +97,7 @@ final readonly class NativeAiProcessor
                 cost: $session->costSummary(),
                 coverageComplete: $errors === [],
             );
-        } catch (AiExecutionException $exception) {
+        } catch (AiExecutionException|ConfigurationException $exception) {
             $globalError = $this->error($exception->errorCode, $exception->getMessage(), $activePages);
             $errors[] = $globalError;
 
@@ -178,7 +179,7 @@ final readonly class NativeAiProcessor
                     retryable: true,
                 ),
             );
-        } catch (AiExecutionException $exception) {
+        } catch (AiExecutionException|ConfigurationException $exception) {
             throw $exception->withPartialResult($this->failedExtraction(
                 $snapshot,
                 $prepared,
@@ -198,6 +199,7 @@ final readonly class NativeAiProcessor
             attemptLimit: $invocation->configuration['limits']['ai_attempts'],
             attemptTimeout: $invocation->configuration['limits']['ai_attempt_timeout'],
             outputLimit: $invocation->configuration['limits']['retained_output_bytes'],
+            attachmentLimit: $invocation->configuration['limits']['inline_attachment_bytes'],
             initialRetainedBytes: $initialRetainedBytes,
         );
     }

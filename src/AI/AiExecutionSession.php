@@ -23,7 +23,8 @@ final class AiExecutionSession
         private readonly Deadline $deadline,
         private readonly int $attemptLimit,
         private readonly int $attemptTimeout,
-        private readonly int $outputLimit,
+        public readonly int $outputLimit,
+        public readonly int $attachmentLimit,
         int $initialRetainedBytes = 0,
     ) {
         $this->retainedBytes = $initialRetainedBytes;
@@ -40,15 +41,26 @@ final class AiExecutionSession
 
         $this->attempts++;
 
+        return $this->remainingSeconds();
+    }
+
+    public function remainingSeconds(): int
+    {
         try {
             return $this->deadline->remainingSeconds($this->attemptTimeout);
         } catch (PreparationException $exception) {
             throw AiExecutionException::make(
                 $exception->errorCode,
-                'The extraction invocation deadline was exceeded before another AI attempt could start.',
+                'The extraction invocation deadline was exceeded.',
                 $exception,
             );
         }
+    }
+
+    public function replaceRetained(string $previous, string $replacement): void
+    {
+        $this->retainedBytes -= strlen($previous);
+        $this->retain($replacement);
     }
 
     public function retain(string $output): void
