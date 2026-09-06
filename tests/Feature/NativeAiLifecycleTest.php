@@ -243,6 +243,33 @@ it('does not mistake an existing normalized fake response for a middleware edit'
     expect($result->data)->toBe(['value' => 'original-json']);
 });
 
+it('keeps original JSON authoritative for unchanged normalized fields during sibling edits', function (array $normalized, bool $valid): void {
+    InlineSchemaAgent::fake([new StructuredTextResponse(
+        $normalized, '{"value":"raw-json","edited":"old"}', new Usage, new Meta('openai', 'review-model'),
+    )])->preventStrayPrompts();
+    config()->set('extraction.middleware', [function (AgentPrompt $prompt, Closure $next): mixed {
+        $response = $next($prompt);
+        assert($response instanceof StructuredAgentResponse);
+        $response['edited'] = 'new';
+
+        return $response;
+    }]);
+
+    $result = app(DocumentExtraction::class)->fromString('source', 'text/plain')
+        ->schema(fn (JsonSchema $schema): array => [
+            'value' => $schema->string()->required(),
+            'edited' => $schema->string()->required(),
+            'extra' => $schema->string(),
+        ])->extract();
+
+    expect($result->complete())->toBe($valid)
+        ->and($result->data)->toBe($valid ? ['value' => 'raw-json', 'edited' => 'new'] : null);
+})->with([
+    'different normalized value' => [['value' => 'normalized-fake', 'edited' => 'old'], true],
+    'unmappable extra normalized key' => [['value' => 'normalized-fake', 'edited' => 'old', 'extra' => 'not in JSON'], false],
+    'unmappable missing normalized key' => [['edited' => 'old'], false],
+]);
+
 it('validates explicit structured-only mutations instead of merging removed or invalid fields back', function (array $replacement, bool $valid): void {
     InlineSchemaAgent::fake([new StructuredTextResponse(
         ['value' => 'old', 'details' => []], '{"value":"old","details":{}}', new Usage, new Meta('openai', 'review-model'),

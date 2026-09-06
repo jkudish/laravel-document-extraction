@@ -136,7 +136,7 @@ final class AiCallScope
             try {
                 $edited = $this->restoreUnchangedJson(
                     $response->structured,
-                    $this->result->data,
+                    $this->providerStructured,
                     json_decode($this->retainedText, false, 512, JSON_THROW_ON_ERROR),
                 );
                 $text = json_encode($edited === [] ? new \stdClass : $edited, JSON_THROW_ON_ERROR);
@@ -165,6 +165,10 @@ final class AiCallScope
         }
 
         $originalChildren = (array) $original;
+
+        if (array_diff_key($baseline, $originalChildren) !== [] || array_diff_key($originalChildren, $baseline) !== []) {
+            throw new InvalidAiOutputException('The normalized response shape cannot be reconciled with its original JSON.');
+        }
 
         foreach ($current as $key => $value) {
             if (array_key_exists($key, $baseline)) {
