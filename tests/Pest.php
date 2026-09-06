@@ -16,6 +16,9 @@ pest()->tia()
         'config/*.php' => 'tests/Feature/ServiceProviderTest.php',
         'resources/prompts/*' => 'tests/Unit/PromptTest.php',
         'resources/schemas/*' => 'tests/Unit/SchemaFileTest.php',
+        'resources/workers/*' => 'tests/Feature/PreparationTest.php',
+        'tests/Fixtures/Images/*' => 'tests/Feature/PreparationTest.php',
+        'tests/Fixtures/Pdf/*' => 'tests/Feature/PreparationTest.php',
         'tests/Fixtures/*' => 'tests/Unit/FixtureTest.php',
     ]);
 
@@ -47,6 +50,7 @@ function nativeRuntimeFingerprint(): string
         'pdfinfo' => nativeCommandVersion('pdfinfo'),
         'pdftoppm' => nativeCommandVersion('pdftoppm'),
         'pdftotext' => nativeCommandVersion('pdftotext'),
+        'prlimit' => nativeCommandVersion('prlimit'),
         'runtime_salt' => getenv('LDE_TIA_RUNTIME_SALT') ?: null,
     ], JSON_THROW_ON_ERROR);
 

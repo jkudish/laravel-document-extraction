@@ -2,7 +2,7 @@
 
 ## Orb runtime
 
-`.agents/setup` installs PHP 8.4 and 8.5 with Imagick and PCOV, Poppler, Composer
+`.agents/setup` installs PHP 8.4 and 8.5 with Imagick and PCOV, Poppler, util-linux, Composer
 2.10.3, and the locked development dependencies. Run it after checking out a branch
 with different dependencies; it is safe to repeat. Warm runs ask Composer to reconcile
 the lockfile rather than skipping installation based on a custom cache marker.
@@ -42,6 +42,17 @@ command makes model calls or requires provider credentials. `composer analyse` l
 through a disposable allowlisted environment; use that route rather than invoking PHPStan directly
 from a credential-bearing shell. PHPStan cache is confined to that temporary environment and
 removed afterward, not written under the repository.
+
+The application-level readiness command is also offline and secret-free:
+
+```sh
+php artisan extraction:doctor
+```
+
+It checks Linux containment, configured bounds, executable Poppler/PHP/`prlimit` paths, required PHP
+extensions, the Illuminate Image Imagick driver, and every advertised codec. It does not contact a
+provider, upload a document, fetch a URL, or make a network capability probe. A missing capability
+is a failed readiness check, never a skipped-support claim.
 
 ## Development acceleration
 
@@ -90,6 +101,13 @@ Larastan level 10. The locked current environment additionally resolved Laravel 
 0.1.0, Intervention Image 4.3.2, Opis JSON Schema 2.6.0, and Spatie PDF-to-text 1.55.0. Native
 evidence was Imagick extension 3.8.1 over ImageMagick 6.9.11-60, PCOV 1.0.12, Poppler 22.12.0,
 and Composer 2.10.3.
+
+Preparation coverage uses real synthetic binaries for text/scanned/mixed/vector/blank/encrypted/
+malformed PDFs and JPEG, PNG, WebP, TIFF, HEIC, HEIF, BMP, AVIF, and GIF images. The compressed PDF
+bomb is executed only inside reduced Linux address-space and PHP-memory limits; it must never be run
+without OS containment. The matrix proves these capabilities on the recorded Debian/Linux native
+runtime only. It makes no Windows or macOS support claim, and a consumer deployment must run
+`extraction:doctor` against its own installed codecs and executables.
 
 The package requires Laravel 13.23 or newer. The complete native Illuminate Image API first exists
 in Laravel 13.20 and its plural `config/images.php` convention first exists in 13.21, so 13.23 has

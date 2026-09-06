@@ -5,7 +5,6 @@ declare(strict_types=1);
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Jkudish\DocumentExtraction\DocumentExtraction;
 use Jkudish\DocumentExtraction\Exceptions\ConfigurationException;
-use Jkudish\DocumentExtraction\Exceptions\ProcessingUnavailableException;
 use Jkudish\DocumentExtraction\PendingExtraction;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
@@ -173,6 +172,8 @@ it('rejects malformed package configuration before accepting a request', functio
     'invalid middleware' => ['middleware', 'not-an-array'],
     'invalid source limit' => ['limits.source_bytes', 0],
     'invalid OCR settings' => ['ocr', 'not-an-array'],
+    'invalid preparation setting' => ['preparation.render_dpi', 0],
+    'empty preparation binary' => ['preparation.binaries.pdfinfo', ''],
 ]);
 
 it('rejects a configured provider map combined with a configured model', function (): void {
@@ -242,10 +243,13 @@ it('rejects unsupported structured-agent capabilities before source egress', fun
     stdClass::class,
 ]);
 
-it('fails explicitly at the not-yet-implemented live processing boundary', function (): void {
-    expect(fn () => app(DocumentExtraction::class)
+it('returns deterministic direct text at the live processing boundary without AI', function (): void {
+    $result = app(DocumentExtraction::class)
         ->fromString('source', 'text/plain')
         ->withoutAi()
-        ->text())
-        ->toThrow(ProcessingUnavailableException::class, 'not implemented');
+        ->text();
+
+    expect($result->text)->toBe('source')
+        ->and($result->complete())->toBeTrue()
+        ->and($result->calls)->toBeEmpty();
 });

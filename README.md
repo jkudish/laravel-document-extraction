@@ -3,16 +3,16 @@
 Laravel-native document text and schema extraction with provenance and AI cost tracking.
 
 > [!IMPORTANT]
-> The source, pending-request, result, and testing-fake contracts are available. Live PDF/image/text
-> parsing and AI processing are not implemented yet: calling a terminal operation on the live
-> binding fails explicitly with `ProcessingUnavailableException` after safe source snapshotting.
+> Bounded direct-text, PDF, and image preparation is implemented. OCR and schema-model execution
+> are the next package stage: inputs that need AI are prepared and then fail explicitly with
+> `ProcessingUnavailableException`; they are never returned as complete extraction results.
 
 ## Foundation
 
 - PHP 8.4 and 8.5; Laravel 13.23 and the current Laravel 13 release
 - Laravel AI SDK and Laravel AI Pricing
 - native Illuminate Image with Intervention Image 4's Imagick driver
-- Spatie PDF-to-text and Poppler, plus Opis JSON Schema 2
+- Spatie PDF-to-text, Poppler, util-linux `prlimit`, and Opis JSON Schema 2
 - Orchestra Testbench, native Pest 5 with local TIA, PAO, Pint, and Larastan level 10
 - no database, queues, frontend, hosted CI, provider credentials, or live data
 
@@ -26,7 +26,14 @@ Imagick, PCOV, Poppler, and signature-verified Composer before installing the lo
 .agents/resume
 ```
 
-The setup script uses the signed Sury PHP repository and is idempotent. See
+The setup script uses the signed Sury PHP repository and is idempotent. Verify production
+preparation readiness without a provider or network request:
+
+```sh
+php artisan extraction:doctor
+```
+
+See
 [`docs/verification.md`](docs/verification.md) for full, TIA, PAO, and four-cell compatibility
 verification commands, plus the local exact-SHA PR receipt and signoff protocol.
 
@@ -44,6 +51,19 @@ release action. See [`docs/verification.md`](docs/verification.md#exact-sha-pull
 The package provider is auto-discovered and publishes `config/extraction.php`. The foundation keeps
 the accepted provider, model, purpose overrides, middleware/options, timeout, and bounded resource
 limit keys stable for production extraction and benchmark integration.
+
+Preparation defaults are 100 MB per source, 100 physical pages, 50 million decoded pixels per
+rendered page/frame, 30 seconds per parser operation, 600 seconds for snapshot plus preparation,
+10 MB retained UTF-8 output, and 512 MB active package-owned source/derivative storage. Native work
+runs in a sanitized isolated PHP worker with a PHP memory limit, Linux address-space/file-size
+limits, and absolute argv-array paths. The separate 20 MB inline-attachment limit is applied by the
+downstream model-request stage; it is not a source-admission or image-resize rule.
+
+`prlimit --fsize` limits each native-created file, while the package checks aggregate owned bytes
+between incremental operations. For a hard cumulative cap on scratch files created *during* a
+native operation, run the application with a dedicated filesystem quota or equivalent container /
+systemd disk control. Linux with util-linux is the supported and tested containment runtime;
+Windows and macOS support is not claimed.
 
 ## Request and source contracts
 
@@ -63,11 +83,41 @@ extensions, upload metadata, and MIME hints do not override byte inspection. Cal
 from their current position to EOF and are never rewound or closed. Original paths, uploads, storage
 objects, and caller streams remain caller-owned; package snapshots are removed on success and error.
 
+Snapshots are made owner-read-only after capture. Stream reads use nonblocking mode and bounded
+readiness waits; the borrowed stream's blocking mode is restored afterward. Streams that cannot
+support nonblocking reads or readiness waits fail explicitly. Application-owned storage adapters
+must also bound their connection/open operations: the invocation checks its deadline before and
+after opening, but cannot preempt arbitrary PHP adapter code. Configured executables and PHP stream
+wrappers are trusted application code; these resource controls are not a sandbox for hostile code.
+
 Configure a pending request with `schema()`, `using()`, `instructions()`, `detectDocuments()`,
 `pages()`, or `withoutAi()`, then call `text()` or `extract()`. Terminal provider/model/timeout
 arguments follow Laravel AI's native `Lab|array|string|null` routing shape. Invalid or conflicting
 configuration is rejected before source bytes are read. Configuration is copied when the pending
 request is created and never mutates Laravel's global configuration.
+
+## Preparation behavior and formats
+
+- TXT, CSV, HTML, JSON, and XML are returned deterministically as bounded UTF-8 text with line
+  endings normalized. JSON and XML hints do not bypass syntax validation. HTML is never rendered or
+  executed; XML document types/entities are rejected and external resolution is disabled.
+- PDF metadata and encryption are gated by `pdfinfo` before text or rendering. Existing text is read
+  one original page at a time through Spatie PDF-to-text, preserving selected-page and blank-page
+  alignment. Pages with absent/invalid text or any embedded raster inventory require OCR; zero text
+  plus zero images is still treated conservatively because vector-only content can be visible.
+- JPEG, PNG, WebP, TIFF (frames become pages), HEIC, HEIF, BMP, AVIF, and single-frame GIF are
+  accepted when the installed Imagick codecs can decode them. Animated/multi-frame non-TIFF inputs
+  are rejected. Orientation and final PNG normalization use Illuminate Image's Imagick driver.
+  Laravel 13.23's Image API does not directly admit TIFF, HEIC, HEIF, or AVIF input, so a bounded
+  direct Imagick step selects a frame and converts it to an admitted lossless representation before
+  orientation and final normalization continue through Illuminate Image.
+
+`text()` avoids a model when bounded direct text is sufficient. `withoutAi()` returns all available
+PDF text and explicit `ocr_required` page coverage for anything unprocessed; it never invents blank
+or complete pages. The decoded-pixel limit is checked before an image decode or PDF render. It does
+not reject a large-geometry PDF when only its bounded text layer is read. Structured extraction
+prepares normalized visual pages, but AI/schema execution, call/pricing evidence, and document
+detection remain downstream package stages.
 
 ## Result contract
 

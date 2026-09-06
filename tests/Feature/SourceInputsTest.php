@@ -8,6 +8,7 @@ use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Jkudish\DocumentExtraction\Exceptions\ExtractionException;
+use Jkudish\DocumentExtraction\Preparation\Deadline;
 use Jkudish\DocumentExtraction\Source\SourceInput;
 use Jkudish\DocumentExtraction\Source\SourceSnapshot;
 use Jkudish\DocumentExtraction\Tests\Support\RecordingDocumentExtraction;
@@ -43,7 +44,7 @@ it('snapshots local paths from actual bytes without changing the original', func
             ->and($snapshot['contents'])->toBe($contents)
             ->and($snapshot['size'])->toBe(strlen($contents))
             ->and($snapshot['directoryMode'])->toBe(0700)
-            ->and($snapshot['fileMode'])->toBe(0600)
+            ->and($snapshot['fileMode'])->toBe(0400)
             ->and(is_file($snapshot['path']))->toBeFalse()
             ->and(file_get_contents($path))->toBe($contents);
     } finally {
@@ -148,6 +149,49 @@ it('enforces source and temporary byte caps while cleaning owned temporary files
             ->and(glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [])->toBe($before);
     }
 })->with(['source_bytes', 'temporary_bytes']);
+
+it('includes source capture in the invocation deadline and leaves no snapshot behind', function (): void {
+    $before = glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [];
+
+    try {
+        SourceSnapshot::capture(
+            SourceInput::contents('deadline source', 'text/plain'),
+            app(FilesystemFactory::class),
+            100,
+            100,
+            Deadline::afterSeconds(0),
+        );
+        throw new RuntimeException('Expected source capture to exceed its deadline.');
+    } catch (ExtractionException $exception) {
+        expect($exception->errorCode)->toBe('invocation_deadline_exceeded')
+            ->and(glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [])->toBe($before);
+    }
+});
+
+it('bounds a stalled socket read and restores the borrowed stream blocking mode', function (): void {
+    $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+    assert(is_array($pair));
+    $before = glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [];
+
+    try {
+        SourceSnapshot::capture(
+            SourceInput::stream($pair[0], 'text/plain'),
+            app(FilesystemFactory::class),
+            100,
+            100,
+            Deadline::afterSeconds(1),
+        );
+        throw new RuntimeException('Expected the stalled read to reach its deadline.');
+    } catch (ExtractionException $exception) {
+        expect($exception->errorCode)->toBe('invocation_deadline_exceeded')
+            ->and(is_resource($pair[0]))->toBeTrue()
+            ->and(stream_get_meta_data($pair[0])['blocked'])->toBeTrue()
+            ->and(glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [])->toBe($before);
+    } finally {
+        fclose($pair[0]);
+        fclose($pair[1]);
+    }
+});
 
 it('applies the byte bound to every source input without taking ownership', function (): void {
     config()->set('extraction.limits.source_bytes', 4);

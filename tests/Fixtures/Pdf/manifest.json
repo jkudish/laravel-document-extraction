@@ -1,0 +1,201 @@
+{
+    "text-only.pdf": {
+        "file": "text-only.pdf",
+        "description": "Single page with a text layer, no images.",
+        "expect": {
+            "pages": 1,
+            "encrypted": "no"
+        },
+        "size": 617,
+        "sha256": "0fee5ed91ea105a338fd06c63499f4b2feccb8fc852b65b5b3373ab62d9a63ee"
+    },
+    "multipage.pdf": {
+        "file": "multipage.pdf",
+        "description": "Five text pages, unique marker per page.",
+        "expect": {
+            "pages": 5,
+            "encrypted": "no"
+        },
+        "size": 1734,
+        "sha256": "2effaab517ca2fc319a466619f4b15460696181e1d82fdebc29cd0ac224da6e8"
+    },
+    "blank.pdf": {
+        "file": "blank.pdf",
+        "description": "Single legitimately blank page (empty content stream).",
+        "expect": {
+            "pages": 1,
+            "encrypted": "no"
+        },
+        "size": 549,
+        "sha256": "d4d8d7328b2d0a95fe2dc7383112187e22e7b3d663abb111eed28412f7f78c01"
+    },
+    "blank-leading.pdf": {
+        "file": "blank-leading.pdf",
+        "description": "Three pages; page 1 blank, pages 2-3 text.",
+        "expect": {
+            "pages": 3,
+            "encrypted": "no"
+        },
+        "size": 1099,
+        "sha256": "02c256e310644ac915df9d90579a60d9ca6f2bbe0200f02fa851c40ac125fc92"
+    },
+    "blank-interior.pdf": {
+        "file": "blank-interior.pdf",
+        "description": "Three pages; page 2 blank.",
+        "expect": {
+            "pages": 3,
+            "encrypted": "no"
+        },
+        "size": 1107,
+        "sha256": "1f4e2c28189dc6a2e8414dfd8bca146a307a3732e859b811394a5480e99d8bbb"
+    },
+    "blank-trailing.pdf": {
+        "file": "blank-trailing.pdf",
+        "description": "Three pages; page 3 blank.",
+        "expect": {
+            "pages": 3,
+            "encrypted": "no"
+        },
+        "size": 1101,
+        "sha256": "02eaf8f9fe755733a08cb18e7451d63b330f837e38b241b6835ca15ad65eb0b8"
+    },
+    "raster.pdf": {
+        "file": "raster.pdf",
+        "description": "Single page containing only an embedded JPEG (simulated scan, no text layer).",
+        "expect": {
+            "pages": 1,
+            "encrypted": "no",
+            "images": 1
+        },
+        "size": 46713,
+        "sha256": "872a7b390158e154079dc6435c236541b557fae6611cd52e06785cd9fd8df195"
+    },
+    "mixed.pdf": {
+        "file": "mixed.pdf",
+        "description": "Single page with both embedded JPEG and a text line.",
+        "expect": {
+            "pages": 1,
+            "encrypted": "no",
+            "images": 1
+        },
+        "size": 46773,
+        "sha256": "e533a2d4b5c74074d9171fc0d58431eda2d212690f80cb418355747e749a4a9f"
+    },
+    "malformed-truncated.pdf": {
+        "file": "malformed-truncated.pdf",
+        "description": "Valid PDF truncated at 60% (xref/trailer missing).",
+        "expect": {
+            "malformed": true
+        },
+        "size": 370,
+        "sha256": "c753b6f94fe9589534ab63bc1924d300206465f0a551f59dac627b1bea0c49e3"
+    },
+    "malformed-garbage.pdf": {
+        "file": "malformed-garbage.pdf",
+        "description": "PDF magic header followed by 2 KiB of random bytes.",
+        "expect": {
+            "malformed": true
+        },
+        "size": 2057,
+        "sha256": "ceef1f826d7a5aab956720c7a53438adb36b1c76ebb56392d55b58783fa472c7"
+    },
+    "encrypted-user.pdf": {
+        "file": "encrypted-user.pdf",
+        "description": "AES-256 encrypted, non-empty user password (cannot open without password).",
+        "expect": {
+            "encrypted": "yes"
+        },
+        "size": 1394,
+        "sha256": "6d2185d488f1152708de04143b1089200e0b5104aeb9d6d2865a024b53248cec"
+    },
+    "encrypted-empty-user.pdf": {
+        "file": "encrypted-empty-user.pdf",
+        "description": "AES-256 encrypted, EMPTY user password, extraction forbidden; opens without password but flagged Encrypted: yes.",
+        "expect": {
+            "encrypted": "yes"
+        },
+        "size": 1397,
+        "sha256": "c99a7a4ba22e181dd969c7e9b10fb80beda07b8517774f395a1e29387050b775"
+    },
+    "bomb-dims.pdf": {
+        "file": "bomb-dims.pdf",
+        "description": "Tiny file declaring a 100000x100000 pt page; rasterizing at 150dpi would need ~43 Gpixel (~173 GB RGB).",
+        "expect": {
+            "pages": 1,
+            "encrypted": "no"
+        },
+        "size": 609,
+        "sha256": "5c400359e7fb261bb3b257519034fe0e6fa735e54ae75cf0beee37ac5248431c"
+    },
+    "bomb-stream.pdf": {
+        "file": "bomb-stream.pdf",
+        "description": "FlateDecode content stream expanding to ~256 MiB of long-string text operators; stresses native decompression memory AND PHP stdout capture.",
+        "expect": {
+            "pages": 1,
+            "encrypted": "no"
+        },
+        "size": 1326281,
+        "sha256": "4487bf32fb5b54b7091ad22fde7054c3eb4dc9a29020a180e79e1d9574780495"
+    },
+    "dense-letter.pdf": {
+        "file": "dense-letter.pdf",
+        "description": "100 letter pages of dense 2pt text (~5 MB extractable). Passes 100MB/100-page guards; stresses output capture vs the 10MB aggregate output cap.",
+        "expect": {
+            "pages": 100,
+            "encrypted": "no"
+        },
+        "size": 405433,
+        "sha256": "6440716a41a282db44bc41d4446c1a7d2f02e88e2becbce4e3de565417d78b3a"
+    },
+    "bigpage-text.pdf": {
+        "file": "bigpage-text.pdf",
+        "description": "ONE 10000x10000pt page of dense 2pt text. Used for pixel-guard render-feasibility rejection (would exceed 50M px at 150dpi).",
+        "expect": {
+            "pages": 1,
+            "encrypted": "no"
+        },
+        "size": 1077638,
+        "sha256": "c725175cc1d64755f673073df53cd5f1e2a56b53946dc581617886cca12eef1c"
+    },
+    "vector-only.pdf": {
+        "file": "vector-only.pdf",
+        "description": "Single page of visible vector paths (rects/lines/curve); zero text, zero images. Counterexample: inventory cannot prove a page blank.",
+        "expect": {
+            "pages": 1,
+            "encrypted": "no",
+            "images": 0
+        },
+        "size": 749,
+        "sha256": "06800103c9d11b5a4491fefc783ecd8d29129ae750788cd9255167753ce3f09e"
+    },
+    "pages-101.pdf": {
+        "file": "pages-101.pdf",
+        "description": "101 simple text pages; one over the plan page-count guard of 100.",
+        "expect": {
+            "pages": 101,
+            "encrypted": "no"
+        },
+        "size": 29314,
+        "sha256": "bd818f5cd649167fdf813f99e6abfd741a0a7ed468165014530c2dce496d61a9"
+    },
+    "argv/evil name;$(touch LDE_PWNED)&.pdf": {
+        "file": "argv/evil name;$(touch LDE_PWNED)&.pdf",
+        "description": "Copy of text-only.pdf under a filename containing spaces, semicolon, $() command substitution and &.",
+        "expect": {
+            "pages": 1,
+            "encrypted": "no"
+        },
+        "size": 617,
+        "sha256": "0fee5ed91ea105a338fd06c63499f4b2feccb8fc852b65b5b3373ab62d9a63ee"
+    },
+    "-optionish.pdf": {
+        "file": "-optionish.pdf",
+        "description": "Copy of text-only.pdf whose basename starts with a dash.",
+        "expect": {
+            "pages": 1,
+            "encrypted": "no"
+        },
+        "size": 617,
+        "sha256": "0fee5ed91ea105a338fd06c63499f4b2feccb8fc852b65b5b3373ab62d9a63ee"
+    }
+}

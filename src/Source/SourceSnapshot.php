@@ -6,6 +6,7 @@ namespace Jkudish\DocumentExtraction\Source;
 
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Jkudish\DocumentExtraction\Exceptions\SourceException;
+use Jkudish\DocumentExtraction\Preparation\Deadline;
 use Throwable;
 
 final class SourceSnapshot
@@ -17,6 +18,7 @@ final class SourceSnapshot
         public readonly string $sha256,
         public readonly int $size,
         public readonly string $mediaType,
+        public readonly Deadline $deadline,
         public readonly ?int $pageCount = null,
     ) {}
 
@@ -25,7 +27,10 @@ final class SourceSnapshot
         FilesystemFactory $filesystems,
         int $sourceByteLimit,
         int $temporaryByteLimit,
+        ?Deadline $deadline = null,
     ): self {
+        $deadline ??= Deadline::afterSeconds(600);
+        $deadline->ensureRemaining();
         $directory = sys_get_temp_dir().'/laravel-document-extraction-'.bin2hex(random_bytes(16));
         $limit = min($sourceByteLimit, $temporaryByteLimit);
         $knownSize = $source->knownSize();
@@ -48,6 +53,7 @@ final class SourceSnapshot
         $destination = null;
         $input = null;
         $ownsInput = false;
+        $blocking = null;
 
         try {
             $destination = fopen($path, 'x+b');
@@ -57,11 +63,19 @@ final class SourceSnapshot
             }
 
             [$input, $ownsInput] = $source->open($filesystems);
+            $deadline->ensureRemaining();
+            $blocking = self::blockingMode(stream_get_meta_data($input));
+
+            if (! @stream_set_blocking($input, false)) {
+                throw SourceException::make('invalid_source', 'The source stream does not support bounded nonblocking reads.');
+            }
+
             $hash = hash_init('sha256');
             $size = 0;
             $containsBinaryControl = false;
 
             while (! feof($input)) {
+                $deadline->ensureRemaining();
                 $chunk = @fread($input, 8192);
 
                 if (! is_string($chunk)) {
@@ -73,7 +87,14 @@ final class SourceSnapshot
                         break;
                     }
 
-                    throw SourceException::make('invalid_source', 'The source stream stopped before reaching EOF.');
+                    $read = [$input];
+                    $write = $except = [];
+
+                    if (@stream_select($read, $write, $except, 0, 100_000) === false) {
+                        throw SourceException::make('invalid_source', 'The source stream cannot be awaited safely.');
+                    }
+
+                    continue;
                 }
 
                 $size += strlen($chunk);
@@ -98,14 +119,19 @@ final class SourceSnapshot
 
             $destination = null;
 
+            if (! chmod($path, 0400)) {
+                throw SourceException::make('invalid_source', 'The private source snapshot could not be made read-only.');
+            }
+
             if ($ownsInput) {
                 fclose($input);
                 $input = null;
             }
 
             $mediaType = (new MediaTypeDetector)->detect($path, $source->mimeTypeHint, $containsBinaryControl);
+            $deadline->ensureRemaining();
 
-            return new self($path, hash_final($hash), $size, $mediaType);
+            return new self($path, hash_final($hash), $size, $mediaType, deadline: $deadline);
         } catch (Throwable $exception) {
             if (is_resource($destination)) {
                 fclose($destination);
@@ -118,6 +144,10 @@ final class SourceSnapshot
             self::removeSnapshot($path);
 
             throw $exception;
+        } finally {
+            if (! $ownsInput && is_resource($input) && $blocking !== null) {
+                stream_set_blocking($input, $blocking);
+            }
         }
     }
 
@@ -153,6 +183,13 @@ final class SourceSnapshot
         if (! @rmdir($directory) && is_dir($directory)) {
             throw SourceException::make('cleanup_failed', 'Private source snapshot cleanup could not be completed.');
         }
+    }
+
+    /** @param array<string, mixed> $metadata */
+    private static function blockingMode(array $metadata): ?bool
+    {
+        // Some native wrappers (including php://temp) omit this metadata key.
+        return is_bool($metadata['blocked'] ?? null) ? $metadata['blocked'] : null;
     }
 
     /** @param resource $destination */

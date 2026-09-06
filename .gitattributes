@@ -1,0 +1,2 @@
+tests/Fixtures/Images/** binary
+tests/Fixtures/Pdf/**/*.pdf binary

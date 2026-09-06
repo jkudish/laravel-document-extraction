@@ -21,6 +21,19 @@ it('boots the package provider and exposes the complete benchmark configuration'
             'middleware' => [],
             'ocr' => ['provider' => null, 'model' => null, 'options' => []],
             'detection' => ['provider' => null, 'model' => null, 'options' => []],
+            'preparation' => [
+                'render_dpi' => 150,
+                'native_memory_bytes' => 1_073_741_824,
+                'php_memory_bytes' => 402_653_184,
+                'binaries' => [
+                    'pdfinfo' => 'pdfinfo',
+                    'pdfimages' => 'pdfimages',
+                    'pdftoppm' => 'pdftoppm',
+                    'pdftotext' => 'pdftotext',
+                    'prlimit' => 'prlimit',
+                    'php' => PHP_BINARY,
+                ],
+            ],
             'limits' => [
                 'source_bytes' => 100_000_000,
                 'physical_pages' => 100,
