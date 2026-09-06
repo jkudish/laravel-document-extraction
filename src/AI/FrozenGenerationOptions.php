@@ -15,7 +15,7 @@ final class FrozenGenerationOptions extends TextGenerationOptions
     public function __construct(TextGenerationOptions $options, private readonly array $providerOptions)
     {
         foreach ([
-            'model', 'modelId', 'input', 'messages', 'contents', 'system', 'system_instruction',
+            'model', 'modelId', 'input', 'messages', 'contents', 'system', 'system_instruction', 'instructions', 'prompt',
             'tools', 'tool_choice', 'tool_config', 'toolConfig', 'text', 'response_format',
             'output_config', 'generationConfig', 'response_mime_type', 'response_json_schema',
             'responseMimeType', 'responseSchema', 'responseJsonSchema', 'stream',

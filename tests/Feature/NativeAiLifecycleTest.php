@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Http;
+use Jkudish\DocumentExtraction\AI\InlineSchemaAgent;
 use Jkudish\DocumentExtraction\AI\OcrAgent;
 use Jkudish\DocumentExtraction\DocumentExtraction;
 use Jkudish\DocumentExtraction\Exceptions\AiExecutionException;
@@ -16,6 +17,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Responses\StructuredTextResponse;
 
 final class ReviewLifecycleAgent implements Agent, HasMiddleware, HasStructuredOutput
 {
@@ -194,6 +196,83 @@ it('preserves ordinary post-forward middleware response changes', function (): v
     expect($result->data)->toBe(['value' => 'post-processed']);
 });
 
+it('honors structured-only middleware edits without repairing invalid original containers', function (string $provider, bool $valid): void {
+    $original = '{"value":"old","details":'.($valid ? '{}' : '[]').',"lines":[]}';
+    config()->set('extraction.middleware', [function (AgentPrompt $prompt, Closure $next): mixed {
+        $response = $next($prompt);
+        assert($response instanceof StructuredAgentResponse);
+        $response['value'] = 'new';
+
+        return $response;
+    }]);
+
+    if ($provider === 'openai') {
+        InlineSchemaAgent::fake([new StructuredTextResponse(
+            ['value' => 'old', 'details' => [], 'lines' => []], $original, new Usage, new Meta('openai', 'review-model'),
+        )])->preventStrayPrompts();
+    } else {
+        config()->set('ai.providers.anthropic.key', 'test-key');
+        config()->set('ai.providers.anthropic.use_native_structured_output', false);
+        $body = '{"id":"msg_edit","type":"message","role":"assistant","model":"review-model",'
+            .'"content":[{"type":"tool_use","id":"tool_1","name":"output_structured_data","input":'.$original.'}],'
+            .'"stop_reason":"tool_use","usage":{"input_tokens":2,"output_tokens":3}}';
+        Http::fake(['https://api.anthropic.com/v1/messages' => Http::response($body, 200, ['Content-Type' => 'application/json'])]);
+    }
+
+    $result = app(DocumentExtraction::class)
+        ->fromString('source', 'text/plain')
+        ->schema(fn (JsonSchema $schema): array => [
+            'value' => $schema->string()->required(),
+            'details' => $schema->object([])->required(),
+            'lines' => $schema->array()->items($schema->string())->required(),
+        ])->extract($provider, 'review-model');
+
+    expect($result->complete())->toBe($valid)
+        ->and($result->data)->toBe($valid ? ['value' => 'new', 'details' => [], 'lines' => []] : null)
+        ->and($result->calls)->toHaveCount(1);
+})->with(['openai', 'anthropic'])->with([true, false]);
+
+it('does not mistake an existing normalized fake response for a middleware edit', function (): void {
+    ReviewLifecycleAgent::fake([new StructuredTextResponse(
+        ['value' => 'normalized-only'], '{"value":"original-json"}', new Usage, new Meta('openai', 'review-model'),
+    )])->preventStrayPrompts();
+
+    $result = app(DocumentExtraction::class)->fromString('source', 'text/plain')
+        ->using(new ReviewLifecycleAgent)->extract();
+
+    expect($result->data)->toBe(['value' => 'original-json']);
+});
+
+it('validates explicit structured-only mutations instead of merging removed or invalid fields back', function (array $replacement, bool $valid): void {
+    InlineSchemaAgent::fake([new StructuredTextResponse(
+        ['value' => 'old', 'details' => []], '{"value":"old","details":{}}', new Usage, new Meta('openai', 'review-model'),
+    )])->preventStrayPrompts();
+    config()->set('extraction.middleware', [function (AgentPrompt $prompt, Closure $next) use ($replacement): mixed {
+        $response = $next($prompt);
+        assert($response instanceof StructuredAgentResponse);
+        $response->structured = $replacement;
+
+        return $response;
+    }]);
+
+    $result = app(DocumentExtraction::class)
+        ->fromString('source', 'text/plain')
+        ->schema(fn (JsonSchema $schema): array => [
+            'value' => $schema->string()->required(),
+            'details' => $schema->object([])->required(),
+            'extra' => $schema->object([]),
+        ])->extract();
+
+    expect($result->complete())->toBe($valid)
+        ->and($result->data)->toBe($valid ? ['value' => 'new', 'details' => [], 'extra' => []] : null);
+})->with([
+    'removed required value' => [['details' => []], false],
+    'wrong scalar type' => [['value' => 3, 'details' => []], false],
+    'new ambiguous empty array' => [['value' => 'new', 'details' => [], 'extra' => []], false],
+    'new explicit empty object' => [['value' => 'new', 'details' => [], 'extra' => new stdClass], true],
+    'unencodable value' => [['value' => INF, 'details' => []], false],
+]);
+
 it('revalidates changed middleware JSON rather than trusting normalized structured data', function (string $text): void {
     ReviewLifecycleAgent::fake([['value' => 'provider']])->preventStrayPrompts();
 
@@ -208,14 +287,21 @@ it('revalidates changed middleware JSON rather than trusting normalized structur
         ->and($result->calls)->toHaveCount(1);
 })->with(['truncated' => '{"value":', 'wrong type' => '{"value":3}']);
 
-it('bounds post-forward middleware output while retaining the completed provider evidence', function (): void {
+it('bounds post-forward middleware output while retaining the completed provider evidence', function (bool $structuredOnly): void {
     config()->set('extraction.limits.retained_output_bytes', 32);
     ReviewLifecycleAgent::fake([['value' => 'provider']])->preventStrayPrompts();
+    $middleware = $structuredOnly ? function (AgentPrompt $prompt, Closure $next): mixed {
+        $response = $next($prompt);
+        assert($response instanceof StructuredAgentResponse);
+        $response['value'] = str_repeat('x', 33);
+
+        return $response;
+    } : new ReviewPostProcessMiddleware(str_repeat('x', 33));
 
     try {
         app(DocumentExtraction::class)
             ->fromString('source', 'text/plain')
-            ->using(new ReviewLifecycleAgent([new ReviewPostProcessMiddleware(str_repeat('x', 33))]))
+            ->using(new ReviewLifecycleAgent([$middleware]))
             ->extract();
         $this->fail('Expected the middleware output limit to stop extraction.');
     } catch (AiExecutionException $exception) {
@@ -223,7 +309,7 @@ it('bounds post-forward middleware output while retaining the completed provider
             ->and($exception->partialResult?->complete())->toBeFalse()
             ->and($exception->partialResult?->calls)->toHaveCount(1);
     }
-});
+})->with([true, false]);
 
 it('retains provider evidence when post-forward middleware raises a configuration failure', function (): void {
     ReviewLifecycleAgent::fake([['value' => 'provider']])->preventStrayPrompts();

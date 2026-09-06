@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 
 final class AiCallScope
 {
@@ -27,6 +28,9 @@ final class AiCallScope
     private ?CompiledSchema $schema = null;
 
     private string $providerText = '';
+
+    /** @var array<string, mixed>|null */
+    private ?array $providerStructured = null;
 
     private string $retainedText = '';
 
@@ -85,16 +89,19 @@ final class AiCallScope
         return true;
     }
 
+    /** @param array<string, mixed>|null $providerStructured */
     public function complete(
         NativeAiResult $result,
         ?CompiledSchema $schema,
         string $providerText,
         string $retainedText,
+        ?array $providerStructured,
     ): void {
         $this->result = $result;
         $this->schema = $schema;
         $this->providerText = $providerText;
         $this->retainedText = $retainedText;
+        $this->providerStructured = $providerStructured;
     }
 
     public function finish(AgentResponse $response): NativeAiResult
@@ -118,16 +125,53 @@ final class AiCallScope
             );
         }
 
-        if ($this->result !== null && $response->text === $this->providerText) {
-            return $this->result;
+        $text = $response->text;
+
+        if ($this->result !== null && $text === $this->providerText) {
+            if ($this->schema === null || ! $response instanceof StructuredAgentResponse || $response->structured === $this->providerStructured) {
+                return $this->result;
+            }
+
+            // Provider JSON was already validated; preserve unchanged containers while applying PHP middleware edits.
+            try {
+                $edited = $this->restoreUnchangedJson(
+                    $response->structured,
+                    $this->result->data,
+                    json_decode($this->retainedText, false, 512, JSON_THROW_ON_ERROR),
+                );
+                $text = json_encode($edited === [] ? new \stdClass : $edited, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                throw new InvalidAiOutputException('The middleware returned data that cannot be represented as JSON.');
+            }
         }
 
-        $this->session->replaceRetained($this->retainedText, $response->text);
+        $this->session->replaceRetained($this->retainedText, $text);
         $result = $this->schema === null
-            ? new NativeAiResult(text: $response->text)
-            : new NativeAiResult(data: $this->schema->validate($response->text));
+            ? new NativeAiResult(text: $text)
+            : new NativeAiResult(data: $this->schema->validate($text));
         $this->session->remainingSeconds();
 
         return $result;
+    }
+
+    private function restoreUnchangedJson(mixed $current, mixed $baseline, mixed $original): mixed
+    {
+        if ($current === $baseline) {
+            return $original;
+        }
+
+        if (! is_array($current) || ! is_array($baseline)) {
+            return $current;
+        }
+
+        $originalChildren = (array) $original;
+
+        foreach ($current as $key => $value) {
+            if (array_key_exists($key, $baseline)) {
+                $current[$key] = $this->restoreUnchangedJson($value, $baseline[$key], $originalChildren[$key]);
+            }
+        }
+
+        return $current;
     }
 }

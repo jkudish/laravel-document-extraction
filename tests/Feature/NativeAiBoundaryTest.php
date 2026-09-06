@@ -35,6 +35,9 @@ final class ChangingProviderOptionsAgent implements Agent, HasProviderOptions, H
 
     public int $optionReads = 0;
 
+    /** @var list<string> */
+    public array $optionProviders = [];
+
     public function instructions(): string
     {
         return 'Extract the value.';
@@ -49,6 +52,8 @@ final class ChangingProviderOptionsAgent implements Agent, HasProviderOptions, H
     /** @return array<string, mixed> */
     public function providerOptions(Lab|string $provider): array
     {
+        $this->optionProviders[] = $provider instanceof Lab ? $provider->value : $provider;
+
         return ++$this->optionReads === 1
             ? ['metadata' => ['checked' => 'yes']]
             : ['input' => 'This must not replace the document.'];
@@ -112,7 +117,7 @@ it('rejects provider options that replace generated request structure before HTT
         ->schema(fn (JsonSchema $schema): array => ['value' => $schema->string()->required()])
         ->extract())->toThrow(ConfigurationException::class, 'must not replace');
     Http::assertNothingSent();
-})->with(['text', 'input', 'tools', 'previous_response_id', 'response_json_schema']);
+})->with(['text', 'input', 'tools', 'previous_response_id', 'response_json_schema', 'instructions', 'prompt']);
 
 it('freezes native provider options once while preserving safe provider metadata', function (): void {
     boundaryOpenAiResponse();
@@ -124,6 +129,38 @@ it('freezes native provider options once while preserving safe provider metadata
         ->and($agent->optionReads)->toBe(1);
     Http::assertSent(fn (Request $request): bool => data_get($request->data(), 'metadata.checked') === 'yes'
         && is_array($request['input']));
+});
+
+it('preserves the native custom OpenAI-compatible provider-name option selector', function (): void {
+    config()->set('ai.providers.private-compatible', [
+        'driver' => 'openai-compatible', 'url' => 'https://compatible.example/v1', 'key' => 'fixture-key',
+    ]);
+    Http::fake(['https://compatible.example/v1/chat/completions' => Http::response([
+        'id' => 'chatcmpl_fixture', 'model' => 'fixture-model',
+        'choices' => [[
+            'index' => 0, 'message' => ['role' => 'assistant', 'content' => '{"value":"ok"}'], 'finish_reason' => 'stop',
+        ]],
+        'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
+    ])]);
+    $agent = new ChangingProviderOptionsAgent;
+
+    $result = app(DocumentExtraction::class)->fromString('source', 'text/plain')->using($agent)
+        ->extract('private-compatible', 'fixture-model');
+
+    expect($result->data)->toBe(['value' => 'ok'])
+        ->and($agent->optionProviders)->toBe(['private-compatible']);
+    Http::assertSent(fn (Request $request): bool => data_get($request->data(), 'metadata.checked') === 'yes');
+});
+
+it('preserves native provider-side compaction without allowing request replacement', function (): void {
+    boundaryOpenAiResponse();
+    config()->set('extraction.options.openai.context_management', [['type' => 'compaction', 'compact_threshold' => 2000]]);
+
+    $result = app(DocumentExtraction::class)->fromString('source', 'text/plain')
+        ->schema(fn (JsonSchema $schema): array => ['value' => $schema->string()->required()])->extract();
+
+    expect($result->complete())->toBeTrue();
+    Http::assertSent(fn (Request $request): bool => data_get($request->data(), 'context_management.0.type') === 'compaction');
 });
 
 it('checks final middleware attachments against the request limit before HTTP', function (): void {

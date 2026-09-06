@@ -154,15 +154,22 @@ extraction invocation. This is this package's supported boundary—not a general
 the package does not claim every such violation can be detected before the nested call reaches a
 provider. Nested calls on another agent, and same-agent calls after forwarding returns, are supported
 and remain unattributed to extraction. Middleware may also return a cached response without forwarding;
-that response is validated without inventing a provider call. Response JSON text is authoritative:
-post-processing middleware must update `text`, not only Laravel AI's normalized `structured` array.
+that response's JSON text is validated without inventing a provider call.
+
+Post-forward middleware can edit `text` or the native `structured` array. Explicitly changed JSON text
+takes precedence if both are changed. Structured-only edits are validated against the same schema;
+strictly unchanged values at existing paths retain their already-validated original JSON container
+shapes. New empty objects need `new stdClass`; `[]` at a new path remains a list. To change an existing
+empty object's representation to an empty list, update JSON text explicitly: normalized PHP `[]`
+cannot express that difference. This preserves existing data representations, not array-element
+identity through reordering, and never repairs invalid original provider JSON.
 
 For every attempt, the package compiles the exact native schema passed to the provider, rejects an
 invalid schema or external reference before dispatch, then validates the returned step text against
 that same Opis draft 2020-12 schema before converting it to a PHP array. Malformed/truncated JSON,
 provider-declared incomplete responses, wrong types, missing required values, additional properties,
-and root lists fail locally. This does
-not trust Laravel AI's normalized structured `[]` as proof that raw JSON was valid, so valid empty
+and root lists fail locally. This does not trust Laravel AI's normalized structured `[]` as proof that
+raw JSON was valid, so valid empty
 objects remain distinguishable from lists when the provider path preserves response text.
 
 The schema contract starts at Laravel's native types, not arbitrary JSON Schema input. Unsupported

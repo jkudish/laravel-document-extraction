@@ -80,7 +80,7 @@ final readonly class ScopedTextGateway implements StepTextGateway
         );
         $options = $options === null ? null : new FrozenGenerationOptions(
             $options,
-            $options->providerOptions($provider->driver()) ?? [],
+            $options->providerOptions($provider->driver() === 'openai-compatible' ? $provider->name() : $provider->driver()) ?? [],
         );
         $compiled = $schema === null ? null : CompiledSchema::fromNative($schema);
         $remaining = $scope->session->beginAttempt();
@@ -113,7 +113,7 @@ final readonly class ScopedTextGateway implements StepTextGateway
                 $result = $compiled === null
                     ? new NativeAiResult(text: $text)
                     : new NativeAiResult(data: $compiled->validate($text));
-                $scope->complete($result, $compiled, $response->text, $text);
+                $scope->complete($result, $compiled, $response->text, $text, $response->structured);
             }
 
             $scope->session->remainingSeconds();
