@@ -10,7 +10,7 @@ if [[ "${LDE_RESUME_ISOLATED:-}" != 1 ]]; then
         LDE_RESUME_ISOLATED=1 /bin/bash "$0" "$@"
 fi
 
-for command in php8.4 php8.5 composer pdfimages pdfinfo pdftoppm pdftotext; do
+for command in php8.4 php8.5 composer pdfimages pdfinfo pdftoppm pdftotext prlimit; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Missing $command; run .agents/setup." >&2
         exit 1

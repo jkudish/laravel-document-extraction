@@ -12,6 +12,8 @@
         "php": "^8.4",
         "ext-fileinfo": "*",
         "ext-imagick": "*",
+        "ext-mbstring": "*",
+        "ext-xmlreader": "*",
         "illuminate/image": "^13.23",
         "illuminate/json-schema": "^13.23",
         "illuminate/process": "^13.23",

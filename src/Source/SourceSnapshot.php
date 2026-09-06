@@ -6,6 +6,7 @@ namespace Jkudish\DocumentExtraction\Source;
 
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Jkudish\DocumentExtraction\Exceptions\SourceException;
+use Jkudish\DocumentExtraction\Preparation\Deadline;
 use Throwable;
 
 final class SourceSnapshot
@@ -17,6 +18,7 @@ final class SourceSnapshot
         public readonly string $sha256,
         public readonly int $size,
         public readonly string $mediaType,
+        public readonly Deadline $deadline,
         public readonly ?int $pageCount = null,
     ) {}
 
@@ -25,7 +27,10 @@ final class SourceSnapshot
         FilesystemFactory $filesystems,
         int $sourceByteLimit,
         int $temporaryByteLimit,
+        ?Deadline $deadline = null,
     ): self {
+        $deadline ??= Deadline::afterSeconds(600);
+        $deadline->ensureRemaining();
         $directory = sys_get_temp_dir().'/laravel-document-extraction-'.bin2hex(random_bytes(16));
         $limit = min($sourceByteLimit, $temporaryByteLimit);
         $knownSize = $source->knownSize();
@@ -57,11 +62,13 @@ final class SourceSnapshot
             }
 
             [$input, $ownsInput] = $source->open($filesystems);
+            $deadline->ensureRemaining();
             $hash = hash_init('sha256');
             $size = 0;
             $containsBinaryControl = false;
 
             while (! feof($input)) {
+                $deadline->ensureRemaining();
                 $chunk = @fread($input, 8192);
 
                 if (! is_string($chunk)) {
@@ -104,8 +111,9 @@ final class SourceSnapshot
             }
 
             $mediaType = (new MediaTypeDetector)->detect($path, $source->mimeTypeHint, $containsBinaryControl);
+            $deadline->ensureRemaining();
 
-            return new self($path, hash_final($hash), $size, $mediaType);
+            return new self($path, hash_final($hash), $size, $mediaType, deadline: $deadline);
         } catch (Throwable $exception) {
             if (is_resource($destination)) {
                 fclose($destination);

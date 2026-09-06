@@ -8,6 +8,7 @@ use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Jkudish\DocumentExtraction\Exceptions\ExtractionException;
+use Jkudish\DocumentExtraction\Preparation\Deadline;
 use Jkudish\DocumentExtraction\Source\SourceInput;
 use Jkudish\DocumentExtraction\Source\SourceSnapshot;
 use Jkudish\DocumentExtraction\Tests\Support\RecordingDocumentExtraction;
@@ -148,6 +149,24 @@ it('enforces source and temporary byte caps while cleaning owned temporary files
             ->and(glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [])->toBe($before);
     }
 })->with(['source_bytes', 'temporary_bytes']);
+
+it('includes source capture in the invocation deadline and leaves no snapshot behind', function (): void {
+    $before = glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [];
+
+    try {
+        SourceSnapshot::capture(
+            SourceInput::contents('deadline source', 'text/plain'),
+            app(FilesystemFactory::class),
+            100,
+            100,
+            Deadline::afterSeconds(0),
+        );
+        throw new RuntimeException('Expected source capture to exceed its deadline.');
+    } catch (ExtractionException $exception) {
+        expect($exception->errorCode)->toBe('invocation_deadline_exceeded')
+            ->and(glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [])->toBe($before);
+    }
+});
 
 it('applies the byte bound to every source input without taking ownership', function (): void {
     config()->set('extraction.limits.source_bytes', 4);

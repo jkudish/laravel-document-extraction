@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Jkudish\DocumentExtraction;
 
 use Illuminate\Support\ServiceProvider;
+use Jkudish\DocumentExtraction\Console\ExtractionDoctorCommand;
 
 final class DocumentExtractionServiceProvider extends ServiceProvider
 {
@@ -21,5 +22,9 @@ final class DocumentExtractionServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../config/extraction.php' => config_path('extraction.php'),
         ], 'document-extraction-config');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([ExtractionDoctorCommand::class]);
+        }
     }
 }
