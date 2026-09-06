@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Jkudish\DocumentExtraction;
 
 use Illuminate\Support\ServiceProvider;
+use Jkudish\DocumentExtraction\AI\InvocationScopeRegistry;
+use Jkudish\DocumentExtraction\AI\NativeAiBridge;
 use Jkudish\DocumentExtraction\Console\ExtractionDoctorCommand;
 
 final class DocumentExtractionServiceProvider extends ServiceProvider
@@ -13,6 +15,8 @@ final class DocumentExtractionServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/extraction.php', 'extraction');
 
+        $this->app->singleton(InvocationScopeRegistry::class);
+        $this->app->singleton(NativeAiBridge::class);
         $this->app->singleton(DocumentExtraction::class);
         $this->app->alias(DocumentExtraction::class, 'document-extraction');
     }

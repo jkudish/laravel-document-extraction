@@ -8,10 +8,14 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Jkudish\DocumentExtraction\DocumentExtraction;
+use Jkudish\DocumentExtraction\Exceptions\ProcessingUnavailableException;
 use Jkudish\DocumentExtraction\ExtractionInvocation;
 use Jkudish\DocumentExtraction\Preparation\PreparedDocument;
 use Jkudish\DocumentExtraction\Results\ExtractionResult;
 use Jkudish\DocumentExtraction\Source\SourceSnapshot;
+use Jkudish\DocumentExtraction\TerminalOperation;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasStructuredOutput;
 
 final class RecordingPreparedExtraction extends DocumentExtraction
 {
@@ -27,6 +31,7 @@ final class RecordingPreparedExtraction extends DocumentExtraction
         ExtractionInvocation $invocation,
         SourceSnapshot $snapshot,
         PreparedDocument $prepared,
+        (Agent&HasStructuredOutput)|null $agent = null,
     ): ExtractionResult {
         $visuals = [];
 
@@ -57,6 +62,20 @@ final class RecordingPreparedExtraction extends DocumentExtraction
             'visuals' => $visuals,
         ];
 
-        return parent::processPrepared($invocation, $snapshot, $prepared);
+        if ($invocation->operation === TerminalOperation::Extract) {
+            throw ProcessingUnavailableException::make(
+                'ai_processing_unavailable',
+                'Structured AI extraction is deliberately not executed by the preparation recorder.',
+            );
+        }
+
+        if ($prepared->requiresAi() && ! $invocation->withoutAi) {
+            throw ProcessingUnavailableException::make(
+                'ai_processing_unavailable',
+                'OCR execution is deliberately not executed by the preparation recorder.',
+            );
+        }
+
+        return parent::processPrepared($invocation, $snapshot, $prepared, $agent);
     }
 }

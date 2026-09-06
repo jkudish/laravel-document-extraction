@@ -7,6 +7,7 @@ namespace Jkudish\DocumentExtraction\Tests;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Http;
 use Jkudish\DocumentExtraction\DocumentExtractionServiceProvider;
+use Laravel\Ai\AiServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
 abstract class TestCase extends Orchestra
@@ -24,7 +25,10 @@ abstract class TestCase extends Orchestra
      */
     protected function getPackageProviders($app): array
     {
-        return [DocumentExtractionServiceProvider::class];
+        return [
+            AiServiceProvider::class,
+            DocumentExtractionServiceProvider::class,
+        ];
     }
 
     /**

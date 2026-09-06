@@ -30,7 +30,7 @@ final readonly class ExtractionInvocation
         public bool $withoutAi,
         public Lab|array|string|null $provider,
         public ?string $model,
-        public int $timeout,
+        public ?int $timeout,
         public array $configuration,
     ) {}
 }

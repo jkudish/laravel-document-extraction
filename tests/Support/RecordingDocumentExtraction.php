@@ -13,6 +13,8 @@ use Jkudish\DocumentExtraction\Results\CostSummary;
 use Jkudish\DocumentExtraction\Results\DocumentResult;
 use Jkudish\DocumentExtraction\Results\ExtractionResult;
 use Jkudish\DocumentExtraction\Source\SourceSnapshot;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasStructuredOutput;
 use RuntimeException;
 
 final class RecordingDocumentExtraction extends DocumentExtraction
@@ -30,8 +32,11 @@ final class RecordingDocumentExtraction extends DocumentExtraction
         parent::__construct($config, $filesystems, $container);
     }
 
-    protected function process(ExtractionInvocation $invocation, SourceSnapshot $snapshot): ExtractionResult
-    {
+    protected function process(
+        ExtractionInvocation $invocation,
+        SourceSnapshot $snapshot,
+        (Agent&HasStructuredOutput)|null $agent,
+    ): ExtractionResult {
         $this->invocations[] = $invocation;
         $contents = file_get_contents($snapshot->path);
         $fileMode = fileperms($snapshot->path);

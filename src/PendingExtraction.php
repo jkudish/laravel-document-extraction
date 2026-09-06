@@ -15,10 +15,11 @@ use Laravel\Ai\Enums\Lab;
 
 /**
  * @phpstan-type ProviderRoute Lab|string|array<int, Lab|string>|array<string, string>|null
- * @phpstan-type PurposeConfiguration array{provider: ProviderRoute, model: ?string, options: array<mixed>}
+ * @phpstan-type ProviderOptions array<string, array<string, mixed>>
+ * @phpstan-type PurposeConfiguration array{provider: ProviderRoute, model: ?string, timeout: ?int, options: ProviderOptions}
  * @phpstan-type LimitConfiguration array{source_bytes: int, physical_pages: int, decoded_pixels_per_page: int, parser_process_timeout: int, ai_attempt_timeout: int, invocation_deadline: int, retained_output_bytes: int, temporary_bytes: int, ai_attempts: int, inline_attachment_bytes: int}
  * @phpstan-type PreparationConfiguration array{render_dpi: int, native_memory_bytes: int, php_memory_bytes: int, binaries: array{pdfinfo: string, pdfimages: string, pdftoppm: string, pdftotext: string, prlimit: string, php: string}}
- * @phpstan-type ExtractionConfiguration array{provider: ProviderRoute, model: ?string, timeout: int, options: array<mixed>, middleware: array<mixed>, ocr: PurposeConfiguration, detection: PurposeConfiguration, preparation: PreparationConfiguration, limits: LimitConfiguration}
+ * @phpstan-type ExtractionConfiguration array{provider: ProviderRoute, model: ?string, timeout: ?int, options: ProviderOptions, middleware: array<mixed>, ocr: PurposeConfiguration, detection: PurposeConfiguration, preparation: PreparationConfiguration, limits: LimitConfiguration}
  */
 final class PendingExtraction
 {
@@ -213,7 +214,7 @@ final class PendingExtraction
 
     /**
      * @param  array<mixed>|Lab|string|null  $provider
-     * @return array{ProviderRoute, ?string, int}
+     * @return array{ProviderRoute, ?string, ?int}
      */
     private function resolvedRoute(
         TerminalOperation $operation,
@@ -238,7 +239,7 @@ final class PendingExtraction
         }
 
         $resolvedModel = is_array($resolvedProvider) ? null : $configuredModel;
-        $resolvedTimeout = $timeout ?? $this->configuration['timeout'];
+        $resolvedTimeout = $timeout ?? ($purpose['timeout'] ?? null) ?? $this->configuration['timeout'];
 
         return [$resolvedProvider, $resolvedModel, $resolvedTimeout];
     }
