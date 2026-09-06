@@ -103,18 +103,44 @@ final readonly class ExtractionResult
 
     public function asSimulated(): self
     {
+        $calls = $this->calls->map(static fn (CallRecord $call): CallRecord => $call->asSimulated());
+        $unpriced = $calls->map(
+            static fn (CallRecord $call, int $index): string => $call->reference() ?? 'call:'.($index + 1),
+        );
+
         return new self(
             documents: $this->documents,
             sourceSha256: $this->sourceSha256,
             mediaType: $this->mediaType,
             pageCount: $this->pageCount,
             pages: $this->pages,
-            calls: $this->calls->map(static fn (CallRecord $call): CallRecord => $call->asSimulated()),
+            calls: $calls,
             errors: $this->errors,
-            cost: $this->cost->asSimulated(),
+            cost: new CostSummary(
+                unpricedCalls: $unpriced,
+                complete: $calls->isEmpty(),
+                evidenceOrigin: EvidenceOrigin::Simulated,
+            ),
             detectionMode: $this->detectionMode,
             coverageComplete: $this->coverageComplete,
             evidenceOrigin: EvidenceOrigin::Simulated,
+        );
+    }
+
+    public function asRecorded(): self
+    {
+        return new self(
+            documents: $this->documents,
+            sourceSha256: $this->sourceSha256,
+            mediaType: $this->mediaType,
+            pageCount: $this->pageCount,
+            pages: $this->pages,
+            calls: $this->calls->map(static fn (CallRecord $call): CallRecord => $call->asRecorded()),
+            errors: $this->errors,
+            cost: $this->cost->asRecorded(),
+            detectionMode: $this->detectionMode,
+            coverageComplete: $this->coverageComplete,
+            evidenceOrigin: EvidenceOrigin::Recorded,
         );
     }
 

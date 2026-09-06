@@ -141,7 +141,7 @@ class DocumentExtraction
                 documents: [new DocumentResult(text: $prepared->directText ?? '')],
                 sourceSha256: $snapshot->sha256,
                 mediaType: $prepared->mediaType,
-                cost: CostSummary::unavailable(),
+                cost: CostSummary::none(),
             );
         }
 
@@ -161,7 +161,7 @@ class DocumentExtraction
                     static fn (PreparedPage $page): PageResult => new PageResult($page->page, $page->text ?? ''),
                     $prepared->pages,
                 ),
-                cost: CostSummary::unavailable(),
+                cost: CostSummary::none(),
             );
         }
 
@@ -197,7 +197,7 @@ class DocumentExtraction
                 $prepared->pages,
             ),
             errors: [$error],
-            cost: CostSummary::unavailable(),
+            cost: CostSummary::none(),
             coverageComplete: false,
         );
     }

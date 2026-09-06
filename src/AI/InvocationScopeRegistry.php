@@ -31,15 +31,19 @@ final class InvocationScopeRegistry
         }
     }
 
-    public function prompting(Agent $agent, string $invocationId): ?AiCallScope
-    {
+    public function prompting(
+        Agent $agent,
+        string $invocationId,
+        string $provider,
+        string $model,
+    ): ?AiCallScope {
         $scope = $this->current();
 
         if ($scope === null || $scope->agent !== $agent) {
             return null;
         }
 
-        return $scope->observePrompt($invocationId) ? $scope : null;
+        return $scope->observePrompt($invocationId, $provider, $model) ? $scope : null;
     }
 
     public function starting(

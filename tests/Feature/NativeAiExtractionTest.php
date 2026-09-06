@@ -259,8 +259,13 @@ it('extracts and validates structured data through a native Laravel agent fake',
         ->and($result->calls)->toHaveCount(1)
         ->and($call->stage)->toBe('extraction')
         ->and($call->outcome)->toBe('succeeded')
+        ->and($call->ordinal)->toBe(1)
+        ->and($call->evidenceOrigin->value)->toBe('simulated')
+        ->and($call->usage)->toBeNull()
+        ->and($call->cost)->toBeNull()
+        ->and($result->evidenceOrigin->value)->toBe('simulated')
         ->and($result->cost->complete)->toBeFalse()
-        ->and($result->cost->unpricedCalls->all())->toBe([0]);
+        ->and($result->cost->unpricedCalls->all())->toBe([$call->reference()]);
 
     InlineSchemaAgent::assertPromptedTimes(1);
 });
@@ -605,7 +610,8 @@ it('allows a cross-agent middleware prompt without attributing it to extraction'
         ->extract('openai', 'extract-model');
 
     expect($result->data)->toBe(['value' => 'extracted'])
-        ->and($result->calls)->toHaveCount(1);
+        ->and($result->calls)->toHaveCount(1)
+        ->and($result->calls->first()?->requestedModel)->toBe('extract-model');
     NativeAuxiliaryAgent::assertPromptedTimes(1);
     NativeStructuredAgent::assertPromptedTimes(1);
 });
@@ -641,7 +647,11 @@ it('cleans invocation scope after exceptions and across sequential requests', fu
 
     expect($failed->complete())->toBeFalse()
         ->and($succeeded->data)->toBe(['value' => 'second'])
-        ->and($succeeded->complete())->toBeTrue();
+        ->and($succeeded->complete())->toBeTrue()
+        ->and($failed->calls->first()?->ordinal)->toBe(1)
+        ->and($succeeded->calls->first()?->ordinal)->toBe(1)
+        ->and($failed->calls->first()?->extractionInvocationId)
+        ->not->toBe($succeeded->calls->first()?->extractionInvocationId);
 });
 
 it('isolates interleaved extraction scopes by Fiber', function (): void {
@@ -669,7 +679,11 @@ it('isolates interleaved extraction scopes by Fiber', function (): void {
     assert($resultB instanceof ExtractionResult);
 
     expect($resultA->data)->toBe(['value' => 'A'])
-        ->and($resultB->data)->toBe(['value' => 'B']);
+        ->and($resultB->data)->toBe(['value' => 'B'])
+        ->and($resultA->calls->first()?->ordinal)->toBe(1)
+        ->and($resultB->calls->first()?->ordinal)->toBe(1)
+        ->and($resultA->calls->first()?->extractionInvocationId)
+        ->not->toBe($resultB->calls->first()?->extractionInvocationId);
 });
 
 it('returns truthful partial OCR page results when one provider call fails', function (): void {
@@ -693,7 +707,11 @@ it('returns truthful partial OCR page results when one provider call fails', fun
         ->and($second->complete())->toBeFalse()
         ->and($second->error?->code)->toBe('provider_failed')
         ->and($result->complete())->toBeFalse()
-        ->and($result->calls->pluck('outcome')->all())->toBe(['succeeded', 'failed']);
+        ->and($result->calls->pluck('outcome')->all())->toBe(['succeeded', 'failed'])
+        ->and($result->calls->pluck('ordinal')->all())->toBe([1, 2])
+        ->and($result->calls->pluck('extractionInvocationId')->unique())->toHaveCount(1)
+        ->and($result->calls->pluck('nativeInvocationId')->unique())->toHaveCount(2)
+        ->and($result->calls->map(fn (CallRecord $call): array => $call->pages->all())->all())->toBe([[1], [2]]);
 });
 
 it('rejects oversized prepared visual payloads before provider egress', function (): void {

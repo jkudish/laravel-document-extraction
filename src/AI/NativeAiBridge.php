@@ -28,7 +28,12 @@ final readonly class NativeAiBridge
 
     private function prompting(PromptingAgent $event): void
     {
-        if ($this->scopes->prompting($event->prompt->agent, $event->invocationId) === null) {
+        if ($this->scopes->prompting(
+            $event->prompt->agent,
+            $event->invocationId,
+            $event->prompt->provider()->name(),
+            $event->prompt->model,
+        ) === null) {
             return;
         }
 

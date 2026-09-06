@@ -23,6 +23,10 @@ final class AiCallScope
 
     private bool $stepStarting = false;
 
+    private ?string $requestedProvider = null;
+
+    private ?string $requestedModel = null;
+
     private ?NativeAiResult $result = null;
 
     private ?CompiledSchema $schema = null;
@@ -42,10 +46,12 @@ final class AiCallScope
         public readonly array $pages,
     ) {}
 
-    public function observePrompt(string $invocationId): bool
+    public function observePrompt(string $invocationId, string $provider, string $model): bool
     {
         if ($this->invocationId === null) {
             $this->invocationId = $invocationId;
+            $this->requestedProvider = $provider;
+            $this->requestedModel = $model;
 
             return true;
         }
@@ -61,7 +67,22 @@ final class AiCallScope
             );
         }
 
+        // Native fallback reuses the invocation id but prompts the next route.
+        $this->requestedProvider = $provider;
+        $this->requestedModel = $model;
+
         return true;
+    }
+
+    public function invocationId(): string
+    {
+        return $this->invocationId ?? throw new \LogicException('The native invocation has not started.');
+    }
+
+    /** @return array{?string, ?string} */
+    public function requestedIdentity(): array
+    {
+        return [$this->requestedProvider, $this->requestedModel];
     }
 
     public function observeStartingStep(

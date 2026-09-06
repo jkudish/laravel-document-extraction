@@ -7,5 +7,6 @@ namespace Jkudish\DocumentExtraction\Results;
 enum EvidenceOrigin: string
 {
     case Live = 'live';
+    case Recorded = 'recorded';
     case Simulated = 'simulated';
 }

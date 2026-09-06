@@ -8,11 +8,13 @@ use Illuminate\Support\ServiceProvider;
 use Jkudish\DocumentExtraction\AI\InvocationScopeRegistry;
 use Jkudish\DocumentExtraction\AI\NativeAiBridge;
 use Jkudish\DocumentExtraction\Console\ExtractionDoctorCommand;
+use Jkudish\LaravelAiPricing\LaravelAiPricingServiceProvider;
 
 final class DocumentExtractionServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->register(LaravelAiPricingServiceProvider::class);
         $this->mergeConfigFrom(__DIR__.'/../config/extraction.php', 'extraction');
 
         $this->app->singleton(InvocationScopeRegistry::class);

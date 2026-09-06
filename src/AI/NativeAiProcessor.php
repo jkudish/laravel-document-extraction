@@ -4,34 +4,41 @@ declare(strict_types=1);
 
 namespace Jkudish\DocumentExtraction\AI;
 
+use Illuminate\Support\Str;
 use Jkudish\DocumentExtraction\Exceptions\AiExecutionException;
 use Jkudish\DocumentExtraction\Exceptions\ConfigurationException;
 use Jkudish\DocumentExtraction\ExtractionInvocation;
 use Jkudish\DocumentExtraction\Preparation\PreparedDocument;
 use Jkudish\DocumentExtraction\Preparation\PreparedPage;
 use Jkudish\DocumentExtraction\Results\DocumentResult;
+use Jkudish\DocumentExtraction\Results\EvidenceOrigin;
 use Jkudish\DocumentExtraction\Results\ExtractionError;
 use Jkudish\DocumentExtraction\Results\ExtractionResult;
 use Jkudish\DocumentExtraction\Results\PageResult;
 use Jkudish\DocumentExtraction\Source\SourceSnapshot;
+use Jkudish\LaravelAiPricing\ResponseCostResolver;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Files\Image;
 
 final readonly class NativeAiProcessor
 {
-    public function __construct(private NativeAiExecutor $ai) {}
+    public function __construct(
+        private NativeAiExecutor $ai,
+        private ResponseCostResolver $pricing,
+    ) {}
 
     public function text(
         ExtractionInvocation $invocation,
         SourceSnapshot $snapshot,
         PreparedDocument $prepared,
     ): ExtractionResult {
-        $session = $this->session($invocation, $snapshot, strlen($prepared->directText ?? ''));
         $agent = new OcrAgent(
             $this->packageOptions($invocation, 'ocr'),
             $invocation->configuration['middleware'],
         );
+        $session = $this->session($invocation, $snapshot, $agent, strlen($prepared->directText ?? ''));
         $pageResults = [];
         $errors = [];
         $activePages = [];
@@ -96,6 +103,7 @@ final readonly class NativeAiProcessor
                 errors: $errors,
                 cost: $session->costSummary(),
                 coverageComplete: $errors === [],
+                evidenceOrigin: $session->evidenceOrigin,
             );
         } catch (AiExecutionException|ConfigurationException $exception) {
             $globalError = $this->error($exception->errorCode, $exception->getMessage(), $activePages);
@@ -116,6 +124,7 @@ final readonly class NativeAiProcessor
                 errors: $errors,
                 cost: $session->costSummary(),
                 coverageComplete: false,
+                evidenceOrigin: $session->evidenceOrigin,
             ));
         }
     }
@@ -126,13 +135,13 @@ final readonly class NativeAiProcessor
         PreparedDocument $prepared,
         ?Agent $applicationAgent,
     ): ExtractionResult {
-        $session = $this->session($invocation, $snapshot);
         $agent = $applicationAgent ?? new InlineSchemaAgent(
             $invocation->schema ?? throw new \LogicException('An inline extraction schema is required.'),
             $invocation->instructions,
             $this->packageOptions($invocation, null),
             $invocation->configuration['middleware'],
         );
+        $session = $this->session($invocation, $snapshot, $agent);
         $pages = $prepared->selectedPages ?? [];
 
         try {
@@ -159,6 +168,7 @@ final readonly class NativeAiProcessor
                 pageCount: $prepared->pageCount,
                 calls: $session->calls(),
                 cost: $session->costSummary(),
+                evidenceOrigin: $session->evidenceOrigin,
             );
         } catch (InvalidAiOutputException $exception) {
             return $this->failedExtraction(
@@ -192,14 +202,20 @@ final readonly class NativeAiProcessor
     private function session(
         ExtractionInvocation $invocation,
         SourceSnapshot $snapshot,
+        Agent $agent,
         int $initialRetainedBytes = 0,
     ): AiExecutionSession {
         return new AiExecutionSession(
+            invocationId: (string) Str::uuid7(),
             deadline: $snapshot->deadline,
             attemptLimit: $invocation->configuration['limits']['ai_attempts'],
             attemptTimeout: $invocation->configuration['limits']['ai_attempt_timeout'],
             outputLimit: $invocation->configuration['limits']['retained_output_bytes'],
             attachmentLimit: $invocation->configuration['limits']['inline_attachment_bytes'],
+            pricing: $this->pricing,
+            evidenceOrigin: Ai::hasFakeGatewayFor($agent::class)
+                ? EvidenceOrigin::Simulated
+                : EvidenceOrigin::Live,
             initialRetainedBytes: $initialRetainedBytes,
         );
     }
@@ -302,6 +318,7 @@ final readonly class NativeAiProcessor
             errors: [$error],
             cost: $session->costSummary(),
             coverageComplete: false,
+            evidenceOrigin: $session->evidenceOrigin,
         );
     }
 }
