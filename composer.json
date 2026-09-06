@@ -49,7 +49,10 @@
         "analyse": "@php scripts/pr-workflow analyse",
         "format": "@php vendor/bin/pint",
         "format:test": "@php vendor/bin/pint --test",
-        "pr:check": "@php scripts/pr-workflow check",
+        "pr:check": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php scripts/pr-workflow check"
+        ],
         "pr:signoff": "@php scripts/pr-workflow signoff",
         "test": "@php vendor/bin/pest --no-tia",
         "test:safeguards": "@php vendor/bin/pest tests/Unit/PrWorkflowTest.php tests/Unit/FoundationProofSafetyTest.php --no-tia",
