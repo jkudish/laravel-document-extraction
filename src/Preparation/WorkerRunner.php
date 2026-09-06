@@ -172,8 +172,10 @@ final readonly class WorkerRunner
     {
         $environment = [];
 
-        foreach (array_keys(getenv()) as $name) {
-            $environment[$name] = false;
+        foreach (array_keys($_SERVER + $_ENV + getenv()) as $name) {
+            if (is_string($name)) {
+                $environment[$name] = false;
+            }
         }
 
         $environment['HOME'] = $workspace;

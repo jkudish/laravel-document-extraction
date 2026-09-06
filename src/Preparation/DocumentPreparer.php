@@ -145,6 +145,10 @@ final readonly class DocumentPreparer
             $pages[] = new PreparedPage($page, $text, $visualPath, $needsOcr, $visualBytes);
         }
 
+        if ($hasUsableText && $retainedBytes + count($pages) - 1 > $configuration['limits']['retained_output_bytes']) {
+            throw PreparationException::make('output_limit_exceeded', 'Document preparation exceeded the configured output byte limit.');
+        }
+
         $directText = $hasUsableText
             ? implode("\f", array_map(static fn (PreparedPage $page): string => $page->text ?? '', $pages))
             : null;
@@ -308,8 +312,8 @@ final readonly class DocumentPreparer
             throw PreparationException::make('invalid_pdf', 'The PDF document contains invalid page dimensions.');
         }
 
-        $width = (int) round(((float) $widthPoints / 72) * $dpi);
-        $height = (int) round(((float) $heightPoints / 72) * $dpi);
+        $width = (int) ceil(((float) $widthPoints / 72) * $dpi);
+        $height = (int) ceil(((float) $heightPoints / 72) * $dpi);
 
         if ($width < 1 || $height < 1 || $width > intdiv($pixelLimit, $height)) {
             throw PreparationException::make('pixel_limit_exceeded', 'A document page exceeds the configured decoded pixel limit.');

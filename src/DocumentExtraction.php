@@ -125,6 +125,13 @@ class DocumentExtraction
             );
         }
 
+        if ($invocation->detectDocuments) {
+            throw ProcessingUnavailableException::make(
+                'ai_processing_unavailable',
+                'Document detection is not implemented in this package phase.',
+            );
+        }
+
         if ($prepared->pageCount === null) {
             return new ExtractionResult(
                 documents: [new DocumentResult(text: $prepared->directText ?? '')],

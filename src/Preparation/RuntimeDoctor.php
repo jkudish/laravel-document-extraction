@@ -70,7 +70,12 @@ final readonly class RuntimeDoctor
                 try {
                     $binary = $this->worker->resolveBinary($configured);
                     $arguments = $name === 'prlimit' ? ['--version'] : ['-v'];
-                    $ready = $this->probe([$binary, ...$arguments]);
+                    $signature = match ($name) {
+                        'php' => 'PHP ',
+                        'prlimit' => 'prlimit from util-linux ',
+                        default => $name.' version ',
+                    };
+                    $ready = $this->probe([$binary, ...$arguments], $signature);
                 } catch (Throwable) {
                     $ready = false;
                 }
@@ -107,12 +112,14 @@ final readonly class RuntimeDoctor
     }
 
     /** @param list<string> $command */
-    private function probe(array $command): bool
+    private function probe(array $command, string $signature): bool
     {
         $environment = [];
 
-        foreach (array_keys(getenv()) as $name) {
-            $environment[$name] = false;
+        foreach (array_keys($_SERVER + $_ENV + getenv()) as $name) {
+            if (is_string($name)) {
+                $environment[$name] = false;
+            }
         }
 
         $environment['HOME'] = '/nonexistent';
@@ -121,12 +128,14 @@ final readonly class RuntimeDoctor
         $environment['LC_ALL'] = 'C.UTF-8';
 
         try {
-            return $this->process
+            $result = $this->process
                 ->newPendingProcess()
                 ->env($environment)
                 ->timeout(5)
-                ->run($command)
-                ->successful();
+                ->run($command);
+
+            return $result->successful()
+                && str_starts_with($result->output().$result->errorOutput(), $signature);
         } catch (Throwable) {
             return false;
         }

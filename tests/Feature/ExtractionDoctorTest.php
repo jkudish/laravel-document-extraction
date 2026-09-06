@@ -36,3 +36,10 @@ it('fails clearly when bounded preparation limits are incomplete', function (): 
         ->and($output)->toContain('configuration: Preparation limits are incomplete or invalid')
         ->and($output)->toContain('Document preparation is not ready');
 });
+
+it('rejects a successful executable that is not the configured parser', function (): void {
+    config()->set('extraction.preparation.binaries.pdfinfo', '/bin/true');
+
+    expect(Artisan::call('extraction:doctor'))->toBe(1)
+        ->and(Artisan::output())->toContain('pdfinfo is missing or unusable');
+});

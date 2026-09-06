@@ -83,6 +83,13 @@ extensions, upload metadata, and MIME hints do not override byte inspection. Cal
 from their current position to EOF and are never rewound or closed. Original paths, uploads, storage
 objects, and caller streams remain caller-owned; package snapshots are removed on success and error.
 
+Snapshots are made owner-read-only after capture. Stream reads use nonblocking mode and bounded
+readiness waits; the borrowed stream's blocking mode is restored afterward. Streams that cannot
+support nonblocking reads or readiness waits fail explicitly. Application-owned storage adapters
+must also bound their connection/open operations: the invocation checks its deadline before and
+after opening, but cannot preempt arbitrary PHP adapter code. Configured executables and PHP stream
+wrappers are trusted application code; these resource controls are not a sandbox for hostile code.
+
 Configure a pending request with `schema()`, `using()`, `instructions()`, `detectDocuments()`,
 `pages()`, or `withoutAi()`, then call `text()` or `extract()`. Terminal provider/model/timeout
 arguments follow Laravel AI's native `Lab|array|string|null` routing shape. Invalid or conflicting

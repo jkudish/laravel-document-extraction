@@ -9,6 +9,8 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Jkudish\DocumentExtraction\DocumentExtraction;
 use Jkudish\DocumentExtraction\Exceptions\ExtractionException;
 use Jkudish\DocumentExtraction\Exceptions\ProcessingUnavailableException;
+use Jkudish\DocumentExtraction\Preparation\PreparationWorkspace;
+use Jkudish\DocumentExtraction\Preparation\RuntimeDoctor;
 use Jkudish\DocumentExtraction\Results\PageResult;
 use Jkudish\DocumentExtraction\Tests\Support\RecordingPreparedExtraction;
 
@@ -379,4 +381,89 @@ it('enforces the active temporary byte budget and cleans every owned derivative 
         ->toThrow(ExtractionException::class);
 
     expect(glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [])->toBe($before);
+});
+
+it('does not silently complete requested document detection before detection is implemented', function (): void {
+    expect(fn () => app(DocumentExtraction::class)
+        ->fromString('Two invoices', 'text/plain')
+        ->detectDocuments()
+        ->text())
+        ->toThrow(ProcessingUnavailableException::class, 'Document detection');
+});
+
+it('matches Poppler pixel rounding for non-integral render dimensions', function (): void {
+    $source = file_get_contents(pdfFixture('blank.pdf'));
+    assert(is_string($source));
+    // Equal-length replacement preserves the synthetic PDF cross-reference offsets.
+    $source = str_replace('/MediaBox [0 0 612 792]', '/MediaBox [0 0 613 793]', $source);
+    $recorder = preparedRecorder();
+
+    expect(fn () => $recorder->fromString($source, 'application/pdf')->text())
+        ->toThrow(ProcessingUnavailableException::class, 'OCR execution');
+
+    expect($recorder->preparations[0]['visuals'][0]['width'])->toBe(1278)
+        ->and($recorder->preparations[0]['visuals'][0]['height'])->toBe(1653);
+});
+
+it('includes page separators in the aggregate retained PDF output budget', function (): void {
+    $extraction = app(DocumentExtraction::class);
+    $baseline = $extraction->fromPath(pdfFixture('multipage.pdf'))->withoutAi()->text();
+    assert(is_string($baseline->text));
+    config()->set('extraction.limits.retained_output_bytes', strlen($baseline->text) - 1);
+
+    try {
+        $extraction->fromPath(pdfFixture('multipage.pdf'))->withoutAi()->text();
+        throw new RuntimeException('Expected page separators to count against the output budget.');
+    } catch (ExtractionException $exception) {
+        expect($exception->errorCode)->toBe('output_limit_exceeded');
+    }
+});
+
+it('omits dotenv and server-only environment entries from workers and doctor probes', function (): void {
+    $fake = sys_get_temp_dir().'/lde-environment-probe-'.bin2hex(random_bytes(6));
+    file_put_contents($fake, <<<'PHP'
+#!/usr/bin/env php
+<?php
+$inherited = getenv('LDE_SYNTHETIC_ENV_ENTRY') !== false || getenv('LDE_SYNTHETIC_SERVER_ENTRY') !== false;
+if (in_array('-v', $argv, true)) { echo 'pdftotext version synthetic'; exit($inherited ? 1 : 0); }
+echo $inherited ? 'unexpected inherited entry' : '';
+PHP);
+    chmod($fake, 0700);
+    $environment = $_ENV;
+    $server = $_SERVER;
+    $_ENV['LDE_SYNTHETIC_ENV_ENTRY'] = 'synthetic-only';
+    $_SERVER['LDE_SYNTHETIC_SERVER_ENTRY'] = 'synthetic-only';
+    config()->set('extraction.preparation.binaries.pdftotext', $fake);
+
+    try {
+        $result = app(DocumentExtraction::class)->fromPath(pdfFixture('text-only.pdf'))->withoutAi()->text();
+        $checks = app(RuntimeDoctor::class)->check();
+
+        expect($result->text)->toBeNull()
+            ->and($checks['binary.pdftotext']['ready'])->toBeTrue();
+    } finally {
+        $_ENV = $environment;
+        $_SERVER = $server;
+        @unlink($fake);
+    }
+});
+
+it('never traverses a replacement workspace-root symlink during cleanup', function (): void {
+    $root = sys_get_temp_dir().'/lde-cleanup-root-'.bin2hex(random_bytes(6));
+    mkdir($root, 0700);
+    mkdir($root.'/outside', 0700);
+    file_put_contents($root.'/outside/sentinel', 'outside the owned workspace');
+    $workspace = PreparationWorkspace::create($root.'/source', 0, 100);
+    rmdir($workspace->path);
+    symlink($root.'/outside', $workspace->path);
+
+    try {
+        expect(fn () => $workspace->cleanup())->toThrow(ExtractionException::class, 'cleanup')
+            ->and(is_file($root.'/outside/sentinel'))->toBeTrue();
+    } finally {
+        @unlink($workspace->path);
+        @unlink($root.'/outside/sentinel');
+        @rmdir($root.'/outside');
+        @rmdir($root);
+    }
 });

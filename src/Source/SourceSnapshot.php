@@ -53,6 +53,7 @@ final class SourceSnapshot
         $destination = null;
         $input = null;
         $ownsInput = false;
+        $blocking = null;
 
         try {
             $destination = fopen($path, 'x+b');
@@ -63,6 +64,12 @@ final class SourceSnapshot
 
             [$input, $ownsInput] = $source->open($filesystems);
             $deadline->ensureRemaining();
+            $blocking = self::blockingMode(stream_get_meta_data($input));
+
+            if (! @stream_set_blocking($input, false)) {
+                throw SourceException::make('invalid_source', 'The source stream does not support bounded nonblocking reads.');
+            }
+
             $hash = hash_init('sha256');
             $size = 0;
             $containsBinaryControl = false;
@@ -80,7 +87,14 @@ final class SourceSnapshot
                         break;
                     }
 
-                    throw SourceException::make('invalid_source', 'The source stream stopped before reaching EOF.');
+                    $read = [$input];
+                    $write = $except = [];
+
+                    if (@stream_select($read, $write, $except, 0, 100_000) === false) {
+                        throw SourceException::make('invalid_source', 'The source stream cannot be awaited safely.');
+                    }
+
+                    continue;
                 }
 
                 $size += strlen($chunk);
@@ -105,6 +119,10 @@ final class SourceSnapshot
 
             $destination = null;
 
+            if (! chmod($path, 0400)) {
+                throw SourceException::make('invalid_source', 'The private source snapshot could not be made read-only.');
+            }
+
             if ($ownsInput) {
                 fclose($input);
                 $input = null;
@@ -126,6 +144,10 @@ final class SourceSnapshot
             self::removeSnapshot($path);
 
             throw $exception;
+        } finally {
+            if (! $ownsInput && is_resource($input) && $blocking !== null) {
+                stream_set_blocking($input, $blocking);
+            }
         }
     }
 
@@ -161,6 +183,13 @@ final class SourceSnapshot
         if (! @rmdir($directory) && is_dir($directory)) {
             throw SourceException::make('cleanup_failed', 'Private source snapshot cleanup could not be completed.');
         }
+    }
+
+    /** @param array<string, mixed> $metadata */
+    private static function blockingMode(array $metadata): ?bool
+    {
+        // Some native wrappers (including php://temp) omit this metadata key.
+        return is_bool($metadata['blocked'] ?? null) ? $metadata['blocked'] : null;
     }
 
     /** @param resource $destination */

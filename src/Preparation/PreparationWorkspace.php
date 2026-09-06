@@ -72,7 +72,13 @@ final class PreparationWorkspace
             return;
         }
 
-        if (is_dir($this->path)) {
+        clearstatcache(true);
+
+        if (file_exists($this->path) || is_link($this->path)) {
+            if (! is_dir($this->path) || realpath($this->path) !== $this->path) {
+                throw PreparationException::make('cleanup_failed', 'Private preparation cleanup encountered a replaced workspace path.');
+            }
+
             $iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($this->path, FilesystemIterator::SKIP_DOTS),
                 RecursiveIteratorIterator::CHILD_FIRST,
