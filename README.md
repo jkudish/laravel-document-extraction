@@ -101,8 +101,9 @@ request is created and never mutates Laravel's global configuration.
 - JPEG, PNG, WebP, TIFF (frames become pages), HEIC, HEIF, BMP, AVIF, and single-frame GIF are
   accepted when the installed Imagick codecs can decode them. Animated/multi-frame non-TIFF inputs
   are rejected. Orientation and final PNG normalization use Illuminate Image's Imagick driver.
-  Illuminate Image does not directly admit TIFF input, so a bounded direct Imagick step selects one
-  TIFF frame before that frame is normalized through Illuminate Image.
+  Laravel 13.23's Image API does not directly admit TIFF, HEIC, HEIF, or AVIF input, so a bounded
+  direct Imagick step selects a frame and converts it to an admitted lossless representation before
+  orientation and final normalization continue through Illuminate Image.
 
 `text()` avoids a model when bounded direct text is sufficient. `withoutAi()` returns all available
 PDF text and explicit `ocr_required` page coverage for anything unprocessed; it never invents blank

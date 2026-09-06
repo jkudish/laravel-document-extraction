@@ -322,6 +322,7 @@ it('normalizes every advertised raster codec through the Illuminate Image worker
     'AVIF' => ['sample.avif', 1, 4, 3],
     'single frame GIF' => ['sample.gif', 1, 4, 3],
     'EXIF orientation' => ['oriented.jpg', 1, 2, 3],
+    'bridged TIFF orientation' => ['oriented.tiff', 1, 2, 3],
 ]);
 
 it('rejects animated non-TIFF images instead of silently selecting a frame', function (): void {

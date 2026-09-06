@@ -68,7 +68,10 @@
             "@analyse",
             "@test"
         ],
-        "test:matrix": "bash scripts/test-matrix"
+        "test:matrix": [
+            "Composer\\Config::disableProcessTimeout",
+            "bash scripts/test-matrix"
+        ]
     },
     "config": {
         "allow-plugins": {

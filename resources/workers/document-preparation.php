@@ -7,6 +7,7 @@ namespace Jkudish\DocumentExtraction\Worker;
 use finfo;
 use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
+use Illuminate\Image\Image;
 use Illuminate\Image\ImageManager;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Process\Factory;
@@ -104,6 +105,20 @@ function imageManager(): ImageManager
     Container::setInstance($container);
 
     return $manager;
+}
+
+function orientWithImageApi(Image $image, int $orientation): Image
+{
+    return match ($orientation) {
+        Imagick::ORIENTATION_TOPRIGHT => $image->flipHorizontally(),
+        Imagick::ORIENTATION_BOTTOMRIGHT => $image->rotate(180),
+        Imagick::ORIENTATION_BOTTOMLEFT => $image->rotate(180)->flipHorizontally(),
+        Imagick::ORIENTATION_LEFTTOP => $image->rotate(90)->flipHorizontally(),
+        Imagick::ORIENTATION_RIGHTTOP => $image->rotate(90),
+        Imagick::ORIENTATION_RIGHTBOTTOM => $image->rotate(270)->flipHorizontally(),
+        Imagick::ORIENTATION_LEFTBOTTOM => $image->rotate(270),
+        default => $image->orient(),
+    };
 }
 
 function writePrivate(string $path, string $bytes, int $limit): void
@@ -424,11 +439,13 @@ function imageNormalize(array $payload): never
 
     try {
         $manager = imageManager();
+        $bridgedOrientation = null;
 
-        if ($mediaType === 'image/tiff') {
+        if (in_array($mediaType, ['image/tiff', 'image/heic', 'image/heif', 'image/avif'], true)) {
             $sequence = new Imagick($source);
             $sequence->setIteratorIndex($frame);
             $selected = $sequence->getImage();
+            $bridgedOrientation = $selected->getImageOrientation();
             $selected->setImagePage(0, 0, 0, 0);
             $selected->setImageFormat('png');
             $input = $selected->getImageBlob();
@@ -442,7 +459,11 @@ function imageNormalize(array $payload): never
             respond(false, code: 'unsupported_codec');
         }
 
-        $image = $manager->fromBytes($input)->usingImagick()->orient()->toPng();
+        $image = $manager->fromBytes($input)->usingImagick();
+        $image = $bridgedOrientation === null
+            ? $image->orient()
+            : orientWithImageApi($image, $bridgedOrientation);
+        $image = $image->toPng();
         $bytes = $image->toBytes();
         [$width, $height] = $image->dimensions();
     } catch (Throwable) {
