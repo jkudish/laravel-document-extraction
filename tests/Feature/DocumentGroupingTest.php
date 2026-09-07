@@ -421,6 +421,46 @@ it('keeps partial text when OCR fails inside one detected group', function (): v
         ->and($result->complete())->toBeFalse();
 });
 
+it('retains completed page text when a global limit stops the current group', function (): void {
+    $path = __DIR__.'/../Fixtures/Images/multipage.tiff';
+    $sourceHash = hash_file('sha256', $path);
+    $before = glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [];
+    config()->set('extraction.limits.ai_attempts', 2);
+    DocumentDetectionAgent::fake([['groups' => [
+        ['pages' => [1, 2], 'ambiguous' => false],
+    ]]])->preventStrayPrompts();
+    OcrAgent::fake(['first page survived'])->preventStrayPrompts();
+
+    try {
+        app(DocumentExtraction::class)
+            ->fromPath($path)
+            ->detectDocuments()
+            ->text('openai', 'ocr-model');
+
+        throw new RuntimeException('The shared attempt limit should stop the second OCR page.');
+    } catch (AiExecutionException $exception) {
+        $partial = $exception->partialResult;
+
+        expect($exception->errorCode)->toBe('ai_attempt_limit_exceeded')
+            ->and($partial)->not->toBeNull()
+            ->and($partial?->sourceSha256)->toBe($sourceHash)
+            ->and($partial?->documents)->toHaveCount(1)
+            ->and($partial?->documents->first()?->pages?->all())->toBe([1, 2])
+            ->and($partial?->documents->first()?->text)->toBe('first page survived')
+            ->and($partial?->documents->first()?->complete())->toBeFalse()
+            ->and($partial?->pages)->toHaveCount(1)
+            ->and($partial?->pages->first()?->page)->toBe(1)
+            ->and($partial?->pages->first()?->text)->toBe('first page survived')
+            ->and($partial?->calls->pluck('stage')->all())->toBe(['detection', 'ocr'])
+            ->and($partial?->errors->last()?->code)->toBe('ai_attempt_limit_exceeded')
+            ->and($partial?->complete())->toBeFalse();
+    }
+
+    expect(hash_file('sha256', $path))->toBe($sourceHash)
+        ->and(glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [])->toBe($before);
+    Http::assertNothingSent();
+});
+
 it('returns an explicit empty detection outcome when the detector provider fails', function (): void {
     DocumentDetectionAgent::fake([
         fn (): never => throw new AiException('private detector provider body'),

@@ -45,6 +45,18 @@ it('rejects structurally invalid assignments without discarding an independent u
     ], [2]],
 ]);
 
+it('does not trust a valid group that reuses a selected page claimed by an invalid group', function (): void {
+    $result = (new PageGroupValidator)->validate(['groups' => [
+        ['pages' => [1, 1], 'ambiguous' => false],
+        ['pages' => [1, 2], 'ambiguous' => false],
+    ]], [1, 2]);
+
+    expect($result['groups'])->toBe([])
+        ->and($result['unassigned'])->toBe([1, 2])
+        ->and(array_map(static fn ($error): string => $error->code, $result['errors']))
+        ->toContain('invalid_detection_assignment', 'unassigned_pages');
+});
+
 /** @param array<string, mixed> $output */
 it('returns a detection failure and no fabricated group for malformed or empty output', function (array $output): void {
     /** @var array<string, mixed> $output */

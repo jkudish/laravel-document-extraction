@@ -55,6 +55,8 @@ final readonly class NativeAiProcessor
         $pageResults = [];
         $errors = [];
         $activePages = $selectedPages;
+        $activeGroupPageResults = [];
+        $activeGroupErrors = [];
 
         try {
             $this->ensureAttachmentLimit($invocation, $prepared->inlineAttachmentBytes());
@@ -95,6 +97,8 @@ final readonly class NativeAiProcessor
 
             foreach ($grouping['groups'] as $group) {
                 $activePages = $group['pages'];
+                $activeGroupPageResults = [];
+                $activeGroupErrors = [];
 
                 if ($group['ambiguous']) {
                     $error = $this->error(
@@ -137,15 +141,18 @@ final readonly class NativeAiProcessor
                     continue;
                 }
 
-                [$document, $groupPages, $groupErrors] = $this->textGroup(
+                $documents[] = $this->textGroup(
                     $invocation,
                     $session,
                     $groupDocument,
                     $processingAgent,
+                    $activeGroupPageResults,
+                    $activeGroupErrors,
                 );
-                $documents[] = $document;
-                array_push($pageResults, ...$groupPages);
-                array_push($errors, ...$groupErrors);
+                array_push($pageResults, ...$activeGroupPageResults);
+                array_push($errors, ...$activeGroupErrors);
+                $activeGroupPageResults = [];
+                $activeGroupErrors = [];
             }
 
             if ($invocation->operation === TerminalOperation::Text) {
@@ -165,7 +172,18 @@ final readonly class NativeAiProcessor
             return $this->detectionResult($snapshot, $prepared, $session, $documents, $pageResults, $errors);
         } catch (AiExecutionException|ConfigurationException $exception) {
             $globalError = $this->error($exception->errorCode, $exception->getMessage(), $activePages);
+            array_push($pageResults, ...$activeGroupPageResults);
+            array_push($errors, ...$activeGroupErrors);
             $errors[] = $globalError;
+
+            if ($invocation->operation === TerminalOperation::Text && $activeGroupPageResults !== []) {
+                $documents[] = new DocumentResult(
+                    pages: $activePages,
+                    text: $this->pageText($activeGroupPageResults),
+                    complete: false,
+                    error: $globalError,
+                );
+            }
 
             throw $exception->withPartialResult(
                 $this->detectionResult($snapshot, $prepared, $session, $documents, $pageResults, $errors),
@@ -432,17 +450,17 @@ final readonly class NativeAiProcessor
     }
 
     /**
-     * @return array{DocumentResult, list<PageResult>, list<ExtractionError>}
+     * @param  list<PageResult>  $pageResults
+     * @param  list<ExtractionError>  $errors
      */
     private function textGroup(
         ExtractionInvocation $invocation,
         AiExecutionSession $session,
         PreparedDocument $prepared,
         Agent $agent,
-    ): array {
-        $pageResults = [];
-        $errors = [];
-
+        array &$pageResults,
+        array &$errors,
+    ): DocumentResult {
         foreach ($prepared->pages as $page) {
             if (! $page->needsOcr) {
                 $pageResults[] = new PageResult($page->page, $page->text ?? '');
@@ -478,16 +496,12 @@ final readonly class NativeAiProcessor
         $text = $this->pageText($pageResults);
         $session->ensureFinalOutputFits($text);
 
-        return [
-            new DocumentResult(
-                pages: $prepared->selectedPages,
-                text: $text,
-                complete: $errors === [],
-                error: $errors[0] ?? null,
-            ),
-            $pageResults,
-            $errors,
-        ];
+        return new DocumentResult(
+            pages: $prepared->selectedPages,
+            text: $text,
+            complete: $errors === [],
+            error: $errors[0] ?? null,
+        );
     }
 
     /** @param list<int> $pages */

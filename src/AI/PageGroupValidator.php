@@ -33,6 +33,7 @@ final readonly class PageGroupValidator
         $candidates = [];
         $errors = [];
         $owners = [];
+        $invalidClaims = [];
 
         foreach ($rawGroups as $index => $rawGroup) {
             if (! is_array($rawGroup) || ! is_array($rawGroup['pages'] ?? null) || ! is_bool($rawGroup['ambiguous'] ?? null)) {
@@ -60,6 +61,10 @@ final readonly class PageGroupValidator
 
             if (! $valid) {
                 $errors[] = $this->invalid($groupPages);
+
+                foreach ($groupPages as $page) {
+                    $invalidClaims[$page] = true;
+                }
 
                 continue;
             }
@@ -92,7 +97,7 @@ final readonly class PageGroupValidator
         $assigned = [];
 
         foreach ($candidates as $candidate) {
-            if ($candidate['overlap']) {
+            if ($candidate['overlap'] || array_intersect_key(array_fill_keys($candidate['pages'], true), $invalidClaims) !== []) {
                 continue;
             }
 
