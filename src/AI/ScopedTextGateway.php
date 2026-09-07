@@ -146,6 +146,7 @@ final readonly class ScopedTextGateway implements StepTextGateway
                 $this->elapsedMilliseconds($startedAtNanoseconds),
                 $startedAt,
                 $response,
+                $scope->evidenceOrigin,
             );
         }
     }

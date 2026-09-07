@@ -52,6 +52,10 @@ final readonly class CallRecord implements Arrayable, JsonSerializable
             throw new InvalidArgumentException('Call duration cannot be negative.');
         }
 
+        if ($evidenceOrigin === EvidenceOrigin::Mixed) {
+            throw new InvalidArgumentException('An individual call must have one evidence origin.');
+        }
+
         $this->validateAttemptIdentity();
         $this->validateModelIdentity($provider, $model, 'resolved');
         $this->validateModelIdentity($requestedProvider, $requestedModel, 'requested');

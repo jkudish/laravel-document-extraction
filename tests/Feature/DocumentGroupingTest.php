@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Http\Client\Request;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Facades\Http;
 use Jkudish\DocumentExtraction\AI\DocumentDetectionAgent;
@@ -12,8 +13,12 @@ use Jkudish\DocumentExtraction\DocumentExtraction;
 use Jkudish\DocumentExtraction\Exceptions\AiExecutionException;
 use Jkudish\DocumentExtraction\Exceptions\ConfigurationException;
 use Jkudish\DocumentExtraction\Results\CallRecord;
+use Jkudish\DocumentExtraction\Results\EvidenceOrigin;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\StructuredTextResponse;
 
 final class GroupingPromptPrefix
 {
@@ -38,10 +43,47 @@ function groupingPdf(): string
     return __DIR__.'/../Fixtures/Pdf/multipage.pdf';
 }
 
+function groupingCorpusPdf(string $file): string
+{
+    return __DIR__.'/../Fixtures/Grouping/'.$file;
+}
+
 /** @return array<string, Type> */
 function groupingSchema(JsonSchema $schema): array
 {
     return ['value' => $schema->string()->required()];
+}
+
+/** @return array<string, mixed> */
+function groupingOpenAiResponse(string $text): array
+{
+    return [
+        'id' => 'resp_grouping',
+        'status' => 'completed',
+        'model' => 'fixture-model',
+        'output' => [[
+            'type' => 'message',
+            'status' => 'completed',
+            'content' => [[
+                'type' => 'output_text',
+                'text' => $text,
+                'annotations' => [],
+            ]],
+        ]],
+        'usage' => ['input_tokens' => 2, 'output_tokens' => 3],
+    ];
+}
+
+function configureGroupingPrice(): void
+{
+    config()->set('ai.providers.openai.key', 'test-key');
+    config()->set('ai-pricing.offline', true);
+    config()->set('ai-pricing.prices', [
+        'openai:fixture-model' => [
+            'input_tokens' => ['amount' => '0.1'],
+            'output_tokens' => ['amount' => '0.01'],
+        ],
+    ]);
 }
 
 it('keeps detection off by default with no detector call or cost', function (): void {
@@ -133,6 +175,120 @@ it('groups selected original PDF pages and extracts each group through one share
     });
     InlineSchemaAgent::assertPromptedTimes(2);
     Http::assertNothingSent();
+});
+
+it('wires a synthetic mixed-length bundle through native grouped extraction', function (): void {
+    $path = groupingCorpusPdf('bundle-03.pdf');
+    $sourceHash = hash_file('sha256', $path);
+    DocumentDetectionAgent::fake([['groups' => [
+        ['pages' => [1, 2], 'ambiguous' => false],
+        ['pages' => [3], 'ambiguous' => false],
+        ['pages' => [4, 5, 6], 'ambiguous' => false],
+    ]]])->preventStrayPrompts();
+    InlineSchemaAgent::fake([
+        ['value' => 'claim'],
+        ['value' => 'utility bill'],
+        ['value' => 'lease addendum'],
+    ])->preventStrayPrompts();
+
+    $result = app(DocumentExtraction::class)
+        ->fromPath($path)
+        ->detectDocuments()
+        ->schema(groupingSchema(...))
+        ->extract();
+
+    expect($result->sourceSha256)->toBe($sourceHash)
+        ->and($result->pageCount)->toBe(6)
+        ->and($result->documents->map(fn ($document) => $document->pages?->all())->all())
+        ->toBe([[1, 2], [3], [4, 5, 6]])
+        ->and($result->documents->pluck('data')->all())->toBe([
+            ['value' => 'claim'],
+            ['value' => 'utility bill'],
+            ['value' => 'lease addendum'],
+        ])
+        ->and($result->calls->map(fn (CallRecord $call): array => $call->pages->all())->all())
+        ->toBe([[1, 2, 3, 4, 5, 6], [1, 2], [3], [4, 5, 6]])
+        ->and($result->complete())->toBeTrue();
+
+    DocumentDetectionAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->attachments->count() === 6);
+    InlineSchemaAgent::assertPromptedTimes(3);
+    Http::assertNothingSent();
+});
+
+it('preserves live extractor pricing when the detector is faked', function (): void {
+    configureGroupingPrice();
+    Http::fake([
+        'https://api.openai.com/v1/responses' => Http::response(
+            groupingOpenAiResponse('{"value":"live extraction"}'),
+        ),
+    ]);
+    DocumentDetectionAgent::fake([['groups' => [
+        ['pages' => [1], 'ambiguous' => false],
+    ]]])->preventStrayPrompts();
+
+    $result = app(DocumentExtraction::class)
+        ->fromPath(groupingPdf())
+        ->pages([1])
+        ->detectDocuments()
+        ->schema(groupingSchema(...))
+        ->extract('openai', 'fixture-model');
+    $recorded = $result->asRecorded();
+
+    expect($result->documents->first()?->data)->toBe(['value' => 'live extraction'])
+        ->and($result->calls->pluck('evidenceOrigin')->all())->toBe([
+            EvidenceOrigin::Simulated,
+            EvidenceOrigin::Live,
+        ])
+        ->and($result->calls->first()?->cost)->toBeNull()
+        ->and((string) $result->calls->last()?->cost?->cost?->amount)->toBe('0.23')
+        ->and($result->evidenceOrigin)->toBe(EvidenceOrigin::Mixed)
+        ->and($result->cost->evidenceOrigin)->toBe(EvidenceOrigin::Mixed)
+        ->and((string) $result->cost->knownByCurrency->get('USD')?->amount)->toBe('0.23')
+        ->and($result->cost->unpricedCalls->all())->toBe([$result->calls->first()?->reference()])
+        ->and($recorded->evidenceOrigin)->toBe(EvidenceOrigin::Mixed)
+        ->and($recorded->calls->pluck('evidenceOrigin')->all())->toBe([
+            EvidenceOrigin::Simulated,
+            EvidenceOrigin::Recorded,
+        ])
+        ->and((string) $recorded->cost->knownByCurrency->get('USD')?->amount)->toBe('0.23');
+    Http::assertSentCount(1);
+});
+
+it('preserves live detector pricing when the extractor is faked', function (): void {
+    configureGroupingPrice();
+    config()->set('extraction.detection.model', 'fixture-model');
+    Http::fake([
+        'https://api.openai.com/v1/responses' => Http::response(
+            groupingOpenAiResponse('{"groups":[{"pages":[1],"ambiguous":false}]}'),
+        ),
+    ]);
+    InlineSchemaAgent::fake([new StructuredTextResponse(
+        ['value' => 'fake extraction'],
+        '{"value":"fake extraction"}',
+        new Usage(2, 3),
+        new Meta('openai', 'fixture-model'),
+    )])->preventStrayPrompts();
+
+    $result = app(DocumentExtraction::class)
+        ->fromPath(groupingPdf())
+        ->pages([1])
+        ->detectDocuments()
+        ->schema(groupingSchema(...))
+        ->extract('openai', 'fixture-model');
+
+    expect($result->documents->first()?->data)->toBe(['value' => 'fake extraction'])
+        ->and($result->calls->pluck('evidenceOrigin')->all())->toBe([
+            EvidenceOrigin::Live,
+            EvidenceOrigin::Simulated,
+        ])
+        ->and((string) $result->calls->first()?->cost?->cost?->amount)->toBe('0.23')
+        ->and($result->calls->last()?->cost)->toBeNull()
+        ->and($result->evidenceOrigin)->toBe(EvidenceOrigin::Mixed)
+        ->and($result->cost->evidenceOrigin)->toBe(EvidenceOrigin::Mixed)
+        ->and((string) $result->cost->knownByCurrency->get('USD')?->amount)->toBe('0.23')
+        ->and($result->cost->unpricedCalls->all())->toBe([$result->calls->last()?->reference()]);
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.openai.com/v1/responses');
+    Http::assertSentCount(1);
 });
 
 it('retains successful siblings and explicit failed groups after operational extraction failure', function (): void {

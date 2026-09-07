@@ -133,6 +133,10 @@ final readonly class ExtractionResult
             return $this;
         }
 
+        $evidenceOrigin = $this->evidenceOrigin === EvidenceOrigin::Mixed
+            ? EvidenceOrigin::Mixed
+            : EvidenceOrigin::Recorded;
+
         return new self(
             documents: $this->documents,
             sourceSha256: $this->sourceSha256,
@@ -144,7 +148,7 @@ final readonly class ExtractionResult
             cost: $this->cost->asRecorded(),
             detectionMode: $this->detectionMode,
             coverageComplete: $this->coverageComplete,
-            evidenceOrigin: EvidenceOrigin::Recorded,
+            evidenceOrigin: $evidenceOrigin,
         );
     }
 

@@ -11,14 +11,12 @@ use Jkudish\DocumentExtraction\ExtractionInvocation;
 use Jkudish\DocumentExtraction\Preparation\PreparedDocument;
 use Jkudish\DocumentExtraction\Preparation\PreparedPage;
 use Jkudish\DocumentExtraction\Results\DocumentResult;
-use Jkudish\DocumentExtraction\Results\EvidenceOrigin;
 use Jkudish\DocumentExtraction\Results\ExtractionError;
 use Jkudish\DocumentExtraction\Results\ExtractionResult;
 use Jkudish\DocumentExtraction\Results\PageResult;
 use Jkudish\DocumentExtraction\Source\SourceSnapshot;
 use Jkudish\DocumentExtraction\TerminalOperation;
 use Jkudish\LaravelAiPricing\ResponseCostResolver;
-use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Files\Image;
@@ -51,7 +49,6 @@ final readonly class NativeAiProcessor
         $session = $this->session(
             $invocation,
             $snapshot,
-            [$detector, $processingAgent],
             $invocation->operation === TerminalOperation::Text ? strlen($prepared->directText ?? '') : 0,
         );
         $documents = [];
@@ -185,7 +182,7 @@ final readonly class NativeAiProcessor
             $this->packageOptions($invocation, 'ocr'),
             $invocation->configuration['middleware'],
         );
-        $session = $this->session($invocation, $snapshot, [$agent], strlen($prepared->directText ?? ''));
+        $session = $this->session($invocation, $snapshot, strlen($prepared->directText ?? ''));
         $pageResults = [];
         $errors = [];
         $activePages = [];
@@ -250,7 +247,7 @@ final readonly class NativeAiProcessor
                 errors: $errors,
                 cost: $session->costSummary(),
                 coverageComplete: $errors === [],
-                evidenceOrigin: $session->evidenceOrigin,
+                evidenceOrigin: $session->evidenceOrigin(),
             );
         } catch (AiExecutionException|ConfigurationException $exception) {
             $globalError = $this->error($exception->errorCode, $exception->getMessage(), $activePages);
@@ -271,7 +268,7 @@ final readonly class NativeAiProcessor
                 errors: $errors,
                 cost: $session->costSummary(),
                 coverageComplete: false,
-                evidenceOrigin: $session->evidenceOrigin,
+                evidenceOrigin: $session->evidenceOrigin(),
             ));
         }
     }
@@ -283,7 +280,7 @@ final readonly class NativeAiProcessor
         ?Agent $applicationAgent,
     ): ExtractionResult {
         $agent = $this->extractionAgent($invocation, $applicationAgent);
-        $session = $this->session($invocation, $snapshot, [$agent]);
+        $session = $this->session($invocation, $snapshot);
         $pages = $prepared->selectedPages ?? [];
 
         try {
@@ -310,7 +307,7 @@ final readonly class NativeAiProcessor
                 pageCount: $prepared->pageCount,
                 calls: $session->calls(),
                 cost: $session->costSummary(),
-                evidenceOrigin: $session->evidenceOrigin,
+                evidenceOrigin: $session->evidenceOrigin(),
             );
         } catch (InvalidAiOutputException $exception) {
             return $this->failedExtraction(
@@ -341,11 +338,9 @@ final readonly class NativeAiProcessor
         }
     }
 
-    /** @param list<Agent> $agents */
     private function session(
         ExtractionInvocation $invocation,
         SourceSnapshot $snapshot,
-        array $agents,
         int $initialRetainedBytes = 0,
     ): AiExecutionSession {
         return new AiExecutionSession(
@@ -356,11 +351,6 @@ final readonly class NativeAiProcessor
             outputLimit: $invocation->configuration['limits']['retained_output_bytes'],
             attachmentLimit: $invocation->configuration['limits']['inline_attachment_bytes'],
             pricing: $this->pricing,
-            evidenceOrigin: collect($agents)->contains(
-                static fn (Agent $agent): bool => Ai::hasFakeGatewayFor($agent::class),
-            )
-                ? EvidenceOrigin::Simulated
-                : EvidenceOrigin::Live,
             initialRetainedBytes: $initialRetainedBytes,
         );
     }
@@ -568,7 +558,7 @@ final readonly class NativeAiProcessor
             cost: $session->costSummary(),
             detectionMode: true,
             coverageComplete: $errors === [],
-            evidenceOrigin: $session->evidenceOrigin,
+            evidenceOrigin: $session->evidenceOrigin(),
         );
     }
 
@@ -645,7 +635,7 @@ final readonly class NativeAiProcessor
             errors: [$error],
             cost: $session->costSummary(),
             coverageComplete: false,
-            evidenceOrigin: $session->evidenceOrigin,
+            evidenceOrigin: $session->evidenceOrigin(),
         );
     }
 }

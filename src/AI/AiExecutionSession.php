@@ -28,6 +28,8 @@ final class AiExecutionSession
     /** @var list<CallRecord> */
     private array $calls = [];
 
+    private readonly EvidenceOrigin $defaultEvidenceOrigin;
+
     public function __construct(
         public readonly string $invocationId,
         private readonly Deadline $deadline,
@@ -36,7 +38,7 @@ final class AiExecutionSession
         public readonly int $outputLimit,
         public readonly int $attachmentLimit,
         private readonly ResponseCostResolver $pricing,
-        public readonly EvidenceOrigin $evidenceOrigin = EvidenceOrigin::Live,
+        EvidenceOrigin $evidenceOrigin = EvidenceOrigin::Live,
         int $initialRetainedBytes = 0,
     ) {
         if (trim($this->invocationId) === '') {
@@ -44,6 +46,7 @@ final class AiExecutionSession
         }
 
         $this->retainedBytes = $initialRetainedBytes;
+        $this->defaultEvidenceOrigin = $evidenceOrigin;
     }
 
     /** @return array{ordinal: int, remaining_seconds: int} */
@@ -125,10 +128,11 @@ final class AiExecutionSession
         int $durationMilliseconds,
         DateTimeImmutable $startedAt,
         ?StepResponse $response,
+        EvidenceOrigin $evidenceOrigin = EvidenceOrigin::Live,
     ): void {
         [$effectiveProvider, $effectiveModel] = $this->effectiveIdentity($response);
         $usage = $this->usage($response);
-        $cost = $this->cost($response, $effectiveProvider, $effectiveModel);
+        $cost = $this->cost($response, $effectiveProvider, $effectiveModel, $evidenceOrigin);
 
         $this->calls[] = new CallRecord(
             stage: $stage,
@@ -138,7 +142,7 @@ final class AiExecutionSession
             model: $resolvedModel,
             durationMilliseconds: $durationMilliseconds,
             cost: $cost,
-            evidenceOrigin: $this->evidenceOrigin,
+            evidenceOrigin: $evidenceOrigin,
             extractionInvocationId: $this->invocationId,
             nativeInvocationId: $nativeInvocationId,
             ordinal: $ordinal,
@@ -157,10 +161,25 @@ final class AiExecutionSession
         return $this->calls;
     }
 
+    public function evidenceOrigin(): EvidenceOrigin
+    {
+        if ($this->calls === []) {
+            return $this->defaultEvidenceOrigin;
+        }
+
+        $origins = [];
+
+        foreach ($this->calls as $call) {
+            $origins[$call->evidenceOrigin->value] = $call->evidenceOrigin;
+        }
+
+        return count($origins) === 1 ? array_values($origins)[0] : EvidenceOrigin::Mixed;
+    }
+
     public function costSummary(): CostSummary
     {
         if ($this->calls === []) {
-            return CostSummary::none($this->evidenceOrigin);
+            return CostSummary::none($this->evidenceOrigin());
         }
 
         /** @var array<string, Money> $known */
@@ -190,7 +209,7 @@ final class AiExecutionSession
             knownByCurrency: $known,
             unpricedCalls: $unpriced,
             complete: $unpriced === [],
-            evidenceOrigin: $this->evidenceOrigin,
+            evidenceOrigin: $this->evidenceOrigin(),
         );
     }
 
@@ -235,8 +254,9 @@ final class AiExecutionSession
         ?StepResponse $response,
         ?string $effectiveProvider,
         ?string $effectiveModel,
+        EvidenceOrigin $evidenceOrigin,
     ): ?CostQuote {
-        if ($response === null || $this->evidenceOrigin !== EvidenceOrigin::Live) {
+        if ($response === null || $evidenceOrigin !== EvidenceOrigin::Live) {
             return null;
         }
 

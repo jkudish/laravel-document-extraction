@@ -128,6 +128,9 @@ retained-output budget, attachment limit, call sequence, and cost summary. Opera
 one usable group retains successful siblings; global resource and configuration failures stop with
 accumulated partial evidence. Detection requires paginated input and enough attachment capacity for
 the complete selected-page context—there is no silent cropping, windowing, or parser-specific split.
+When an invocation combines live and simulated native agents, each call retains its own evidence
+mode and pricing eligibility while the result and cost summary serialize their aggregate mode as
+`mixed`; converting that result to recorded evidence preserves live quotes and simulated call labels.
 
 Inline schemas use Laravel's native `JsonSchema` types:
 
