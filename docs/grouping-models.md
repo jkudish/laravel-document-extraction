@@ -40,8 +40,8 @@ The table uses each model's top-level/default catalog price; endpoint variations
 | `qwen/qwen3.7-plus` | Lowest token-cost independent family in this shortlist; one Alibaba endpoint advertises vision + strict structured output | 1,000,000 / 131,072 | $0.32 / $1.28 | cache read $0.064/M; cache write $0.40/M; no separate image or reasoning rate provided |
 | `google/gemini-3.8-flash` | Low-cost multimodal option with six structured-capable endpoints and large context | 1,048,576 / 65,536 | $0.75 / $3.75 | $0.00000075/image; internal reasoning $3.75/M; cache read $0.075/M; cache write $0.0416666666666667/M |
 | `mistralai/mistral-medium-3-5` | Different model/provider family and the clearest ZDR-tagged first-party endpoint option | 262,144 / 209,715 | $1.50 / $7.50 | no separate image, reasoning, or cache rate provided |
-| `openai/gpt-5.6-sol` | Higher-capability-priced comparison from OpenAI; several strict-capable routes | 1,050,000 / 128,000 | $2.00 / $10.00 | cache read $0.20/M; cache write $2.50/M; no separate image or reasoning rate provided |
-| `anthropic/claude-sonnet-5` | Higher-capability-priced comparison from Anthropic; multiple strict-capable routes | 1,000,000 / 128,000 | $2.00 / $10.00 | cache read $0.20/M; 5-minute write $2.50/M; 1-hour write $4.00/M; no separate image or reasoning rate provided |
+| `openai/gpt-5.6-sol` | Higher-priced comparison from OpenAI; several strict-capable routes | 1,050,000 / 128,000 | $2.00 / $10.00 | cache read $0.20/M; cache write $2.50/M; no separate image or reasoning rate provided |
+| `anthropic/claude-sonnet-5` | Higher-priced comparison from Anthropic; multiple strict-capable routes | 1,000,000 / 128,000 | $2.00 / $10.00 | cache read $0.20/M; 5-minute write $2.50/M; 1-hour write $4.00/M; no separate image or reasoning rate provided |
 
 ### Price and endpoint qualifications
 
@@ -71,7 +71,7 @@ An absent `image` field does not make image input free; it means the catalog sup
 per-image fee. Image processing can contribute model-specific prompt tokens. Likewise, absence of
 `internal_reasoning` is not evidence of free reasoning: reasoning tokens may be reflected in normal
 completion usage. Actual response usage and recorded cost, not this estimate, should be the billing
-evidence. No model has a fixed per-request fee in the retrieved shortlist metadata.
+evidence. No fixed per-request fee was provided in the retrieved shortlist metadata.
 
 ## Future capped synthetic pilot
 
@@ -89,7 +89,9 @@ only if the capped budget permits. This ordering is experimental design, not a c
 For each admitted model/endpoint combination:
 
 - freeze the prompt, schema, page rendering, endpoint routing/data policy, model ID, and reasoning
-  setting; use `provider.require_parameters = true` and a hard OpenRouter `max_price` ceiling;
+  setting; use `provider.require_parameters = true` and an OpenRouter `max_price` rate ceiling.
+  Its prompt/completion values are USD per million tokens, not a total run budget. Bound the run's
+  call count and output tokens separately and agree on total-spend enforcement before paid execution;
 - tune nothing on the holdout. Use the development bundles for prompt/schema changes, then freeze
   them before evaluating held-out examples;
 - run at least three repeats per synthetic bundle because seeds and nominally low randomness do not
@@ -107,6 +109,7 @@ The pilot is intentionally deferred: it requires explicit paid-call and data-pol
 - OpenRouter's default router is price-weighted and allows fallbacks. For comparable trials, pin the
   intended endpoint with `provider.only` (or exact `order`) and `allow_fallbacks = false`; otherwise
   model ID alone does not identify the serving endpoint, price, latency, or policy.
+  Use the full endpoint slug where variants exist: a base provider slug can match multiple regions.
 - `require_parameters = true` excludes endpoints that do not advertise every sent parameter. Without
   it, unsupported parameters may be ignored; OpenRouter's soft preference does not remove a model
   when no endpoint supports the parameter.
