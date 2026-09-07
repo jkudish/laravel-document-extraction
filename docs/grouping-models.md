@@ -1,162 +1,179 @@
 # OpenRouter models for document grouping
 
-Retrieved **2026-09-07T03:27:36Z** from OpenRouter's public catalog and endpoint APIs. This is a
-dated research shortlist for a future paid synthetic-corpus pilot, not a runtime registry, default
-model selection, spend approval, or claim of grouping or extraction accuracy.
+Retrieved **2026-09-07T03:47:07Z** from OpenRouter's public model, endpoint, and ZDR APIs.
+This is an 18-model experimental screen for a future paid synthetic-corpus evaluation. It is not a
+runtime registry, quality ranking, model activation, spend approval, or accuracy result.
 
-## Compatibility screen
+## What “compatible” means here
 
-The grouping detector sends several normalized page images in one ordinary Laravel AI request and
-expects strict schema output. A candidate therefore had to have all of the following in the current
-OpenRouter metadata:
+The detector sends multiple normalized page images in one ordinary Laravel AI request and expects a
+strict group-assignment schema. Every retained model currently has:
 
-1. `image` among its input modalities and `text` among its output modalities;
-2. both `response_format` and `structured_outputs` in the model metadata; and
-3. at least one currently listed endpoint advertising both parameters.
+1. `image` input and `text` output in model metadata;
+2. model-level `response_format` and `structured_outputs`; and
+3. at least one endpoint advertising both parameters.
 
-`structured_outputs` matters: `response_format` alone can mean basic `json_object` mode, which only
-promises valid JSON. Strict schema mode is `response_format.type = json_schema`. OpenRouter says
-support is endpoint-specific, can change, and even strict enforcement varies by provider (native
-enforcement, translation, or a strong hint). The package's local schema and membership checks remain
-authoritative regardless of provider claims.
+This is **catalog compatibility only**. No paid request was made, so none is yet demonstrated through
+Laravel AI v0.11.2 → OpenRouter → the named endpoint. OpenRouter says strict-output support is
+endpoint-specific and can change; provider enforcement ranges from native strict mode to translation
+or a strong hint. The package's local schema and page-membership validation remains authoritative.
+`response_format` without `structured_outputs` is not enough: `json_object` only means valid JSON,
+whereas this flow needs `response_format.type = json_schema`.
 
-Laravel AI v0.11.2 is promising but unproved for these exact models. Its native OpenRouter gateway
-maps each image attachment to an `image_url` part, builds `json_schema` response format for structured
-agents, and merges `HasProviderOptions` values into the request body. That permits a native
-`provider.require_parameters = true` option without a custom transport. The package forbids provider
-options from replacing generated messages or `response_format`, as intended. **No paid request was
-made**, so every row below is only **catalog-compatible**, not demonstrated through a live Laravel
-SDK → OpenRouter → endpoint request. OpenRouter also warns that the number of images accepted in one
-request varies by model and provider; the future pilot must exercise the actual multi-image bundles.
+Laravel AI v0.11.2 does provide the required native wire shapes: one `image_url` part per image,
+`json_schema` for a structured agent, and merged `HasProviderOptions`. This permits
+`provider.require_parameters = true`, full endpoint routing slugs, and rate ceilings without a custom
+transport. Actual multi-image limits still vary by endpoint and must be tested in the authorized eval.
 
-## Shortlist
+## Expanded candidate matrix
 
-Catalog prices are decimal **USD per token** except `image`, which is **USD per input image**.
-Normalized token prices multiply the raw values by exactly 1,000,000. “Not provided” is not zero.
-The table uses each model's top-level/default catalog price; endpoint variations follow it.
+Prices below are the current model-level/default catalog rates in USD per 1M input/output tokens.
+Raw per-token decimals, endpoint ranges, cache/reasoning/image fees, overrides, and full endpoint slugs
+are preserved in [`grouping-models.json`](grouping-models.json). A missing fee is **not provided**, not
+zero. “Actual cost” is **not measured** for every row: it only exists after an eventual live response
+and must come from recorded usage/provider cost evidence rather than these catalog estimates.
 
-| Model ID | Why retain for consideration | Context / max output | Input / output per 1M tokens | Other reported charges |
+| Coverage group | Exact model ID | Context / max output | Catalog input / output per 1M | Important pricing or routing qualification |
 | --- | --- | ---: | ---: | --- |
-| `qwen/qwen3.7-plus` | Lowest token-cost independent family in this shortlist; one Alibaba endpoint advertises vision + strict structured output | 1,000,000 / 131,072 | $0.32 / $1.28 | cache read $0.064/M; cache write $0.40/M; no separate image or reasoning rate provided |
-| `google/gemini-3.8-flash` | Low-cost multimodal option with six structured-capable endpoints and large context | 1,048,576 / 65,536 | $0.75 / $3.75 | $0.00000075/image; internal reasoning $3.75/M; cache read $0.075/M; cache write $0.0416666666666667/M |
-| `mistralai/mistral-medium-3-5` | Different model/provider family and the clearest ZDR-tagged first-party endpoint option | 262,144 / 209,715 | $1.50 / $7.50 | no separate image, reasoning, or cache rate provided |
-| `openai/gpt-5.6-sol` | Higher-priced comparison from OpenAI; several strict-capable routes | 1,050,000 / 128,000 | $2.00 / $10.00 | cache read $0.20/M; cache write $2.50/M; no separate image or reasoning rate provided |
-| `anthropic/claude-sonnet-5` | Higher-priced comparison from Anthropic; multiple strict-capable routes | 1,000,000 / 128,000 | $2.00 / $10.00 | cache read $0.20/M; 5-minute write $2.50/M; 1-hour write $4.00/M; no separate image or reasoning rate provided |
+| Qwen current | `qwen/qwen3.8-flash` | 1,000,000 / 131,072 | $0.15 / $0.47 | Alibaba only; cache read/write $0.016/$0.20 per 1M; no strict ZDR entry |
+| Qwen current | `qwen/qwen3.7-plus` | 1,000,000 / 131,072 | $0.32 / $1.28 | Above 256k prompt tokens: $0.96/$3.84; Alibaba only; no strict ZDR entry |
+| Qwen prior | `qwen/qwen3.6-flash` | 1,000,000 / 65,536 | $0.1875 / $1.125 | Above 256k: $0.75/$3.00; Alibaba only; no strict ZDR entry |
+| Qwen prior | `qwen/qwen3.5-flash-02-23` | 1,000,000 / 65,536 | $0.065 / $0.26 | Lowest listed Qwen rates; Alibaba only; no strict ZDR entry |
+| Qwen vision | `qwen/qwen3-vl-32b-instruct` | 131,072 / 32,768 | $0.104 / $0.416 | Explicit VL model; Alibaba only; no strict ZDR entry |
+| Qwen older vision | `qwen/qwen2.5-vl-72b-instruct` | 128,000 / 115,200 | $0.80 / $1.00 | Explicit older VL generation; only `parasail/fp8`, which appears in ZDR API |
+| Gemini current | `google/gemini-3.8-flash` | 1,048,576 / 65,536 | $0.75 / $3.75 | $0.00000075/image; internal reasoning $3.75/M; endpoint range $0.375/$1.875–$1.35/$6.75 |
+| Gemini older stable | `google/gemini-3.1-flash-lite` | 1,048,576 / 65,536 | $0.25 / $1.50 | $0.00000025/image; eight strict endpoints; range $0.125/$0.75–$0.45/$2.70 |
+| Gemini older stable | `google/gemini-2.5-flash` | 1,048,576 / 65,535 | $0.30 / $2.50 | $0.00000030/image; seven strict endpoints; range $0.15/$1.25–$0.54/$4.50 |
+| Gemini older stable | `google/gemini-2.5-pro` | 1,048,576 / 65,536 | $1.25 / $10.00 | $0.00000125/image; above 200k: $2.50/$15; seven strict endpoints |
+| OpenAI requested | `openai/gpt-5.6-luna` | 1,050,000 / 128,000 | $0.20 / $1.20 | Replaces Sol; above 272k: $0.40/$1.80; strict endpoint range $0.10/$0.60–$0.40/$2.40 |
+| Anthropic retained | `anthropic/claude-sonnet-5` | 1,000,000 / 128,000 | $2.00 / $10.00 | Six of nine endpoints strict; strict range $2/$10–$2.20/$11 |
+| Anthropic added | `anthropic/claude-haiku-4.5` | 200,000 / 64,000 | $1.00 / $5.00 | Version-pinned Haiku; five of eight endpoints strict; range $1/$5–$1.10/$5.50 |
+| Mistral diversity | `mistralai/mistral-small-2603` | 262,144 / 209,715 | $0.15 / $0.60 | Four strict endpoints; range $0.15/$0.60–$0.1875/$0.75; three ZDR entries |
+| Meta diversity | `meta-llama/llama-4-maverick` | 1,048,576 / 115,200 | $0.20 / $0.696 | Five strict endpoints across providers; all five appear in ZDR API |
+| ByteDance diversity | `bytedance-seed/seed-2.0-mini` | 262,144 / 131,072 | $0.10 / $0.40 | Above 128k: $0.20/$0.80; only `seed/fp8`, listed ZDR |
+| Moonshot diversity | `moonshotai/kimi-k2.5` | 262,144 / 235,929 | $0.45 / $2.25 | Five of eight endpoints strict; strict range $0.45/$2.25–$0.60/$3.325 |
+| Small-model diversity | `google/gemma-3-12b-it` | 131,072 / 16,384 | $0.05 / $0.15 | Only `deepinfra/bf16`, listed ZDR; smallest output ceiling in the screen |
 
-### Price and endpoint qualifications
+These groups rank **experimental coverage**, not presumed quality. Newer, larger, or more expensive
+does not imply better page grouping. The Qwen set deliberately spans general models, explicit VL
+models, and generations; the Gemini set uses version-pinned stable IDs; the last five broaden model
+and hosting families at low-to-mid listed rates.
 
-- **Qwen:** above 256,000 prompt tokens the catalog override is $0.96/M input, $3.84/M
-  output, $0.192/M cache read, and $1.20/M cache write. Its only listed endpoint is Alibaba;
-  the public ZDR endpoint list did not identify a strict-capable route for this model.
-- **Gemini:** structured-capable endpoint tiers ranged from $0.375/$1.875 per 1M tokens for
-  `flex`, through the table's default $0.75/$3.75, to $1.35/$6.75 for `priority`; their image,
-  reasoning, and cache rates move with the tier. One Vertex flex endpoint reported status `-2`
-  rather than `0` at retrieval; this report does not infer undocumented status semantics.
-  Flex/priority service tiers require explicit eligibility/selection and should not be assumed from
-  the model-level price. The ZDR list contained structured-capable Vertex global endpoints, but not
-  AI Studio endpoints.
-- **Mistral:** default and `mistral/zdr` routes were $1.50/$7.50 per 1M; the EU route was
-  $1.65/$8.25. The ZDR list contained strict-capable `mistral/zdr` and `mistral/eu` routes.
-- **GPT:** strict-capable endpoints ranged from OpenAI flex at $1/$5 per 1M through default at
-  $2/$10 and fast at $4/$20, then Azure at $5/$30–$5.50/$33. For prompts above 272,000 tokens,
-  every endpoint has a higher override; default becomes $4/$15. The Bedrock endpoint did **not**
-  advertise structured output. The ZDR list contained strict-capable Azure routes, not first-party
-  OpenAI routes.
-- **Claude:** strict-capable routes were $2/$10 per 1M except Bedrock `us-east-1` at $2.20/$11.
-  Three Google Vertex routes advertised `response_format` but **not** `structured_outputs` and must
-  be excluded by `require_parameters`. The ZDR list contained strict-capable Bedrock routes; other
-  routes must not be presumed ZDR.
+### Requested-name disposition
 
-An absent `image` field does not make image input free; it means the catalog supplied no separate
-per-image fee. Image processing can contribute model-specific prompt tokens. Likewise, absence of
-`internal_reasoning` is not evidence of free reasoning: reasoning tokens may be reflected in normal
-completion usage. Actual response usage and recorded cost, not this estimate, should be the billing
-evidence. No fixed per-request fee was provided in the retrieved shortlist metadata.
+- **GPT-5.6 Luna:** exact `openai/gpt-5.6-luna` is present and retained. The former Sol row is removed.
+  `openai/gpt-5.6-luna-pro` also exists, but was not silently substituted for the requested Luna.
+- **Sonnet:** exact `anthropic/claude-sonnet-5` remains.
+- **Haiku:** exact version-pinned `anthropic/claude-haiku-4.5` is retained. The catalog also exposes
+  `~anthropic/claude-haiku-latest`; the moving alias is not used in a reproducible eval.
+- **Older Gemini:** stable `gemini-3.1-flash-lite`, `gemini-2.5-flash`, and `gemini-2.5-pro` are
+  retained. The catalog has `gemini-3-flash-preview`, not a stable Gemini 3.0 ID, so it is excluded.
+- **Older Qwen:** the catalog-compatible screen includes 3.6, 3.5, Qwen3 VL, and Qwen2.5 VL. No
+  requested Qwen name was invented where an exact catalog ID was unavailable.
+- Batch variants are excluded from the synchronous detector screen. Router aliases (`~...latest`,
+  `openrouter/auto`, and `openrouter/free`) are excluded because they do not freeze model/endpoint
+  identity for comparative evidence.
 
-## Future capped synthetic pilot
+## Cost-controlled evaluation design
 
-Start with **three candidates**, without selecting a winner:
+No paid-call authority exists yet. When a total cap and data policy are explicitly approved, use the
+installed/native package path plus the separately provisioned evaluation dependencies:
 
-1. `qwen/qwen3.7-plus` for the lowest token-cost screen and a distinct family;
-2. `google/gemini-3.8-flash` for a low-cost, broad-multimodal comparison with several endpoints; and
-3. `anthropic/claude-sonnet-5` for a higher-priced family comparison and multiple strict-capable
-   routes.
+- Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
+- `jkudish/pest-plugin-ai-benchmarks` for the model/endpoint comparison axis, repetitions, durable
+  scorecards, replay/resume, requested/effective identity, and regression evidence; and
+- installed `jkudish/laravel-ai-pricing` v0.1.0 for provenance-aware post-response cost attribution.
 
-If Qwen cannot meet the required data policy or native multi-image/schema request, replace it with
-`mistralai/mistral-medium-3-5`. Use `openai/gpt-5.6-sol` as an additional higher-priced comparison
-only if the capped budget permits. This ordering is experimental design, not a capability ranking.
+The two Pest plugins are not currently installed in this package; dependency setup is separate work.
+Do not replace deterministic grouping metrics with an LLM judge. Do not call catalog-rate arithmetic
+“actual cost.” After each completed live trial, retain provider-reported OpenRouter cost when exposed;
+otherwise calculate from normalized usage and a dated compatible rate, preserving source,
+completeness, missing units, and snapshot provenance. Failed calls can still be billable and unknown
+cost must remain unknown rather than zero.
 
-For each admitted model/endpoint combination:
+Run the evaluation in gates:
 
-- freeze the prompt, schema, page rendering, endpoint routing/data policy, model ID, and reasoning
-  setting; use `provider.require_parameters = true` and an OpenRouter `max_price` rate ceiling.
-  Its prompt/completion values are USD per million tokens, not a total run budget. Bound the run's
-  call count and output tokens separately and agree on total-spend enforcement before paid execution;
-- tune nothing on the holdout. Use the development bundles for prompt/schema changes, then freeze
-  them before evaluating held-out examples;
-- run at least three repeats per synthetic bundle because seeds and nominally low randomness do not
-  guarantee reproducibility across providers;
-- record exact-group match per bundle, merge mistakes, split mistakes, assignment coverage,
-  ambiguity handling, unassigned-page handling, schema/membership failures, provider failures,
-  latency, token/image/reasoning usage, and recorded USD cost; and
-- report both per-bundle outcomes and aggregates. Do not convert successful schema validation into
-  an accuracy claim and do not mix extraction quality with grouping quality.
+1. **Offline protocol gate:** prove every configuration produces the same frozen images, prompt,
+   schema, endpoint options, and local validators. Cost: $0 provider spend.
+2. **Broad development screen:** one live trial per model per development bundle, at most
+   \(18D\) calls for \(D\) development bundles. This is enough to reject request incompatibility,
+   chronic schema/membership failure, obvious grouping failure, or unacceptable observed cost/latency.
+3. **Development finalists:** choose 3–5 models from measured evidence, not metadata. Add repeats to
+   reach at least three trials per finalist/development bundle. Prompt/schema changes remain confined
+   to development data.
+4. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
+   and scoring before at least three repeats on each held-out bundle. Never tune on holdout outcomes.
 
-The pilot is intentionally deferred: it requires explicit paid-call and data-policy approval.
+The recommendation is to screen all 18 once before choosing finalists. If an eventual approved cap
+cannot support that broad screen, three **coverage anchors**, not presumed winners, are
+`qwen/qwen3.8-flash` (current low listed rate), `google/gemini-2.5-flash` (older stable Gemini with
+seven strict endpoints), and `openai/gpt-5.6-luna` (the requested cross-family replacement for Sol).
+Do not promote an anchor or any other candidate to finalist without measured development evidence.
 
-## Routing, privacy, and operational caveats
+Before execution, calculate a scenario estimate from the frozen call count, output cap, and current
+rates, then enforce a separate total-spend control. OpenRouter `provider.max_price` is only a
+per-unit **rate ceiling** (prompt/completion values are USD per 1M tokens; image is USD each), not a
+total-run budget. Use `provider.require_parameters = true`, a full endpoint slug in `provider.only`,
+and `allow_fallbacks = false` so endpoint, price, and data policy do not drift within a comparison.
 
-- OpenRouter's default router is price-weighted and allows fallbacks. For comparable trials, pin the
-  intended endpoint with `provider.only` (or exact `order`) and `allow_fallbacks = false`; otherwise
-  model ID alone does not identify the serving endpoint, price, latency, or policy.
-  Use the full endpoint slug where variants exist: a base provider slug can match multiple regions.
-- `require_parameters = true` excludes endpoints that do not advertise every sent parameter. Without
-  it, unsupported parameters may be ignored; OpenRouter's soft preference does not remove a model
-  when no endpoint supports the parameter.
-- `provider.data_collection = deny` filters providers that may store/train on data; `provider.zdr =
-  true` restricts inference to endpoints OpenRouter marks zero-retention. These are routing controls,
-  not independent guarantees. OpenRouter states endpoint policy can differ from provider policy and
-  takes a conservative stance when policy is unknown. ZDR still permits in-memory implicit caching
-  and does not cover separately enabled plugins/tools.
-- ZDR can remove first-party endpoints (for example, selecting Azure instead of first-party OpenAI,
-  Vertex instead of AI Studio, or Bedrock/Vertex instead of first-party Anthropic), changing price,
-  behavior, and availability. Re-fetch endpoint metadata and policy immediately before a paid pilot.
-- Context and max-output values are ceilings, not proof that a request containing all rendered pages
-  fits. Input and output share context, image tokenization varies, and per-provider image-count/body
-  limits are not represented by the headline context number.
-- Reasoning is enabled by default in the retrieved metadata for Qwen, Gemini, GPT, and Claude;
-  Mistral's `default_enabled` was not provided. It is mandatory for Gemini 3.8 Flash. Fix reasoning
-  settings where the model permits it and include reasoning usage in cost/latency comparisons. Do
-  not compare “latency” without recording endpoint and service tier.
-- Availability, endpoint status, prices, and policies are volatile. This snapshot is evidence for
-  consideration only; it must never auto-activate a model or become a production allowlist.
+Record these metrics per trial and aggregate without hiding bundle-level failures:
+
+- exact group-set match and exact whole-bundle match;
+- merge mistakes, split mistakes, duplicate assignments, missing assignments, and invalid pages;
+- assignment coverage, ambiguity decisions, and unassigned-page decisions;
+- schema, membership, provider, timeout, and local-validation failures;
+- requested and effective model/provider/endpoint/reasoning identity;
+- latency, prompt/output/image/cache/reasoning usage; and
+- recorded USD cost, cost source/completeness, and unknown billable failures.
+
+Grouping and extraction are separate settings and separate quality questions. Schema validity and
+complete page coverage do not establish factual grouping accuracy; grouping accuracy does not
+establish extraction accuracy.
+
+## Routing, price, and privacy caveats
+
+- Endpoint support differs within one model. For Luna, Sonnet, Haiku, and Kimi, some listed endpoints
+  fail the strict screen; `require_parameters = true` is mandatory. Full eligible and excluded slugs
+  are in the JSON snapshot.
+- Default routing is price-weighted and allows fallback. A base provider slug can match multiple
+  regions/tiers, so use the complete endpoint slug for evidence-quality trials.
+- Flex, priority, fast, batch, and quantized endpoints can differ in rate, latency, availability, and
+  behavior. Endpoint range is not a promised price. Re-fetch metadata immediately before execution.
+- An absent `image` field means no separate per-image fee was provided; image processing can still
+  produce billable prompt tokens. Absent reasoning/cache/request fees likewise mean not provided,
+  not free. Only Gemini rows reported a separate image fee in this snapshot.
+- Context and output are ceilings, not proof that all rendered pages fit. Input and output share
+  context; image tokenization, request body, and image-count limits vary by endpoint.
+- `data_collection = deny` and `zdr = true` are OpenRouter routing constraints, not independent policy
+  guarantees. ZDR entries can change, permit in-memory implicit caching, and do not cover separately
+  enabled tools/plugins. ZDR routing may move OpenAI to Azure, Gemini to Vertex, or Anthropic to
+  Bedrock, changing price and behavior.
+- Availability, prices, aliases, endpoint support, and data policies are volatile. This file must not
+  auto-activate models or become a production allowlist.
 
 ## Sources
 
-All sources were public and retrieved without provider credentials or model calls:
+All research used public, unauthenticated sources and no model calls:
 
-- [OpenRouter Models API](https://openrouter.ai/api/v1/models) — exact IDs, modalities, model-level
-  supported parameters, context/output limits, prices, overrides, and reasoning metadata.
-- Endpoint APIs for [Qwen](https://openrouter.ai/api/v1/models/qwen/qwen3.7-plus/endpoints),
-  [Gemini](https://openrouter.ai/api/v1/models/google/gemini-3.8-flash/endpoints),
-  [Mistral](https://openrouter.ai/api/v1/models/mistralai/mistral-medium-3-5/endpoints),
-  [GPT](https://openrouter.ai/api/v1/models/openai/gpt-5.6-sol/endpoints), and
-  [Claude](https://openrouter.ai/api/v1/models/anthropic/claude-sonnet-5/endpoints) — endpoint-specific
-  parameters, prices, status, provider tags, and limits.
-- [OpenRouter Models documentation](https://openrouter.ai/docs/guides/overview/models) — field units,
-  zero semantics, overrides, supported-parameter meaning, and context-limit caveats.
-- [Structured Outputs](https://openrouter.ai/docs/guides/features/structured-outputs) — strict
-  `json_schema`, endpoint-specific support, `require_parameters`, and enforcement caveats.
-- [Image Inputs](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding) — multiple
-  image parts, supported formats, and provider/model image-count variability.
-- [Provider Routing](https://openrouter.ai/docs/guides/routing/provider-selection) — routing,
-  fallbacks, parameter enforcement, price ceilings, data collection, and ZDR controls.
-- [Zero Data Retention](https://openrouter.ai/docs/guides/features/zdr) and the live
-  [ZDR endpoint API](https://openrouter.ai/api/v1/endpoints/zdr) — endpoint policy scope and current
-  eligible endpoint tags.
-- Laravel AI v0.11.2 source at the locked commit: native OpenRouter
-  [structured request builder](https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/BuildsTextRequests.php)
+- [OpenRouter Models API](https://openrouter.ai/api/v1/models) for exact IDs, canonical slugs,
+  modalities, prices, overrides, reasoning metadata, and context/output limits.
+- Each row's endpoint URL follows `https://openrouter.ai/api/v1/models/{author}/{model}/endpoints`;
+  all 18 exact URLs are retained in the companion JSON and were fetched independently.
+- [ZDR endpoint API](https://openrouter.ai/api/v1/endpoints/zdr) for current model + full endpoint
+  combinations marked zero-retention.
+- [Models documentation](https://openrouter.ai/docs/guides/overview/models) for pricing units,
+  missing-versus-zero semantics, overrides, parameter fields, and context ceilings.
+- [Structured Outputs](https://openrouter.ai/docs/guides/features/structured-outputs) for
+  `json_schema`, endpoint-specific support, and strict-enforcement caveats.
+- [Image Inputs](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding) for
+  multi-image shapes and endpoint-dependent image limits.
+- [Provider Routing](https://openrouter.ai/docs/guides/routing/provider-selection) and
+  [ZDR documentation](https://openrouter.ai/docs/guides/features/zdr) for endpoint pinning, rate
+  ceilings, fallback, data collection, and retention constraints.
+- Locked Laravel AI v0.11.2 source: [structured request builder](https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/BuildsTextRequests.php)
   and [attachment mapper](https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/MapsAttachments.php).
-
-The machine-readable companion is [`grouping-models.json`](grouping-models.json). It retains only
-the shortlist rather than committing a full catalog scrape.
+- [Pest Evals](https://github.com/pestphp/pest-plugin-evals) and
+  [Laravel AI Pricing](https://github.com/jkudish/laravel-ai-pricing) for the required future
+  evaluation and actual-cost attribution boundaries. `jkudish/pest-plugin-ai-benchmarks` is also a
+  user-specified harness requirement, but no unauthenticated public GitHub or Packagist package source
+  was available at retrieval, so no external capability claim is made from it here.

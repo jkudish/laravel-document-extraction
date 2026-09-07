@@ -1,7 +1,12 @@
 {
-  "retrieved_at_utc": "2026-09-07T03:27:36Z",
-  "purpose": "Research shortlist for a future capped synthetic document-grouping pilot",
-  "evidence_status": "catalog-compatible; no paid or live Laravel SDK model requests executed",
+  "retrieved_at_utc": "2026-09-07T03:47:07Z",
+  "purpose": "Expanded catalog screen for a future cost-capped synthetic document-grouping evaluation",
+  "evidence_status": "catalog-compatible only; no live Laravel SDK model requests or paid calls executed",
+  "actual_costs": {
+    "status": "not measured",
+    "value_usd": null,
+    "reason": "Actual cost requires an authorized completed live response with recorded provider cost or compatible usage evidence; catalog rates are estimates, not actual costs."
+  },
   "pricing_units": {
     "raw_token_fields": "USD per token",
     "normalized_token_fields": "USD per 1000000 tokens",
@@ -9,13 +14,236 @@
     "request": "USD per request",
     "absent_field": "not provided; must not be interpreted as zero"
   },
+  "selection_rule": {
+    "required_input_modality": "image",
+    "required_output_modality": "text",
+    "required_model_parameters": ["response_format", "structured_outputs"],
+    "required_endpoint_parameters": ["response_format", "structured_outputs"],
+    "excluded": ["batch variants", "moving latest aliases", "auto/free routers", "models without at least one strict-capable endpoint"]
+  },
+  "requested_name_dispositions": [
+    {"request": "GPT-5.6 Luna instead of Sol", "result": "included", "id": "openai/gpt-5.6-luna", "note": "Sol removed; Luna Pro exists but was not substituted"},
+    {"request": "keep Sonnet", "result": "included", "id": "anthropic/claude-sonnet-5"},
+    {"request": "add Haiku", "result": "included", "id": "anthropic/claude-haiku-4.5", "note": "version-pinned ID used instead of moving ~anthropic/claude-haiku-latest alias"},
+    {"request": "older stable Gemini", "result": "included", "ids": ["google/gemini-3.1-flash-lite", "google/gemini-2.5-flash", "google/gemini-2.5-pro"], "not_included": "No stable Gemini 3.0 ID was present; google/gemini-3-flash-preview is preview-only"},
+    {"request": "other and older Qwen", "result": "included", "ids": ["qwen/qwen3.8-flash", "qwen/qwen3.7-plus", "qwen/qwen3.6-flash", "qwen/qwen3.5-flash-02-23", "qwen/qwen3-vl-32b-instruct", "qwen/qwen2.5-vl-72b-instruct"]}
+  ],
+  "models": [
+    {
+      "id": "qwen/qwen3.8-flash",
+      "canonical_slug": "qwen/qwen3.8-flash-20260826",
+      "coverage_group": "qwen-current",
+      "modalities": {"input": ["text", "image", "video"], "output": ["text"]},
+      "context_tokens": 1000000,
+      "max_completion_tokens": 131072,
+      "reasoning": {"mandatory": false, "default_enabled": true, "supports_max_tokens": true},
+      "pricing": {"raw_usd": {"prompt": "0.00000015", "completion": "0.00000047", "input_cache_read": "0.000000016", "input_cache_write": "0.0000002"}, "usd_per_million_tokens": {"prompt": "0.15", "completion": "0.47", "input_cache_read": "0.016", "input_cache_write": "0.2"}, "absent": ["image", "request", "internal_reasoning", "input_cache_write_1h"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/qwen/qwen3.8-flash/endpoints", "listed": 1, "strict_capable": 1, "strict_tags": ["alibaba"], "excluded_tags": [], "zdr_strict_tags": [], "strict_rate_range_usd_per_million": {"prompt": ["0.15", "0.15"], "completion": ["0.47", "0.47"]}}
+    },
+    {
+      "id": "qwen/qwen3.7-plus",
+      "canonical_slug": "qwen/qwen3.7-plus-20260602",
+      "coverage_group": "qwen-current",
+      "modalities": {"input": ["text", "image"], "output": ["text"]},
+      "context_tokens": 1000000,
+      "max_completion_tokens": 131072,
+      "reasoning": {"mandatory": false, "default_enabled": true},
+      "pricing": {"raw_usd": {"prompt": "0.00000032", "completion": "0.00000128", "input_cache_read": "0.000000064", "input_cache_write": "0.0000004"}, "usd_per_million_tokens": {"prompt": "0.32", "completion": "1.28", "input_cache_read": "0.064", "input_cache_write": "0.4"}, "absent": ["image", "request", "internal_reasoning", "input_cache_write_1h"], "overrides": [{"condition": {"min_prompt_tokens": 256000, "comparison": "strictly greater than"}, "raw_usd": {"prompt": "0.00000096", "completion": "0.00000384", "input_cache_read": "0.000000192", "input_cache_write": "0.0000012"}, "usd_per_million_tokens": {"prompt": "0.96", "completion": "3.84", "input_cache_read": "0.192", "input_cache_write": "1.2"}}]},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/qwen/qwen3.7-plus/endpoints", "listed": 1, "strict_capable": 1, "strict_tags": ["alibaba"], "excluded_tags": [], "zdr_strict_tags": [], "strict_rate_range_usd_per_million": {"prompt": ["0.32", "0.32"], "completion": ["1.28", "1.28"]}}
+    },
+    {
+      "id": "qwen/qwen3.6-flash",
+      "canonical_slug": "qwen/qwen3.6-flash",
+      "coverage_group": "qwen-prior",
+      "modalities": {"input": ["text", "image", "video"], "output": ["text"]},
+      "context_tokens": 1000000,
+      "max_completion_tokens": 65536,
+      "reasoning": {"mandatory": false},
+      "pricing": {"raw_usd": {"prompt": "0.0000001875", "completion": "0.000001125", "input_cache_write": "0.000000234375"}, "usd_per_million_tokens": {"prompt": "0.1875", "completion": "1.125", "input_cache_write": "0.234375"}, "absent": ["image", "request", "internal_reasoning", "input_cache_read", "input_cache_write_1h"], "overrides": [{"condition": {"min_prompt_tokens": 256000, "comparison": "strictly greater than"}, "raw_usd": {"prompt": "0.00000075", "completion": "0.000003", "input_cache_write": "0.0000009375"}, "usd_per_million_tokens": {"prompt": "0.75", "completion": "3", "input_cache_write": "0.9375"}}]},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/qwen/qwen3.6-flash/endpoints", "listed": 1, "strict_capable": 1, "strict_tags": ["alibaba"], "excluded_tags": [], "zdr_strict_tags": [], "strict_rate_range_usd_per_million": {"prompt": ["0.1875", "0.1875"], "completion": ["1.125", "1.125"]}}
+    },
+    {
+      "id": "qwen/qwen3.5-flash-02-23",
+      "canonical_slug": "qwen/qwen3.5-flash-20260224",
+      "coverage_group": "qwen-prior",
+      "modalities": {"input": ["text", "image", "video"], "output": ["text"]},
+      "context_tokens": 1000000,
+      "max_completion_tokens": 65536,
+      "reasoning": {"mandatory": false},
+      "pricing": {"raw_usd": {"prompt": "0.000000065", "completion": "0.00000026"}, "usd_per_million_tokens": {"prompt": "0.065", "completion": "0.26"}, "absent": ["image", "request", "internal_reasoning", "input_cache_read", "input_cache_write", "input_cache_write_1h"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/qwen/qwen3.5-flash-02-23/endpoints", "listed": 1, "strict_capable": 1, "strict_tags": ["alibaba"], "excluded_tags": [], "zdr_strict_tags": [], "strict_rate_range_usd_per_million": {"prompt": ["0.065", "0.065"], "completion": ["0.26", "0.26"]}}
+    },
+    {
+      "id": "qwen/qwen3-vl-32b-instruct",
+      "canonical_slug": "qwen/qwen3-vl-32b-instruct",
+      "coverage_group": "qwen-vision",
+      "modalities": {"input": ["text", "image"], "output": ["text"]},
+      "context_tokens": 131072,
+      "max_completion_tokens": 32768,
+      "reasoning": null,
+      "pricing": {"raw_usd": {"prompt": "0.000000104", "completion": "0.000000416"}, "usd_per_million_tokens": {"prompt": "0.104", "completion": "0.416"}, "absent": ["image", "request", "internal_reasoning", "input_cache_read", "input_cache_write", "input_cache_write_1h"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/qwen/qwen3-vl-32b-instruct/endpoints", "listed": 1, "strict_capable": 1, "strict_tags": ["alibaba"], "excluded_tags": [], "zdr_strict_tags": [], "strict_rate_range_usd_per_million": {"prompt": ["0.104", "0.104"], "completion": ["0.416", "0.416"]}}
+    },
+    {
+      "id": "qwen/qwen2.5-vl-72b-instruct",
+      "canonical_slug": "qwen/qwen2.5-vl-72b-instruct",
+      "coverage_group": "qwen-older-vision",
+      "modalities": {"input": ["text", "image"], "output": ["text"]},
+      "context_tokens": 128000,
+      "max_completion_tokens": 115200,
+      "reasoning": null,
+      "pricing": {"raw_usd": {"prompt": "0.0000008", "completion": "0.000001", "input_cache_read": "0.0000004"}, "usd_per_million_tokens": {"prompt": "0.8", "completion": "1", "input_cache_read": "0.4"}, "absent": ["image", "request", "internal_reasoning", "input_cache_write", "input_cache_write_1h"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/qwen/qwen2.5-vl-72b-instruct/endpoints", "listed": 1, "strict_capable": 1, "strict_tags": ["parasail/fp8"], "excluded_tags": [], "zdr_strict_tags": ["parasail/fp8"], "strict_rate_range_usd_per_million": {"prompt": ["0.8", "0.8"], "completion": ["1", "1"]}}
+    },
+    {
+      "id": "google/gemini-3.8-flash",
+      "canonical_slug": "google/gemini-3.8-flash-20260902",
+      "coverage_group": "gemini-current",
+      "modalities": {"input": ["text", "image", "video", "file", "audio"], "output": ["text"]},
+      "context_tokens": 1048576,
+      "max_completion_tokens": 65536,
+      "reasoning": {"mandatory": true, "default_enabled": true, "supported_efforts": ["high", "medium", "low"], "default_effort": "medium"},
+      "pricing": {"raw_usd": {"prompt": "0.00000075", "completion": "0.00000375", "image": "0.00000075", "internal_reasoning": "0.00000375", "input_cache_read": "0.000000075", "input_cache_write": "0.0000000416666666666667"}, "usd_per_million_tokens": {"prompt": "0.75", "completion": "3.75", "internal_reasoning": "3.75", "input_cache_read": "0.075", "input_cache_write": "0.0416666666666667"}, "image_usd_each": "0.00000075", "absent": ["request", "input_cache_write_1h"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/google/gemini-3.8-flash/endpoints", "listed": 6, "strict_capable": 6, "strict_tags": ["google-ai-studio/flex", "google-vertex/global/flex", "google-ai-studio", "google-vertex/global", "google-ai-studio/priority", "google-vertex/global/priority"], "excluded_tags": [], "zdr_strict_tags": ["google-vertex/global/flex", "google-vertex/global", "google-vertex/global/priority"], "strict_rate_range_usd_per_million": {"prompt": ["0.375", "1.35"], "completion": ["1.875", "6.75"]}}
+    },
+    {
+      "id": "google/gemini-3.1-flash-lite",
+      "canonical_slug": "google/gemini-3.1-flash-lite-20260507",
+      "coverage_group": "gemini-older-stable",
+      "modalities": {"input": ["text", "image", "video", "file", "audio"], "output": ["text"]},
+      "context_tokens": 1048576,
+      "max_completion_tokens": 65536,
+      "reasoning": {"mandatory": false, "default_enabled": true, "supported_efforts": ["high", "medium", "low", "minimal"], "default_effort": "minimal"},
+      "pricing": {"raw_usd": {"prompt": "0.00000025", "completion": "0.0000015", "image": "0.00000025", "internal_reasoning": "0.0000015", "input_cache_read": "0.000000025", "input_cache_write": "0.0000000833333333333333"}, "usd_per_million_tokens": {"prompt": "0.25", "completion": "1.5", "internal_reasoning": "1.5", "input_cache_read": "0.025", "input_cache_write": "0.0833333333333333"}, "image_usd_each": "0.00000025", "absent": ["request", "input_cache_write_1h"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/google/gemini-3.1-flash-lite/endpoints", "listed": 8, "strict_capable": 8, "strict_tags": ["google-vertex/global/flex", "google-ai-studio/flex", "google-ai-studio", "google-vertex/global", "google-vertex/eu", "google-vertex/us", "google-vertex/global/priority", "google-ai-studio/priority"], "excluded_tags": [], "zdr_strict_tags": ["google-vertex/global/flex", "google-vertex/global", "google-vertex/eu", "google-vertex/us", "google-vertex/global/priority"], "strict_rate_range_usd_per_million": {"prompt": ["0.125", "0.45"], "completion": ["0.75", "2.7"]}}
+    },
+    {
+      "id": "google/gemini-2.5-flash",
+      "canonical_slug": "google/gemini-2.5-flash",
+      "coverage_group": "gemini-older-stable",
+      "modalities": {"input": ["file", "image", "text", "audio", "video"], "output": ["text"]},
+      "context_tokens": 1048576,
+      "max_completion_tokens": 65535,
+      "reasoning": {"mandatory": false},
+      "pricing": {"raw_usd": {"prompt": "0.0000003", "completion": "0.0000025", "image": "0.0000003", "internal_reasoning": "0.0000025", "input_cache_read": "0.00000003", "input_cache_write": "0.0000000833333333333333"}, "usd_per_million_tokens": {"prompt": "0.3", "completion": "2.5", "internal_reasoning": "2.5", "input_cache_read": "0.03", "input_cache_write": "0.0833333333333333"}, "image_usd_each": "0.0000003", "absent": ["request", "input_cache_write_1h"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/google/gemini-2.5-flash/endpoints", "listed": 7, "strict_capable": 7, "strict_tags": ["google-vertex/eu", "google-vertex/global", "google-vertex/global/priority", "google-ai-studio/flex", "google-ai-studio", "google-vertex", "google-ai-studio/priority"], "excluded_tags": [], "zdr_strict_tags": ["google-vertex/eu", "google-vertex/global", "google-vertex/global/priority", "google-vertex"], "strict_rate_range_usd_per_million": {"prompt": ["0.15", "0.54"], "completion": ["1.25", "4.5"]}}
+    },
+    {
+      "id": "google/gemini-2.5-pro",
+      "canonical_slug": "google/gemini-2.5-pro",
+      "coverage_group": "gemini-older-stable",
+      "modalities": {"input": ["text", "image", "file", "audio", "video"], "output": ["text"]},
+      "context_tokens": 1048576,
+      "max_completion_tokens": 65536,
+      "reasoning": {"mandatory": true},
+      "pricing": {"raw_usd": {"prompt": "0.00000125", "completion": "0.00001", "image": "0.00000125", "internal_reasoning": "0.00001", "input_cache_read": "0.000000125", "input_cache_write": "0.000000375"}, "usd_per_million_tokens": {"prompt": "1.25", "completion": "10", "internal_reasoning": "10", "input_cache_read": "0.125", "input_cache_write": "0.375"}, "image_usd_each": "0.00000125", "absent": ["request", "input_cache_write_1h"], "overrides": [{"condition": {"min_prompt_tokens": 200000, "comparison": "strictly greater than"}, "raw_usd": {"prompt": "0.0000025", "completion": "0.000015", "input_cache_read": "0.00000025"}, "usd_per_million_tokens": {"prompt": "2.5", "completion": "15", "input_cache_read": "0.25"}, "note": "Other absent override keys inherit base prices"}]},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/google/gemini-2.5-pro/endpoints", "listed": 7, "strict_capable": 7, "strict_tags": ["google-vertex/global", "google-vertex/global/priority", "google-ai-studio/flex", "google-vertex/eu", "google-ai-studio", "google-vertex/us", "google-ai-studio/priority"], "excluded_tags": [], "zdr_strict_tags": ["google-vertex/global", "google-vertex/global/priority", "google-vertex/eu", "google-vertex/us"], "strict_rate_range_usd_per_million": {"prompt": ["0.625", "2.25"], "completion": ["5", "18"]}}
+    },
+    {
+      "id": "openai/gpt-5.6-luna",
+      "canonical_slug": "openai/gpt-5.6-luna-20260709",
+      "coverage_group": "openai-requested",
+      "modalities": {"input": ["file", "image", "text"], "output": ["text"]},
+      "context_tokens": 1050000,
+      "max_completion_tokens": 128000,
+      "reasoning": {"mandatory": false, "default_enabled": true, "supported_efforts": ["max", "xhigh", "high", "medium", "low", "none"], "default_effort": "medium"},
+      "pricing": {"raw_usd": {"prompt": "0.0000002", "completion": "0.0000012", "input_cache_read": "0.00000002", "input_cache_write": "0.00000025"}, "usd_per_million_tokens": {"prompt": "0.2", "completion": "1.2", "input_cache_read": "0.02", "input_cache_write": "0.25"}, "absent": ["image", "request", "internal_reasoning", "input_cache_write_1h"], "overrides": [{"condition": {"min_prompt_tokens": 272000, "comparison": "strictly greater than"}, "raw_usd": {"prompt": "0.0000004", "completion": "0.0000018", "input_cache_read": "0.00000004", "input_cache_write": "0.0000005"}, "usd_per_million_tokens": {"prompt": "0.4", "completion": "1.8", "input_cache_read": "0.04", "input_cache_write": "0.5"}}]},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/openai/gpt-5.6-luna/endpoints", "listed": 7, "strict_capable": 6, "strict_tags": ["openai/flex", "azure", "openai", "azure/us", "azure/eu", "openai/fast"], "excluded_tags": ["amazon-bedrock/us-east-1"], "zdr_strict_tags": ["azure", "azure/us", "azure/eu"], "strict_rate_range_usd_per_million": {"prompt": ["0.1", "0.4"], "completion": ["0.6", "2.4"]}}
+    },
+    {
+      "id": "anthropic/claude-sonnet-5",
+      "canonical_slug": "anthropic/claude-sonnet-5-20260630",
+      "coverage_group": "anthropic-retained",
+      "modalities": {"input": ["text", "image", "file"], "output": ["text"]},
+      "context_tokens": 1000000,
+      "max_completion_tokens": 128000,
+      "reasoning": {"mandatory": false, "default_enabled": true, "supported_efforts": ["max", "xhigh", "high", "medium", "low"], "default_effort": "high"},
+      "pricing": {"raw_usd": {"prompt": "0.000002", "completion": "0.00001", "input_cache_read": "0.0000002", "input_cache_write": "0.0000025", "input_cache_write_1h": "0.000004"}, "usd_per_million_tokens": {"prompt": "2", "completion": "10", "input_cache_read": "0.2", "input_cache_write": "2.5", "input_cache_write_1h": "4"}, "absent": ["image", "request", "internal_reasoning"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/anthropic/claude-sonnet-5/endpoints", "listed": 9, "strict_capable": 6, "strict_tags": ["claude-on-aws", "azure/us", "azure/global", "amazon-bedrock/global", "anthropic", "amazon-bedrock/us-east-1"], "excluded_tags": ["google-vertex/global", "google-vertex/us", "google-vertex/europe"], "zdr_strict_tags": ["amazon-bedrock/global", "amazon-bedrock/us-east-1"], "strict_rate_range_usd_per_million": {"prompt": ["2", "2.2"], "completion": ["10", "11"]}}
+    },
+    {
+      "id": "anthropic/claude-haiku-4.5",
+      "canonical_slug": "anthropic/claude-4.5-haiku-20251001",
+      "coverage_group": "anthropic-added",
+      "modalities": {"input": ["text", "image", "file"], "output": ["text"]},
+      "context_tokens": 200000,
+      "max_completion_tokens": 64000,
+      "reasoning": {"mandatory": false},
+      "pricing": {"raw_usd": {"prompt": "0.000001", "completion": "0.000005", "input_cache_read": "0.0000001", "input_cache_write": "0.00000125", "input_cache_write_1h": "0.000002"}, "usd_per_million_tokens": {"prompt": "1", "completion": "5", "input_cache_read": "0.1", "input_cache_write": "1.25", "input_cache_write_1h": "2"}, "absent": ["image", "request", "internal_reasoning"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/anthropic/claude-haiku-4.5/endpoints", "listed": 8, "strict_capable": 5, "strict_tags": ["azure/global", "amazon-bedrock/global", "anthropic", "amazon-bedrock/us", "amazon-bedrock/eu-west-1"], "excluded_tags": ["google-vertex/global", "google-vertex/us-east5", "google-vertex/europe"], "zdr_strict_tags": ["amazon-bedrock/global", "amazon-bedrock/us", "amazon-bedrock/eu-west-1"], "strict_rate_range_usd_per_million": {"prompt": ["1", "1.1"], "completion": ["5", "5.5"]}}
+    },
+    {
+      "id": "mistralai/mistral-small-2603",
+      "canonical_slug": "mistralai/mistral-small-2603",
+      "coverage_group": "mistral-diversity",
+      "modalities": {"input": ["text", "image"], "output": ["text"]},
+      "context_tokens": 262144,
+      "max_completion_tokens": 209715,
+      "reasoning": {"mandatory": false, "default_enabled": false, "supported_efforts": ["high", "none"], "default_effort": "high"},
+      "pricing": {"raw_usd": {"prompt": "0.00000015", "completion": "0.0000006", "input_cache_read": "0.000000015"}, "usd_per_million_tokens": {"prompt": "0.15", "completion": "0.6", "input_cache_read": "0.015"}, "absent": ["image", "request", "internal_reasoning", "input_cache_write", "input_cache_write_1h"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/mistralai/mistral-small-2603/endpoints", "listed": 4, "strict_capable": 4, "strict_tags": ["mistral/zdr", "mistral", "mistral/eu", "venice/fp8"], "excluded_tags": [], "zdr_strict_tags": ["mistral/zdr", "mistral/eu", "venice/fp8"], "strict_rate_range_usd_per_million": {"prompt": ["0.15", "0.1875"], "completion": ["0.6", "0.75"]}}
+    },
+    {
+      "id": "meta-llama/llama-4-maverick",
+      "canonical_slug": "meta-llama/llama-4-maverick-17b-128e-instruct",
+      "coverage_group": "meta-diversity",
+      "modalities": {"input": ["text", "image"], "output": ["text"]},
+      "context_tokens": 1048576,
+      "max_completion_tokens": 115200,
+      "reasoning": null,
+      "pricing": {"raw_usd": {"prompt": "0.0000002", "completion": "0.000000696"}, "usd_per_million_tokens": {"prompt": "0.2", "completion": "0.696"}, "absent": ["image", "request", "internal_reasoning", "input_cache_read", "input_cache_write", "input_cache_write_1h"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/meta-llama/llama-4-maverick/endpoints", "listed": 5, "strict_capable": 5, "strict_tags": ["digitalocean", "deepinfra/base", "novita/fp8", "parasail/fp8", "google-vertex/us-east5"], "excluded_tags": [], "zdr_strict_tags": ["digitalocean", "deepinfra/base", "novita/fp8", "parasail/fp8", "google-vertex/us-east5"], "strict_rate_range_usd_per_million": {"prompt": ["0.2", "0.35"], "completion": ["0.696", "1.15"]}}
+    },
+    {
+      "id": "bytedance-seed/seed-2.0-mini",
+      "canonical_slug": "bytedance-seed/seed-2.0-mini-20260224",
+      "coverage_group": "bytedance-diversity",
+      "modalities": {"input": ["text", "image", "video"], "output": ["text"]},
+      "context_tokens": 262144,
+      "max_completion_tokens": 131072,
+      "reasoning": {"mandatory": false, "supported_efforts": ["high", "medium", "low", "minimal"], "default_effort": "medium"},
+      "pricing": {"raw_usd": {"prompt": "0.0000001", "completion": "0.0000004"}, "usd_per_million_tokens": {"prompt": "0.1", "completion": "0.4"}, "absent": ["image", "request", "internal_reasoning", "input_cache_read", "input_cache_write", "input_cache_write_1h"], "overrides": [{"condition": {"min_prompt_tokens": 128000, "comparison": "strictly greater than"}, "raw_usd": {"prompt": "0.0000002", "completion": "0.0000008"}, "usd_per_million_tokens": {"prompt": "0.2", "completion": "0.8"}}]},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/bytedance-seed/seed-2.0-mini/endpoints", "listed": 1, "strict_capable": 1, "strict_tags": ["seed/fp8"], "excluded_tags": [], "zdr_strict_tags": ["seed/fp8"], "strict_rate_range_usd_per_million": {"prompt": ["0.1", "0.1"], "completion": ["0.4", "0.4"]}}
+    },
+    {
+      "id": "moonshotai/kimi-k2.5",
+      "canonical_slug": "moonshotai/kimi-k2.5-0127",
+      "coverage_group": "moonshot-diversity",
+      "modalities": {"input": ["text", "image"], "output": ["text"]},
+      "context_tokens": 262144,
+      "max_completion_tokens": 235929,
+      "reasoning": {"mandatory": false, "default_enabled": true},
+      "pricing": {"raw_usd": {"prompt": "0.00000045", "completion": "0.00000225", "input_cache_read": "0.00000007"}, "usd_per_million_tokens": {"prompt": "0.45", "completion": "2.25", "input_cache_read": "0.07"}, "absent": ["image", "request", "internal_reasoning", "input_cache_write", "input_cache_write_1h"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/moonshotai/kimi-k2.5/endpoints", "listed": 8, "strict_capable": 5, "strict_tags": ["siliconflow/int4", "atlas-cloud/int4", "venice", "novita", "phala"], "excluded_tags": ["deepinfra/fp4", "digitalocean", "amazon-bedrock/us-east-2"], "zdr_strict_tags": ["siliconflow/int4", "venice", "novita", "phala"], "strict_rate_range_usd_per_million": {"prompt": ["0.45", "0.6"], "completion": ["2.25", "3.325"]}}
+    },
+    {
+      "id": "google/gemma-3-12b-it",
+      "canonical_slug": "google/gemma-3-12b-it",
+      "coverage_group": "small-model-diversity",
+      "modalities": {"input": ["text", "image"], "output": ["text"]},
+      "context_tokens": 131072,
+      "max_completion_tokens": 16384,
+      "reasoning": null,
+      "pricing": {"raw_usd": {"prompt": "0.00000005", "completion": "0.00000015"}, "usd_per_million_tokens": {"prompt": "0.05", "completion": "0.15"}, "absent": ["image", "request", "internal_reasoning", "input_cache_read", "input_cache_write", "input_cache_write_1h"], "overrides": []},
+      "endpoints": {"url": "https://openrouter.ai/api/v1/models/google/gemma-3-12b-it/endpoints", "listed": 1, "strict_capable": 1, "strict_tags": ["deepinfra/bf16"], "excluded_tags": [], "zdr_strict_tags": ["deepinfra/bf16"], "strict_rate_range_usd_per_million": {"prompt": ["0.05", "0.05"], "completion": ["0.15", "0.15"]}}
+    }
+  ],
+  "evaluation_design": {
+    "ranking_basis": "experimental lineage, architecture, provider, price-tier, and endpoint coverage; not presumed quality",
+    "recommendation": "Screen all 18 once; if an eventual approved cap cannot support that, use the three coverage anchors without treating them as presumed winners.",
+    "coverage_anchors_if_cap_requires_narrowing": ["qwen/qwen3.8-flash", "google/gemini-2.5-flash", "openai/gpt-5.6-luna"],
+    "harness": ["pestphp/pest-plugin-evals", "jkudish/pest-plugin-ai-benchmarks", "jkudish/laravel-ai-pricing"],
+    "dependency_status": "laravel-ai-pricing v0.1.0 installed; both Pest plugins require separate dependency work",
+    "stages": [
+      {"name": "offline protocol gate", "paid_calls": 0},
+      {"name": "broad development screen", "models": 18, "repeats": 1, "maximum_calls_formula": "18 * development_bundle_count"},
+      {"name": "development finalists", "models": "3-5 chosen from measured evidence", "minimum_total_repeats_per_bundle": 3},
+      {"name": "frozen holdout", "minimum_repeats_per_finalist_bundle": 3, "tuning_allowed": false}
+    ],
+    "metrics": ["exact_group_set_match", "exact_bundle_match", "merge_mistakes", "split_mistakes", "duplicate_assignments", "missing_assignments", "invalid_pages", "assignment_coverage", "ambiguity_handling", "unassigned_page_handling", "schema_failure", "membership_failure", "provider_failure", "timeout", "requested_and_effective_identity", "latency", "usage_by_unit", "recorded_usd_cost", "cost_source", "cost_completeness", "unknown_billable_failure"]
+  },
   "sources": [
     "https://openrouter.ai/api/v1/models",
-    "https://openrouter.ai/api/v1/models/qwen/qwen3.7-plus/endpoints",
-    "https://openrouter.ai/api/v1/models/google/gemini-3.8-flash/endpoints",
-    "https://openrouter.ai/api/v1/models/mistralai/mistral-medium-3-5/endpoints",
-    "https://openrouter.ai/api/v1/models/openai/gpt-5.6-sol/endpoints",
-    "https://openrouter.ai/api/v1/models/anthropic/claude-sonnet-5/endpoints",
     "https://openrouter.ai/api/v1/endpoints/zdr",
     "https://openrouter.ai/docs/guides/overview/models",
     "https://openrouter.ai/docs/guides/features/structured-outputs",
@@ -23,233 +251,11 @@
     "https://openrouter.ai/docs/guides/routing/provider-selection",
     "https://openrouter.ai/docs/guides/features/zdr",
     "https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/BuildsTextRequests.php",
-    "https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/MapsAttachments.php"
+    "https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/MapsAttachments.php",
+    "https://github.com/pestphp/pest-plugin-evals",
+    "https://github.com/jkudish/laravel-ai-pricing"
   ],
-  "models": [
-    {
-      "id": "qwen/qwen3.7-plus",
-      "canonical_slug": "qwen/qwen3.7-plus-20260602",
-      "future_pilot_priority": "primary",
-      "capabilities": {
-        "input_modalities": ["text", "image"],
-        "output_modalities": ["text"],
-        "response_format": true,
-        "structured_outputs": true,
-        "context_tokens": 1000000,
-        "max_completion_tokens": 131072,
-        "reasoning_mandatory": false,
-        "reasoning_default_enabled": true
-      },
-      "pricing": {
-        "raw_usd": {
-          "prompt": "0.00000032",
-          "completion": "0.00000128",
-          "image": null,
-          "request": null,
-          "internal_reasoning": null,
-          "input_cache_read": "0.000000064",
-          "input_cache_write": "0.0000004",
-          "input_cache_write_1h": null
-        },
-        "usd_per_million_tokens": {
-          "prompt": "0.32",
-          "completion": "1.28",
-          "internal_reasoning": null,
-          "input_cache_read": "0.064",
-          "input_cache_write": "0.4",
-          "input_cache_write_1h": null
-        },
-        "overrides": [
-          {
-            "condition": {"min_prompt_tokens": 256000, "comparison": "strictly greater than"},
-            "raw_usd": {"prompt": "0.00000096", "completion": "0.00000384", "input_cache_read": "0.000000192", "input_cache_write": "0.0000012"},
-            "usd_per_million_tokens": {"prompt": "0.96", "completion": "3.84", "input_cache_read": "0.192", "input_cache_write": "1.2"}
-          }
-        ]
-      },
-      "endpoints": {
-        "listed": 1,
-        "structured_capable": 1,
-        "structured_tags": ["alibaba"],
-        "non_structured_tags": [],
-        "zdr_and_structured_tags": [],
-        "structured_price_range_usd_per_million": {"prompt": ["0.32", "0.32"], "completion": ["1.28", "1.28"]}
-      }
-    },
-    {
-      "id": "google/gemini-3.8-flash",
-      "canonical_slug": "google/gemini-3.8-flash-20260902",
-      "future_pilot_priority": "primary",
-      "capabilities": {
-        "input_modalities": ["text", "image", "video", "file", "audio"],
-        "output_modalities": ["text"],
-        "response_format": true,
-        "structured_outputs": true,
-        "context_tokens": 1048576,
-        "max_completion_tokens": 65536,
-        "reasoning_mandatory": true,
-        "reasoning_default_enabled": true,
-        "reasoning_default_effort": "medium"
-      },
-      "pricing": {
-        "raw_usd": {
-          "prompt": "0.00000075",
-          "completion": "0.00000375",
-          "image": "0.00000075",
-          "request": null,
-          "internal_reasoning": "0.00000375",
-          "input_cache_read": "0.000000075",
-          "input_cache_write": "0.0000000416666666666667",
-          "input_cache_write_1h": null
-        },
-        "usd_per_million_tokens": {
-          "prompt": "0.75",
-          "completion": "3.75",
-          "internal_reasoning": "3.75",
-          "input_cache_read": "0.075",
-          "input_cache_write": "0.0416666666666667",
-          "input_cache_write_1h": null
-        },
-        "overrides": []
-      },
-      "endpoints": {
-        "listed": 6,
-        "structured_capable": 6,
-        "structured_tags": ["google-ai-studio/flex", "google-vertex/global/flex", "google-ai-studio", "google-vertex/global", "google-ai-studio/priority", "google-vertex/global/priority"],
-        "non_structured_tags": [],
-        "nonzero_status_at_retrieval": [{"tag": "google-vertex/global/flex", "status": -2, "semantics": "not inferred"}],
-        "zdr_and_structured_tags": ["google-vertex/global/flex", "google-vertex/global", "google-vertex/global/priority"],
-        "structured_price_range_usd_per_million": {"prompt": ["0.375", "1.35"], "completion": ["1.875", "6.75"]},
-        "structured_image_price_range_usd_each": ["0.000000375", "0.00000135"]
-      }
-    },
-    {
-      "id": "mistralai/mistral-medium-3-5",
-      "canonical_slug": "mistralai/mistral-medium-3.5-20260430",
-      "future_pilot_priority": "fallback",
-      "capabilities": {
-        "input_modalities": ["text", "image", "file"],
-        "output_modalities": ["text"],
-        "response_format": true,
-        "structured_outputs": true,
-        "context_tokens": 262144,
-        "max_completion_tokens": 209715,
-        "reasoning_mandatory": false,
-        "reasoning_default_enabled": null,
-        "reasoning_default_effort": "high"
-      },
-      "pricing": {
-        "raw_usd": {
-          "prompt": "0.0000015",
-          "completion": "0.0000075",
-          "image": null,
-          "request": null,
-          "internal_reasoning": null,
-          "input_cache_read": null,
-          "input_cache_write": null,
-          "input_cache_write_1h": null
-        },
-        "usd_per_million_tokens": {"prompt": "1.5", "completion": "7.5", "internal_reasoning": null, "input_cache_read": null, "input_cache_write": null, "input_cache_write_1h": null},
-        "overrides": []
-      },
-      "endpoints": {
-        "listed": 3,
-        "structured_capable": 3,
-        "structured_tags": ["mistral/zdr", "mistral", "mistral/eu"],
-        "non_structured_tags": [],
-        "zdr_and_structured_tags": ["mistral/zdr", "mistral/eu"],
-        "structured_price_range_usd_per_million": {"prompt": ["1.5", "1.65"], "completion": ["7.5", "8.25"]}
-      }
-    },
-    {
-      "id": "openai/gpt-5.6-sol",
-      "canonical_slug": "openai/gpt-5.6-sol-20260709",
-      "future_pilot_priority": "optional",
-      "capabilities": {
-        "input_modalities": ["file", "image", "text"],
-        "output_modalities": ["text"],
-        "response_format": true,
-        "structured_outputs": true,
-        "context_tokens": 1050000,
-        "max_completion_tokens": 128000,
-        "reasoning_mandatory": false,
-        "reasoning_default_enabled": true,
-        "reasoning_default_effort": "medium"
-      },
-      "pricing": {
-        "raw_usd": {
-          "prompt": "0.000002",
-          "completion": "0.00001",
-          "image": null,
-          "request": null,
-          "internal_reasoning": null,
-          "input_cache_read": "0.0000002",
-          "input_cache_write": "0.0000025",
-          "input_cache_write_1h": null
-        },
-        "usd_per_million_tokens": {"prompt": "2", "completion": "10", "internal_reasoning": null, "input_cache_read": "0.2", "input_cache_write": "2.5", "input_cache_write_1h": null},
-        "overrides": [
-          {
-            "condition": {"min_prompt_tokens": 272000, "comparison": "strictly greater than"},
-            "raw_usd": {"prompt": "0.000004", "completion": "0.000015", "input_cache_read": "0.0000004", "input_cache_write": "0.000005"},
-            "usd_per_million_tokens": {"prompt": "4", "completion": "15", "input_cache_read": "0.4", "input_cache_write": "5"}
-          }
-        ]
-      },
-      "endpoints": {
-        "listed": 7,
-        "structured_capable": 6,
-        "structured_tags": ["openai/flex", "openai", "openai/fast", "azure", "azure/us", "azure/eu"],
-        "non_structured_tags": ["amazon-bedrock/us-east-1"],
-        "zdr_and_structured_tags": ["azure", "azure/us", "azure/eu"],
-        "structured_price_range_usd_per_million": {"prompt": ["1", "5.5"], "completion": ["5", "33"]}
-      }
-    },
-    {
-      "id": "anthropic/claude-sonnet-5",
-      "canonical_slug": "anthropic/claude-sonnet-5-20260630",
-      "future_pilot_priority": "primary",
-      "capabilities": {
-        "input_modalities": ["text", "image", "file"],
-        "output_modalities": ["text"],
-        "response_format": true,
-        "structured_outputs": true,
-        "context_tokens": 1000000,
-        "max_completion_tokens": 128000,
-        "reasoning_mandatory": false,
-        "reasoning_default_enabled": true,
-        "reasoning_default_effort": "high"
-      },
-      "pricing": {
-        "raw_usd": {
-          "prompt": "0.000002",
-          "completion": "0.00001",
-          "image": null,
-          "request": null,
-          "internal_reasoning": null,
-          "input_cache_read": "0.0000002",
-          "input_cache_write": "0.0000025",
-          "input_cache_write_1h": "0.000004"
-        },
-        "usd_per_million_tokens": {"prompt": "2", "completion": "10", "internal_reasoning": null, "input_cache_read": "0.2", "input_cache_write": "2.5", "input_cache_write_1h": "4"},
-        "overrides": []
-      },
-      "endpoints": {
-        "listed": 9,
-        "structured_capable": 6,
-        "structured_tags": ["claude-on-aws", "azure/us", "azure/global", "amazon-bedrock/global", "anthropic", "amazon-bedrock/us-east-1"],
-        "non_structured_tags": ["google-vertex/global", "google-vertex/us", "google-vertex/europe"],
-        "zdr_and_structured_tags": ["amazon-bedrock/global", "amazon-bedrock/us-east-1"],
-        "structured_price_range_usd_per_million": {"prompt": ["2", "2.2"], "completion": ["10", "11"]}
-      }
-    }
-  ],
-  "future_pilot": {
-    "primary_candidates": ["qwen/qwen3.7-plus", "google/gemini-3.8-flash", "anthropic/claude-sonnet-5"],
-    "conditional_replacement": "mistralai/mistral-medium-3-5 if Qwen cannot meet native request or data-policy requirements",
-    "optional_additional_comparison": "openai/gpt-5.6-sol if a paid cap is explicitly approved",
-    "minimum_repeats_per_bundle": 3,
-    "holdout_rule": "Tune prompt/schema only on development bundles; freeze them before held-out evaluation",
-    "metrics": ["exact_group_match", "merge_mistakes", "split_mistakes", "assignment_coverage", "ambiguity_handling", "unassigned_page_handling", "schema_or_membership_failure", "provider_failure", "latency", "token_image_reasoning_usage", "recorded_usd_cost"]
-  }
+  "unavailable_public_sources": [
+    {"artifact": "jkudish/pest-plugin-ai-benchmarks", "checked": ["https://github.com/jkudish/pest-plugin-ai-benchmarks", "https://repo.packagist.org/p2/jkudish/pest-plugin-ai-benchmarks.json"], "result": "HTTP 404 at retrieval; retained only as a user-specified future harness requirement"}
+  ]
 }
