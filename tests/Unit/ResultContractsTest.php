@@ -10,6 +10,11 @@ use Jkudish\DocumentExtraction\Results\EvidenceOrigin;
 use Jkudish\DocumentExtraction\Results\ExtractionError;
 use Jkudish\DocumentExtraction\Results\ExtractionResult;
 use Jkudish\DocumentExtraction\Results\PageResult;
+use Jkudish\LaravelAiPricing\Enums\CostCompleteness;
+use Jkudish\LaravelAiPricing\Enums\PricingSource;
+use Jkudish\LaravelAiPricing\ValueObjects\CostQuote;
+use Jkudish\LaravelAiPricing\ValueObjects\Money;
+use Laravel\Ai\Responses\Data\Usage;
 
 it('derives ordinary data and text from its one document without duplicate mutable values', function (): void {
     $documents = collect([new DocumentResult(data: [])]);
@@ -118,6 +123,56 @@ it('marks copied fake results as simulated evidence', function (): void {
         ->and($simulated->evidenceOrigin)->toBe(EvidenceOrigin::Simulated)
         ->and($simulated->cost->evidenceOrigin)->toBe(EvidenceOrigin::Simulated)
         ->and($simulated->text)->toBe('text');
+});
+
+it('distinguishes replayed evidence from new spend and strips pricing from public fakes', function (): void {
+    $quote = new CostQuote(
+        new Money('0.123456789012345678', 'USD'),
+        CostCompleteness::Complete,
+        PricingSource::Configured,
+    );
+    $quotedMoney = $quote->cost ?? throw new LogicException('The test quote requires a subtotal.');
+    $call = new CallRecord(
+        stage: 'extraction',
+        outcome: 'succeeded',
+        provider: 'requested-provider',
+        model: 'requested-model',
+        cost: $quote,
+        extractionInvocationId: 'extraction-id',
+        nativeInvocationId: 'native-id',
+        ordinal: 1,
+        requestedProvider: 'requested-provider',
+        requestedModel: 'requested-model',
+        effectiveProvider: 'effective-provider',
+        effectiveModel: 'effective-model',
+        usage: new Usage(2, 3),
+        startedAt: new DateTimeImmutable('2026-09-06T00:00:00+00:00'),
+    );
+    $live = new ExtractionResult(
+        documents: [new DocumentResult(data: ['value' => 'safe'])],
+        sourceSha256: str_repeat('d', 64),
+        mediaType: 'application/json',
+        calls: [$call],
+        cost: new CostSummary(['USD' => $quotedMoney], complete: true),
+    );
+
+    $recorded = $live->asRecorded();
+    $simulated = $live->asSimulated();
+
+    expect($recorded->evidenceOrigin)->toBe(EvidenceOrigin::Recorded)
+        ->and($recorded->calls->first()?->evidenceOrigin)->toBe(EvidenceOrigin::Recorded)
+        ->and($recorded->calls->first()?->cost)->toBe($quote)
+        ->and($recorded->cost->knownByCurrency->get('USD'))->toBe($quote->cost)
+        ->and($recorded->cost->evidenceOrigin)->toBe(EvidenceOrigin::Recorded)
+        ->and($simulated->evidenceOrigin)->toBe(EvidenceOrigin::Simulated)
+        ->and($simulated->calls->first()?->cost)->toBeNull()
+        ->and($simulated->calls->first()?->usage)->toBeNull()
+        ->and($simulated->cost->knownByCurrency)->toBeEmpty()
+        ->and($simulated->cost->unpricedCalls->all())->toBe(['extraction-id:1'])
+        ->and($simulated->cost->complete)->toBeFalse()
+        ->and($simulated->asRecorded())->toBe($simulated)
+        ->and($simulated->calls->first()?->asRecorded()->evidenceOrigin)->toBe(EvidenceOrigin::Simulated)
+        ->and($simulated->cost->asRecorded()->evidenceOrigin)->toBe(EvidenceOrigin::Simulated);
 });
 
 it('rejects ambiguous or impossible page provenance', function (Closure $make): void {

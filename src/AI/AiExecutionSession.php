@@ -4,11 +4,20 @@ declare(strict_types=1);
 
 namespace Jkudish\DocumentExtraction\AI;
 
+use DateTimeImmutable;
 use Jkudish\DocumentExtraction\Exceptions\AiExecutionException;
 use Jkudish\DocumentExtraction\Exceptions\PreparationException;
 use Jkudish\DocumentExtraction\Preparation\Deadline;
 use Jkudish\DocumentExtraction\Results\CallRecord;
 use Jkudish\DocumentExtraction\Results\CostSummary;
+use Jkudish\DocumentExtraction\Results\EvidenceOrigin;
+use Jkudish\LaravelAiPricing\Enums\CostCompleteness;
+use Jkudish\LaravelAiPricing\ResponseCostResolver;
+use Jkudish\LaravelAiPricing\ValueObjects\CostQuote;
+use Jkudish\LaravelAiPricing\ValueObjects\Money;
+use Laravel\Ai\Gateway\StepResponse;
+use Laravel\Ai\Responses\Data\Usage;
+use Throwable;
 
 final class AiExecutionSession
 {
@@ -20,17 +29,25 @@ final class AiExecutionSession
     private array $calls = [];
 
     public function __construct(
+        public readonly string $invocationId,
         private readonly Deadline $deadline,
         private readonly int $attemptLimit,
         private readonly int $attemptTimeout,
         public readonly int $outputLimit,
         public readonly int $attachmentLimit,
+        private readonly ResponseCostResolver $pricing,
+        public readonly EvidenceOrigin $evidenceOrigin = EvidenceOrigin::Live,
         int $initialRetainedBytes = 0,
     ) {
+        if (trim($this->invocationId) === '') {
+            throw new \InvalidArgumentException('An AI execution session requires an invocation identity.');
+        }
+
         $this->retainedBytes = $initialRetainedBytes;
     }
 
-    public function beginAttempt(): int
+    /** @return array{ordinal: int, remaining_seconds: int} */
+    public function beginAttempt(): array
     {
         if ($this->attempts >= $this->attemptLimit) {
             throw AiExecutionException::make(
@@ -39,9 +56,10 @@ final class AiExecutionSession
             );
         }
 
+        $remaining = $this->remainingSeconds();
         $this->attempts++;
 
-        return $this->remainingSeconds();
+        return ['ordinal' => $this->attempts, 'remaining_seconds' => $remaining];
     }
 
     public function remainingSeconds(): int
@@ -91,22 +109,45 @@ final class AiExecutionSession
         }
     }
 
-    /** @param list<int> $pages */
+    /**
+     * @param  list<int>  $pages
+     */
     public function record(
         string $stage,
         array $pages,
-        string $provider,
-        string $model,
+        string $nativeInvocationId,
+        int $ordinal,
+        ?string $requestedProvider,
+        ?string $requestedModel,
+        string $resolvedProvider,
+        string $resolvedModel,
         string $outcome,
         int $durationMilliseconds,
+        DateTimeImmutable $startedAt,
+        ?StepResponse $response,
     ): void {
+        [$effectiveProvider, $effectiveModel] = $this->effectiveIdentity($response);
+        $usage = $this->usage($response);
+        $cost = $this->cost($response, $effectiveProvider, $effectiveModel);
+
         $this->calls[] = new CallRecord(
             stage: $stage,
             outcome: $outcome,
             pages: $pages,
-            provider: $provider,
-            model: $model,
+            provider: $resolvedProvider,
+            model: $resolvedModel,
             durationMilliseconds: $durationMilliseconds,
+            cost: $cost,
+            evidenceOrigin: $this->evidenceOrigin,
+            extractionInvocationId: $this->invocationId,
+            nativeInvocationId: $nativeInvocationId,
+            ordinal: $ordinal,
+            requestedProvider: $requestedProvider,
+            requestedModel: $requestedModel,
+            effectiveProvider: $effectiveProvider,
+            effectiveModel: $effectiveModel,
+            usage: $usage,
+            startedAt: $startedAt,
         );
     }
 
@@ -118,9 +159,95 @@ final class AiExecutionSession
 
     public function costSummary(): CostSummary
     {
+        if ($this->calls === []) {
+            return CostSummary::none($this->evidenceOrigin);
+        }
+
+        /** @var array<string, Money> $known */
+        $known = [];
+        $unpriced = [];
+
+        foreach ($this->calls as $index => $call) {
+            $quote = $call->cost;
+
+            if ($quote?->cost !== null) {
+                $currency = $quote->cost->currency;
+                $known[$currency] = isset($known[$currency])
+                    ? $known[$currency]->plus($quote->cost)
+                    : $quote->cost;
+            }
+
+            if ($call->evidenceOrigin !== EvidenceOrigin::Live
+                || $call->usage === null
+                || $quote === null
+                || $quote->cost === null
+                || $quote->completeness !== CostCompleteness::Complete) {
+                $unpriced[] = $call->reference() ?? 'call:'.($index + 1);
+            }
+        }
+
         return new CostSummary(
-            unpricedCalls: array_keys($this->calls),
-            complete: false,
+            knownByCurrency: $known,
+            unpricedCalls: $unpriced,
+            complete: $unpriced === [],
+            evidenceOrigin: $this->evidenceOrigin,
         );
+    }
+
+    /** @return array{?string, ?string} */
+    private function effectiveIdentity(?StepResponse $response): array
+    {
+        $provider = $response?->meta->provider;
+        $model = $response?->meta->model;
+
+        if (! is_string($provider) || trim($provider) === '' || ! is_string($model) || trim($model) === '') {
+            return [null, null];
+        }
+
+        return [$provider, $model];
+    }
+
+    private function usage(?StepResponse $response): ?Usage
+    {
+        if ($response === null) {
+            return null;
+        }
+
+        $usage = $response->usage;
+        $values = [
+            $usage->promptTokens,
+            $usage->completionTokens,
+            $usage->cacheWriteInputTokens,
+            $usage->cacheReadInputTokens,
+            $usage->reasoningTokens,
+        ];
+
+        if (min($values) < 0 || max($values) === 0) {
+            // Laravel AI defaults every usage field to zero. Without a positive
+            // unit there is no portable signal that a provider measured usage.
+            return null;
+        }
+
+        return new Usage(...$values);
+    }
+
+    private function cost(
+        ?StepResponse $response,
+        ?string $effectiveProvider,
+        ?string $effectiveModel,
+    ): ?CostQuote {
+        if ($response === null || $this->evidenceOrigin !== EvidenceOrigin::Live) {
+            return null;
+        }
+
+        try {
+            $quote = $this->pricing->cost($response);
+        } catch (Throwable) {
+            return null;
+        }
+
+        // Pricing must not substitute the requested route when the provider did
+        // not report a complete effective identity for the returned response.
+        return $effectiveProvider !== null && $effectiveModel !== null ? $quote : null;
     }
 }

@@ -366,7 +366,10 @@ it('validates ordinary middleware short-circuit output without inventing provide
         ->extract();
 
     expect($result->data)->toBe(['value' => 'short-circuited'])
-        ->and($result->calls)->toBeEmpty();
+        ->and($result->calls)->toBeEmpty()
+        ->and($result->cost->knownByCurrency)->toBeEmpty()
+        ->and($result->cost->unpricedCalls)->toBeEmpty()
+        ->and($result->cost->complete)->toBeTrue();
     Http::assertNothingSent();
 });
 
@@ -385,6 +388,7 @@ it('permits unrelated same-agent calls after the outer gateway returns', functio
         ->extract();
 
     expect($result->data)->toBe(['value' => 'outer'])
-        ->and($result->calls)->toHaveCount(1);
+        ->and($result->calls)->toHaveCount(1)
+        ->and($result->calls->first()?->ordinal)->toBe(1);
     ReviewLifecycleAgent::assertPromptedTimes(2);
 });

@@ -4,9 +4,9 @@ Laravel-native document text and schema extraction with provenance and AI cost t
 
 > [!IMPORTANT]
 > Bounded direct-text, PDF, and image preparation, native OCR, and schema-model execution are
-> implemented. Document detection, complete Laravel AI Pricing records, benchmark integration, and
-> production hardening remain later package stages; current AI calls are explicitly unpriced rather
-> than reported as zero-cost.
+> implemented with per-attempt Laravel AI Pricing evidence. Document detection, benchmark integration,
+> and production hardening remain later package stages; unavailable usage or pricing stays explicitly
+> unpriced rather than being reported as zero-cost.
 
 ## Foundation
 
@@ -229,10 +229,31 @@ source identity, normalized media type, nullable page count, cost summary, and `
 ordinary mode, `data` and `text` are read-only accessors derived from the single `DocumentResult`.
 In document-detection mode they remain `null`; callers inspect every document instead of silently
 receiving the first group. Failed structured documents retain no unvalidated data, and unpaginated
-content never receives invented page numbers. Current native call records provide stage, page,
-provider/model, outcome, and duration as the minimal evidence seam for this stage. Full usage,
-effective-identity, and Laravel AI Pricing aggregation is intentionally deferred; every AI call is
-listed as unpriced and cost completeness is false instead of fabricating zero spend.
+content never receives invented page numbers.
+
+Each dispatched native attempt has a stable extraction invocation ID, native invocation ID, ordinal,
+stage and pages, requested/resolved/effective provider-model identities, start time, duration, outcome,
+nullable usage, and the original Laravel AI Pricing `CostQuote`. Effective identity and usage remain
+`null` when the provider does not establish them; requested identity is never substituted to make a
+quote possible. A returned response is recorded and priced once even if later local finish-reason,
+deadline, byte-limit, JSON, or schema validation rejects it. Failed attempts without a response remain
+unpriced with unknown usage and spend. Laravel AI's all-zero default usage is also treated as unknown,
+not proof of a measured zero.
+
+`CostSummary` combines known quote subtotals exactly with `Money::plus`, independently by currency,
+without floating-point arithmetic or FX conversion. Partial quotes keep their known subtotal and full
+quote provenance while their stable call reference remains in `unpricedCalls`; unavailable quotes and
+unknown failed spend are listed there too. `complete` therefore means every live call has measured usage
+and a complete quote. No-AI and provider-short-circuit paths have no calls and complete zero spend.
+These are calculated pricing estimates from the pinned catalog or configured rates, not provider
+invoices.
+
+Evidence mode distinguishes newly incurred `live` calls from historical `recorded` results and
+`simulated` native or public extraction fakes. Simulated calls are never counted as measured live spend,
+and aggregate native `AgentResponse` usage is not priced again over its individual step responses.
+Attempt evidence is accumulated in memory; an OS kill or a provider call whose response is lost before
+the process receives it can leave spend unknown or lose the in-memory record. Applications that require
+durability must persist completed extraction results in their own storage.
 
 ## Testing with the facade fake
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Jkudish\DocumentExtraction\AI;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use Generator;
 use Illuminate\JsonSchema\Types\Type;
 use Jkudish\DocumentExtraction\Exceptions\ConfigurationException;
@@ -83,9 +85,14 @@ final readonly class ScopedTextGateway implements StepTextGateway
             $options->providerOptions($provider->driver() === 'openai-compatible' ? $provider->name() : $provider->driver()) ?? [],
         );
         $compiled = $schema === null ? null : CompiledSchema::fromNative($schema);
-        $remaining = $scope->session->beginAttempt();
-        $resolvedTimeout = $timeout === null ? $remaining : min($timeout, $remaining);
-        $startedAt = hrtime(true);
+        $attempt = $scope->session->beginAttempt();
+        $resolvedTimeout = $timeout === null
+            ? $attempt['remaining_seconds']
+            : min($timeout, $attempt['remaining_seconds']);
+        $startedAt = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $startedAtNanoseconds = hrtime(true);
+        $response = null;
+        $outcome = 'failed';
 
         try {
             $response = $this->gateway->generateTextStep(
@@ -117,27 +124,29 @@ final readonly class ScopedTextGateway implements StepTextGateway
             }
 
             $scope->session->remainingSeconds();
-            $scope->session->record(
-                $scope->stage,
-                $scope->pages,
-                $provider->name(),
-                $model,
-                $response->finishReason === FinishReason::Stop ? 'succeeded' : 'continued',
-                $this->elapsedMilliseconds($startedAt),
-            );
+            $outcome = $response->finishReason === FinishReason::Stop ? 'succeeded' : 'continued';
 
             return $response;
         } catch (Throwable $exception) {
+            $outcome = $exception instanceof InvalidAiOutputException ? 'invalid_output' : 'failed';
+
+            throw $exception;
+        } finally {
+            [$requestedProvider, $requestedModel] = $scope->requestedIdentity();
             $scope->session->record(
                 $scope->stage,
                 $scope->pages,
+                $scope->invocationId(),
+                $attempt['ordinal'],
+                $requestedProvider,
+                $requestedModel,
                 $provider->name(),
                 $model,
-                $exception instanceof InvalidAiOutputException ? 'invalid_output' : 'failed',
-                $this->elapsedMilliseconds($startedAt),
+                $outcome,
+                $this->elapsedMilliseconds($startedAtNanoseconds),
+                $startedAt,
+                $response,
             );
-
-            throw $exception;
         }
     }
 
