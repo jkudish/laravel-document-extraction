@@ -1,0 +1,136 @@
+%PDF-1.4
+% synthetic fixture
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 5 /Kids [4 0 R 6 0 R 8 0 R 10 0 R 12 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 205 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(CITY OF FAIRVIEW) Tj
+0 -28 Td
+/F1 14 Tf
+(RENOVATION PERMIT RP-650) Tj
+0 -28 Td
+(Property: 88 Alder Street) Tj
+0 -28 Td
+(Issued: 2026-08-05) Tj
+0 -28 Td
+(Page 1 of 2) Tj
+0 -28 Td
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 244 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(CITY OF FAIRVIEW) Tj
+0 -28 Td
+/F1 14 Tf
+(RENOVATION PERMIT RP-650) Tj
+0 -28 Td
+(Property: 88 Alder Street) Tj
+0 -28 Td
+(Page 2 of 2) Tj
+0 -28 Td
+() Tj
+0 -28 Td
+(Approved work: interior partition changes.) Tj
+0 -28 Td
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 0 >>
+stream
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 199 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(COASTAL FREIGHT) Tj
+0 -28 Td
+/F1 14 Tf
+(SHIPPING MANIFEST SF-901) Tj
+0 -28 Td
+(Origin: Vancouver) Tj
+0 -28 Td
+(Destination: Victoria) Tj
+0 -28 Td
+(Page 1 of 2) Tj
+0 -28 Td
+ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 13 0 R >>
+endobj
+13 0 obj
+<< /Length 205 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(COASTAL FREIGHT) Tj
+0 -28 Td
+/F1 14 Tf
+(SHIPPING MANIFEST SF-901) Tj
+0 -28 Td
+(Page 2 of 2) Tj
+0 -28 Td
+() Tj
+0 -28 Td
+(Crates: 6) Tj
+0 -28 Td
+(Total weight: 840 kg) Tj
+0 -28 Td
+ET
+endstream
+endobj
+xref
+0 14
+0000000000 65535 f
+0000000029 00000 n
+0000000078 00000 n
+0000000161 00000 n
+0000000231 00000 n
+0000000357 00000 n
+0000000612 00000 n
+0000000738 00000 n
+0000001032 00000 n
+0000001158 00000 n
+0000001206 00000 n
+0000001334 00000 n
+0000001584 00000 n
+0000001712 00000 n
+trailer
+<< /Size 14 /Root 1 0 R >>
+startxref
+1968
+%%EOF

@@ -1,0 +1,222 @@
+{
+    "schema_version": 1,
+    "provenance": "Entirely synthetic content authored for this repository; no private or production documents.",
+    "page_numbering": "One-based physical PDF page numbers.",
+    "splits": {
+        "prompt-example": "May be used as examples while developing grouping prompts.",
+        "holdout": "Must not be used as prompt-tuning examples or exposed with expected labels during evaluation."
+    },
+    "fixtures": [
+        {
+            "id": "single-three-page-document",
+            "file": "bundle-01.pdf",
+            "split": "prompt-example",
+            "description": "One complete three-page inspection report.",
+            "page_count": 3,
+            "sha256": "5336f0d551042cee4a364fed5ba3a22bf4fb18ab01db8bc295ccdade94b59074",
+            "size": 1996,
+            "content": "text-layer",
+            "expected": {
+                "groups": [
+                    [
+                        1,
+                        2,
+                        3
+                    ]
+                ],
+                "unassigned_pages": [],
+                "ambiguous_pages": [],
+                "unassigned_reasons": {}
+            }
+        },
+        {
+            "id": "three-single-page-documents",
+            "file": "bundle-02.pdf",
+            "split": "prompt-example",
+            "description": "Three unrelated complete single-page documents.",
+            "page_count": 3,
+            "sha256": "9f70da647a65399db669719fac5871ff68e8b00938af3c2e6d2d12319d00320e",
+            "size": 1656,
+            "content": "text-layer",
+            "expected": {
+                "groups": [
+                    [
+                        1
+                    ],
+                    [
+                        2
+                    ],
+                    [
+                        3
+                    ]
+                ],
+                "unassigned_pages": [],
+                "ambiguous_pages": [],
+                "unassigned_reasons": {}
+            }
+        },
+        {
+            "id": "mixed-document-lengths",
+            "file": "bundle-03.pdf",
+            "split": "prompt-example",
+            "description": "A two-page claim, a one-page utility bill, and a three-page lease addendum.",
+            "page_count": 6,
+            "sha256": "a6bc5657346c8a9b98c87f2b4432d61c52105d923475c98d159065552b0d96f9",
+            "size": 3261,
+            "content": "text-layer",
+            "expected": {
+                "groups": [
+                    [
+                        1,
+                        2
+                    ],
+                    [
+                        3
+                    ],
+                    [
+                        4,
+                        5,
+                        6
+                    ]
+                ],
+                "unassigned_pages": [],
+                "ambiguous_pages": [],
+                "unassigned_reasons": {}
+            }
+        },
+        {
+            "id": "same-issuer-invoices",
+            "file": "bundle-04.pdf",
+            "split": "holdout",
+            "description": "Two visually similar two-page invoices from the same issuer, separated by natural invoice identifiers.",
+            "page_count": 4,
+            "sha256": "b4a26681fc95311b1a5d184c678abf1afba4302c2edc7cdd21d67132d30b0b6d",
+            "size": 2295,
+            "content": "text-layer",
+            "expected": {
+                "groups": [
+                    [
+                        1,
+                        2
+                    ],
+                    [
+                        3,
+                        4
+                    ]
+                ],
+                "unassigned_pages": [],
+                "ambiguous_pages": [],
+                "unassigned_reasons": {}
+            }
+        },
+        {
+            "id": "blank-separator",
+            "file": "bundle-05.pdf",
+            "split": "prompt-example",
+            "description": "Two documents separated by a truly blank page that remains unassigned.",
+            "page_count": 5,
+            "sha256": "e7be4c14fecda44f01a2411524e2b6ef238bcbe96b30fc2b2836b175e42f37d6",
+            "size": 2300,
+            "content": "text-layer",
+            "expected": {
+                "groups": [
+                    [
+                        1,
+                        2
+                    ],
+                    [
+                        4,
+                        5
+                    ]
+                ],
+                "unassigned_pages": [
+                    3
+                ],
+                "ambiguous_pages": [],
+                "unassigned_reasons": {
+                    "3": "The page is truly blank and carries no observable document identity."
+                }
+            }
+        },
+        {
+            "id": "ambiguous-orphan",
+            "file": "bundle-06.pdf",
+            "split": "holdout",
+            "description": "Two complete single-page documents followed by an orphan continuation page with no observable identity.",
+            "page_count": 3,
+            "sha256": "34df8f813e9021bdae001bf0db0a249fcce80d183def0d246d3a20af7f6c8589",
+            "size": 1678,
+            "content": "text-layer",
+            "expected": {
+                "groups": [
+                    [
+                        1
+                    ],
+                    [
+                        2
+                    ]
+                ],
+                "unassigned_pages": [
+                    3
+                ],
+                "ambiguous_pages": [
+                    3
+                ],
+                "unassigned_reasons": {
+                    "3": "The continuation page has no issuer, recipient, reference number, page count, or other evidence tying it to either preceding document."
+                }
+            }
+        },
+        {
+            "id": "scan-like-raster",
+            "file": "bundle-07.pdf",
+            "split": "holdout",
+            "description": "Two two-page documents represented only as raster images with no PDF text layer.",
+            "page_count": 4,
+            "sha256": "edabae8cfb9fcb160bdbb87c9e495021ff1fb857d60f5c9366c36b7e1efc93db",
+            "size": 8425,
+            "content": "raster-only",
+            "expected": {
+                "groups": [
+                    [
+                        1,
+                        2
+                    ],
+                    [
+                        3,
+                        4
+                    ]
+                ],
+                "unassigned_pages": [],
+                "ambiguous_pages": [],
+                "unassigned_reasons": {}
+            }
+        },
+        {
+            "id": "non-financial-documents",
+            "file": "bundle-08.pdf",
+            "split": "prompt-example",
+            "description": "Meeting minutes and a course handbook demonstrate non-financial grouping.",
+            "page_count": 5,
+            "sha256": "b45376ab80646816aa096691a2308b475bd320e603628b159e5ee12dd0b36af1",
+            "size": 2632,
+            "content": "text-layer",
+            "expected": {
+                "groups": [
+                    [
+                        1,
+                        2
+                    ],
+                    [
+                        3,
+                        4,
+                        5
+                    ]
+                ],
+                "unassigned_pages": [],
+                "ambiguous_pages": [],
+                "unassigned_reasons": {}
+            }
+        }
+    ]
+}
