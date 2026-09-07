@@ -233,7 +233,7 @@
     "recommendation": "Screen all 18 once; if an eventual approved cap cannot support that, use the three coverage anchors without treating them as presumed winners.",
     "coverage_anchors_if_cap_requires_narrowing": ["qwen/qwen3.8-flash", "google/gemini-2.5-flash", "openai/gpt-5.6-luna"],
     "harness": ["pestphp/pest-plugin-evals", "jkudish/pest-plugin-ai-benchmarks", "jkudish/laravel-ai-pricing"],
-    "dependency_status": "laravel-ai-pricing v0.1.0 installed; both Pest plugins require separate dependency work",
+    "dependency_status": "pest-plugin-ai-benchmarks v0.1.0, pest-plugin-evals ^5.0.2, and laravel-ai-pricing v0.1.0 installed from public releases; no VCS or path repository required",
     "stages": [
       {"name": "offline protocol gate", "paid_calls": 0},
       {"name": "broad development screen", "models": 18, "repeats": 1, "grouping_trials_formula": "18 * development_bundle_count", "budget_note": "Trials are not a provider-call cap; include every stage and attempt, including per-group extraction or OCR when exercising the full pipeline."},
@@ -253,9 +253,9 @@
     "https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/BuildsTextRequests.php",
     "https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/MapsAttachments.php",
     "https://github.com/pestphp/pest-plugin-evals",
+    "https://github.com/jkudish/pest-plugin-ai-benchmarks",
+    "https://packagist.org/packages/jkudish/pest-plugin-ai-benchmarks",
     "https://github.com/jkudish/laravel-ai-pricing"
   ],
-  "unavailable_public_sources": [
-    {"artifact": "jkudish/pest-plugin-ai-benchmarks", "checked": ["https://github.com/jkudish/pest-plugin-ai-benchmarks", "https://repo.packagist.org/p2/jkudish/pest-plugin-ai-benchmarks.json"], "result": "HTTP 404 at retrieval; retained only as a user-specified future harness requirement"}
-  ]
+  "unavailable_public_sources": []
 }

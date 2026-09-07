@@ -77,14 +77,17 @@ and hosting families at low-to-mid listed rates.
 ## Cost-controlled evaluation design
 
 No paid-call authority exists yet. When a total cap and data policy are explicitly approved, use the
-installed/native package path plus the separately provisioned evaluation dependencies:
+installed native package path and published evaluation dependencies:
 
 - Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
-- `jkudish/pest-plugin-ai-benchmarks` for the model/endpoint comparison axis, repetitions, durable
+- `jkudish/pest-plugin-ai-benchmarks` v0.1.0 for the model/endpoint comparison axis, repetitions, durable
   scorecards, replay/resume, requested/effective identity, and regression evidence; and
 - installed `jkudish/laravel-ai-pricing` v0.1.0 for provenance-aware post-response cost attribution.
 
-The two Pest plugins are not currently installed in this package; dependency setup is separate work.
+The Pest plugins are installed from tagged public releases with no VCS or path repository. Pest AI
+Benchmarks records explicit scorer results through its own expectation and Pest Evals' public scorer
+contract; no unreleased callback branch is required.
+
 Do not replace deterministic grouping metrics with an LLM judge. Do not call catalog-rate arithmetic
 “actual cost.” After each completed live trial, retain provider-reported OpenRouter cost when exposed;
 otherwise calculate from normalized usage and a dated compatible rate, preserving source,
@@ -174,8 +177,8 @@ All research used public, unauthenticated sources and no model calls:
   ceilings, fallback, data collection, and retention constraints.
 - Locked Laravel AI v0.11.2 source: [structured request builder](https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/BuildsTextRequests.php)
   and [attachment mapper](https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/MapsAttachments.php).
-- [Pest Evals](https://github.com/pestphp/pest-plugin-evals) and
+- [Pest Evals](https://github.com/pestphp/pest-plugin-evals),
+  [Pest AI Benchmarks](https://github.com/jkudish/pest-plugin-ai-benchmarks), and
   [Laravel AI Pricing](https://github.com/jkudish/laravel-ai-pricing) for the required future
-  evaluation and actual-cost attribution boundaries. `jkudish/pest-plugin-ai-benchmarks` is also a
-  user-specified harness requirement, but no unauthenticated public GitHub or Packagist package source
-  was available at retrieval, so no external capability claim is made from it here.
+  evaluation and actual-cost attribution boundaries. Pest AI Benchmarks v0.1.0 was published after the
+  model-catalog retrieval and was separately verified from its public Packagist distribution.
