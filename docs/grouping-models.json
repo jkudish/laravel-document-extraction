@@ -236,7 +236,7 @@
     "dependency_status": "laravel-ai-pricing v0.1.0 installed; both Pest plugins require separate dependency work",
     "stages": [
       {"name": "offline protocol gate", "paid_calls": 0},
-      {"name": "broad development screen", "models": 18, "repeats": 1, "maximum_calls_formula": "18 * development_bundle_count"},
+      {"name": "broad development screen", "models": 18, "repeats": 1, "grouping_trials_formula": "18 * development_bundle_count", "budget_note": "Trials are not a provider-call cap; include every stage and attempt, including per-group extraction or OCR when exercising the full pipeline."},
       {"name": "development finalists", "models": "3-5 chosen from measured evidence", "minimum_total_repeats_per_bundle": 3},
       {"name": "frozen holdout", "minimum_repeats_per_finalist_bundle": 3, "tuning_allowed": false}
     ],

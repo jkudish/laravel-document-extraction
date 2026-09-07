@@ -95,8 +95,10 @@ Run the evaluation in gates:
 
 1. **Offline protocol gate:** prove every configuration produces the same frozen images, prompt,
    schema, endpoint options, and local validators. Cost: $0 provider spend.
-2. **Broad development screen:** one live trial per model per development bundle, at most
-   \(18D\) calls for \(D\) development bundles. This is enough to reject request incompatibility,
+2. **Broad development screen:** one live grouping trial per model per development bundle:
+   \(18D\) trials for \(D\) development bundles, not a total provider-call cap. Exercising the full
+   extraction pipeline adds per-group extraction or OCR calls; count every stage and attempt in the
+   budget. This screen can identify request incompatibility,
    chronic schema/membership failure, obvious grouping failure, or unacceptable observed cost/latency.
 3. **Development finalists:** choose 3–5 models from measured evidence, not metadata. Add repeats to
    reach at least three trials per finalist/development bundle. Prompt/schema changes remain confined
