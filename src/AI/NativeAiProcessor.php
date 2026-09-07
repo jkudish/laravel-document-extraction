@@ -57,6 +57,7 @@ final readonly class NativeAiProcessor
         $activePages = $selectedPages;
         $activeGroupPageResults = [];
         $activeGroupErrors = [];
+        $groupingStarted = false;
 
         try {
             $this->ensureAttachmentLimit($invocation, $prepared->inlineAttachmentBytes());
@@ -79,6 +80,7 @@ final readonly class NativeAiProcessor
                     $prepared,
                     $session,
                     $this->error('detection_failed', 'Document detection returned invalid structured output.', $selectedPages, $exception->path),
+                    $invocation->operation === TerminalOperation::Text,
                 );
             } catch (AiException) {
                 return $this->failedDetection(
@@ -86,6 +88,7 @@ final readonly class NativeAiProcessor
                     $prepared,
                     $session,
                     $this->error('detection_failed', 'The AI provider could not detect document groups.', $selectedPages, retryable: true),
+                    $invocation->operation === TerminalOperation::Text,
                 );
             }
 
@@ -93,6 +96,7 @@ final readonly class NativeAiProcessor
                 $detection->data ?? throw new \LogicException('Document detection returned no validated data.'),
                 $selectedPages,
             );
+            $groupingStarted = true;
             $errors = $grouping['errors'];
 
             foreach ($grouping['groups'] as $group) {
@@ -175,6 +179,10 @@ final readonly class NativeAiProcessor
             array_push($pageResults, ...$activeGroupPageResults);
             array_push($errors, ...$activeGroupErrors);
             $errors[] = $globalError;
+
+            if ($invocation->operation === TerminalOperation::Text && ! $groupingStarted) {
+                $pageResults = $this->failedDetectionPages($prepared, $globalError);
+            }
 
             if ($invocation->operation === TerminalOperation::Text && $activeGroupPageResults !== []) {
                 $documents[] = new DocumentResult(
@@ -581,8 +589,30 @@ final readonly class NativeAiProcessor
         PreparedDocument $prepared,
         AiExecutionSession $session,
         ExtractionError $error,
+        bool $includePreparedPages,
     ): ExtractionResult {
-        return $this->detectionResult($snapshot, $prepared, $session, [], [], [$error]);
+        return $this->detectionResult(
+            $snapshot,
+            $prepared,
+            $session,
+            [],
+            $includePreparedPages ? $this->failedDetectionPages($prepared, $error) : [],
+            [$error],
+        );
+    }
+
+    /** @return list<PageResult> */
+    private function failedDetectionPages(PreparedDocument $prepared, ExtractionError $error): array
+    {
+        return array_map(
+            static fn (PreparedPage $page): PageResult => new PageResult(
+                $page->page,
+                $page->text,
+                complete: false,
+                error: $error,
+            ),
+            $prepared->pages,
+        );
     }
 
     /** @param list<PageResult> $pages */

@@ -14,6 +14,7 @@ use Jkudish\DocumentExtraction\Exceptions\AiExecutionException;
 use Jkudish\DocumentExtraction\Exceptions\ConfigurationException;
 use Jkudish\DocumentExtraction\Results\CallRecord;
 use Jkudish\DocumentExtraction\Results\EvidenceOrigin;
+use Jkudish\DocumentExtraction\Results\PageResult;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
@@ -461,7 +462,7 @@ it('retains completed page text when a global limit stops the current group', fu
     Http::assertNothingSent();
 });
 
-it('returns an explicit empty detection outcome when the detector provider fails', function (): void {
+it('preserves prepared page text when the detector provider fails', function (): void {
     DocumentDetectionAgent::fake([
         fn (): never => throw new AiException('private detector provider body'),
     ])->preventStrayPrompts();
@@ -475,8 +476,36 @@ it('returns an explicit empty detection outcome when the detector provider fails
     expect($result->documents)->toBeEmpty()
         ->and($result->errors->first()?->code)->toBe('detection_failed')
         ->and($result->errors->first()?->message)->not->toContain('private detector provider body')
+        ->and($result->pages->pluck('page')->all())->toBe([1, 2])
+        ->and($result->pages->first()?->text)->toContain('PAGE 1 OF 5 MARKER BRAVO')
+        ->and($result->pages->last()?->text)->toContain('PAGE 2 OF 5 MARKER BRAVO')
+        ->and($result->pages->every(static fn (PageResult $page): bool => ! $page->complete()))->toBeTrue()
+        ->and($result->pages->every(static fn (PageResult $page): bool => $page->error?->code === 'detection_failed'))->toBeTrue()
         ->and($result->calls->pluck('stage')->all())->toBe(['detection'])
         ->and($result->complete())->toBeFalse();
+});
+
+it('preserves prepared page text when detection returns malformed output', function (): void {
+    DocumentDetectionAgent::fake(['not json'])->preventStrayPrompts();
+    OcrAgent::fake([])->preventStrayPrompts();
+
+    $result = app(DocumentExtraction::class)
+        ->fromPath(groupingPdf())
+        ->pages([1, 2])
+        ->detectDocuments()
+        ->text();
+
+    expect($result->documents)->toBeEmpty()
+        ->and($result->text)->toBeNull()
+        ->and($result->pages->pluck('page')->all())->toBe([1, 2])
+        ->and($result->pages->first()?->text)->toContain('PAGE 1 OF 5 MARKER BRAVO')
+        ->and($result->pages->last()?->text)->toContain('PAGE 2 OF 5 MARKER BRAVO')
+        ->and($result->pages->every(static fn (PageResult $page): bool => ! $page->complete()))->toBeTrue()
+        ->and($result->pages->every(static fn (PageResult $page): bool => $page->error?->code === 'detection_failed'))->toBeTrue()
+        ->and($result->errors->pluck('code')->all())->toBe(['detection_failed'])
+        ->and($result->calls->pluck('stage')->all())->toBe(['detection'])
+        ->and($result->complete())->toBeFalse();
+    OcrAgent::assertNeverPrompted();
 });
 
 it('shares the global attempt limit across detection and every group', function (): void {
@@ -513,12 +542,24 @@ it('fails oversized detector context before model egress', function (): void {
     config()->set('extraction.limits.inline_attachment_bytes', 1);
     DocumentDetectionAgent::fake([['groups' => []]])->preventStrayPrompts();
 
-    expect(fn () => app(DocumentExtraction::class)
-        ->fromPath(groupingPdf())
-        ->pages([1])
-        ->detectDocuments()
-        ->text())
-        ->toThrow(AiExecutionException::class, 'pre-base64');
+    try {
+        app(DocumentExtraction::class)
+            ->fromPath(groupingPdf())
+            ->pages([1])
+            ->detectDocuments()
+            ->text();
+
+        throw new RuntimeException('The detector context limit should fail before model egress.');
+    } catch (AiExecutionException $exception) {
+        expect($exception->getMessage())->toContain('pre-base64')
+            ->and($exception->partialResult?->documents)->toBeEmpty()
+            ->and($exception->partialResult?->pages)->toHaveCount(1)
+            ->and($exception->partialResult?->pages->first()?->page)->toBe(1)
+            ->and($exception->partialResult?->pages->first()?->text)->toContain('PAGE 1 OF 5 MARKER BRAVO')
+            ->and($exception->partialResult?->pages->first()?->complete())->toBeFalse()
+            ->and($exception->partialResult?->pages->first()?->error?->code)->toBe('input_too_large_for_model')
+            ->and($exception->partialResult?->calls)->toBeEmpty();
+    }
 
     DocumentDetectionAgent::assertNeverPrompted();
 });
