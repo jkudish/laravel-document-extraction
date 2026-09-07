@@ -145,6 +145,9 @@ final class PendingExtraction
     ): ExtractionResult {
         $this->validateModes($operation, $provider, $model, $timeout);
         [$resolvedProvider, $resolvedModel, $resolvedTimeout] = $this->resolvedRoute($operation, $provider, $model, $timeout);
+        [$detectionProvider, $detectionModel, $detectionTimeout] = $this->detectionEnabled
+            ? $this->resolvedPurposeRoute('detection')
+            : [null, null, null];
 
         return $this->extraction->execute(new ExtractionInvocation(
             source: $this->source,
@@ -158,6 +161,9 @@ final class PendingExtraction
             provider: $resolvedProvider,
             model: $resolvedModel,
             timeout: $resolvedTimeout,
+            detectionProvider: $detectionProvider,
+            detectionModel: $detectionModel,
+            detectionTimeout: $detectionTimeout,
             configuration: $this->configuration,
         ));
     }
@@ -242,6 +248,29 @@ final class PendingExtraction
         $resolvedTimeout = $timeout ?? ($purpose['timeout'] ?? null) ?? $this->configuration['timeout'];
 
         return [$resolvedProvider, $resolvedModel, $resolvedTimeout];
+    }
+
+    /** @return array{ProviderRoute, ?string, ?int} */
+    private function resolvedPurposeRoute(string $purpose): array
+    {
+        /** @var PurposeConfiguration $configuration */
+        $configuration = $this->configuration[$purpose];
+        /** @var ProviderRoute $provider */
+        $provider = $configuration['provider'] ?? $this->configuration['provider'];
+        $model = $configuration['model'] ?? $this->configuration['model'];
+
+        if (is_array($provider) && $model !== null) {
+            throw ConfigurationException::make(
+                'conflicting_configuration',
+                "The resolved {$purpose} provider list cannot be combined with a separate model.",
+            );
+        }
+
+        return [
+            $provider,
+            is_array($provider) ? null : $model,
+            $configuration['timeout'] ?? $this->configuration['timeout'],
+        ];
     }
 
     /** @param array<mixed>|Lab|string|null $provider */

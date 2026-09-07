@@ -17,6 +17,7 @@ final readonly class ExtractionInvocation
     /**
      * @param  list<int>  $pages
      * @param  ProviderRoute  $provider
+     * @param  ProviderRoute  $detectionProvider
      * @param  ExtractionConfiguration  $configuration
      */
     public function __construct(
@@ -31,6 +32,9 @@ final readonly class ExtractionInvocation
         public Lab|array|string|null $provider,
         public ?string $model,
         public ?int $timeout,
+        public Lab|array|string|null $detectionProvider,
+        public ?string $detectionModel,
+        public ?int $detectionTimeout,
         public array $configuration,
     ) {}
 }

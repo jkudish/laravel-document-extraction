@@ -109,6 +109,14 @@ without OS containment. The matrix proves these capabilities on the recorded Deb
 runtime only. It makes no Windows or macOS support claim, and a consumer deployment must run
 `extraction:doctor` against its own installed codecs and executables.
 
+Page-grouping tests are credential-free. They use Laravel AI's native structured and text fakes,
+prevent stray HTTP, and exercise real PDF/image preparation so selected original page numbers,
+source checksums, normalized visual attachments, and cleanup remain covered. The suite verifies
+detector-off behavior, independent detection routing (including an OpenRouter-compatible route),
+strict local assignment validation, partial sibling outcomes, grouped text/OCR, and shared
+attempt/output/attachment limits. These tests prove orchestration and invariants, not model accuracy;
+paid quality evaluation is a separate explicitly authorized activity.
+
 The package requires Laravel 13.23 or newer. The complete native Illuminate Image API first exists
 in Laravel 13.20 and its plural `config/images.php` convention first exists in 13.21, so 13.23 has
 the required facade, manager, service provider, Intervention Image 4 Imagick driver, and

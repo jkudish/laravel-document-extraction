@@ -383,12 +383,12 @@ it('enforces the active temporary byte budget and cleans every owned derivative 
     expect(glob(sys_get_temp_dir().'/laravel-document-extraction-*') ?: [])->toBe($before);
 });
 
-it('does not silently complete requested document detection before detection is implemented', function (): void {
+it('does not invent page groups for unpaginated document detection', function (): void {
     expect(fn () => app(DocumentExtraction::class)
         ->fromString('Two invoices', 'text/plain')
         ->detectDocuments()
         ->text())
-        ->toThrow(ProcessingUnavailableException::class, 'Document detection');
+        ->toThrow(ExtractionException::class, 'paginated');
 });
 
 it('matches Poppler pixel rounding for non-integral render dimensions', function (): void {

@@ -10,7 +10,6 @@ use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Http\UploadedFile;
 use Jkudish\DocumentExtraction\AI\NativeAiProcessor;
 use Jkudish\DocumentExtraction\Exceptions\ConfigurationException;
-use Jkudish\DocumentExtraction\Exceptions\ProcessingUnavailableException;
 use Jkudish\DocumentExtraction\Preparation\Deadline;
 use Jkudish\DocumentExtraction\Preparation\DocumentPreparer;
 use Jkudish\DocumentExtraction\Preparation\PreparationWorkspace;
@@ -124,10 +123,15 @@ class DocumentExtraction
         (Agent&HasStructuredOutput)|null $agent = null,
     ): ExtractionResult {
         if ($invocation->detectDocuments) {
-            throw ProcessingUnavailableException::make(
-                'ai_processing_unavailable',
-                'Document detection is not implemented in this package phase.',
-            );
+            if ($prepared->pageCount === null) {
+                throw ConfigurationException::make(
+                    'detection_unavailable',
+                    'Document detection requires paginated source content.',
+                );
+            }
+
+            return $this->container->make(NativeAiProcessor::class)
+                ->group($invocation, $snapshot, $prepared, $agent);
         }
 
         $processor = $this->container->make(NativeAiProcessor::class);
