@@ -19,6 +19,7 @@ pest()->tia()
         'resources/workers/*' => 'tests/Feature/PreparationTest.php',
         'tests/Fixtures/Images/*' => 'tests/Feature/PreparationTest.php',
         'tests/Fixtures/Pdf/*' => 'tests/Feature/PreparationTest.php',
+        'tests/Fixtures/Grouping/*' => 'tests/Feature',
         'tests/Fixtures/*' => 'tests/Unit/FixtureTest.php',
     ]);
 
