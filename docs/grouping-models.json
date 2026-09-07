@@ -1,0 +1,255 @@
+{
+  "retrieved_at_utc": "2026-09-07T03:27:36Z",
+  "purpose": "Research shortlist for a future capped synthetic document-grouping pilot",
+  "evidence_status": "catalog-compatible; no paid or live Laravel SDK model requests executed",
+  "pricing_units": {
+    "raw_token_fields": "USD per token",
+    "normalized_token_fields": "USD per 1000000 tokens",
+    "image": "USD per input image",
+    "request": "USD per request",
+    "absent_field": "not provided; must not be interpreted as zero"
+  },
+  "sources": [
+    "https://openrouter.ai/api/v1/models",
+    "https://openrouter.ai/api/v1/models/qwen/qwen3.7-plus/endpoints",
+    "https://openrouter.ai/api/v1/models/google/gemini-3.8-flash/endpoints",
+    "https://openrouter.ai/api/v1/models/mistralai/mistral-medium-3-5/endpoints",
+    "https://openrouter.ai/api/v1/models/openai/gpt-5.6-sol/endpoints",
+    "https://openrouter.ai/api/v1/models/anthropic/claude-sonnet-5/endpoints",
+    "https://openrouter.ai/api/v1/endpoints/zdr",
+    "https://openrouter.ai/docs/guides/overview/models",
+    "https://openrouter.ai/docs/guides/features/structured-outputs",
+    "https://openrouter.ai/docs/guides/overview/multimodal/image-understanding",
+    "https://openrouter.ai/docs/guides/routing/provider-selection",
+    "https://openrouter.ai/docs/guides/features/zdr",
+    "https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/BuildsTextRequests.php",
+    "https://github.com/laravel/ai/blob/ee2c5162838d440c4e2e629ea93c8c87e838eaed/src/Gateway/OpenRouter/Concerns/MapsAttachments.php"
+  ],
+  "models": [
+    {
+      "id": "qwen/qwen3.7-plus",
+      "canonical_slug": "qwen/qwen3.7-plus-20260602",
+      "future_pilot_priority": "primary",
+      "capabilities": {
+        "input_modalities": ["text", "image"],
+        "output_modalities": ["text"],
+        "response_format": true,
+        "structured_outputs": true,
+        "context_tokens": 1000000,
+        "max_completion_tokens": 131072,
+        "reasoning_mandatory": false,
+        "reasoning_default_enabled": true
+      },
+      "pricing": {
+        "raw_usd": {
+          "prompt": "0.00000032",
+          "completion": "0.00000128",
+          "image": null,
+          "request": null,
+          "internal_reasoning": null,
+          "input_cache_read": "0.000000064",
+          "input_cache_write": "0.0000004",
+          "input_cache_write_1h": null
+        },
+        "usd_per_million_tokens": {
+          "prompt": "0.32",
+          "completion": "1.28",
+          "internal_reasoning": null,
+          "input_cache_read": "0.064",
+          "input_cache_write": "0.4",
+          "input_cache_write_1h": null
+        },
+        "overrides": [
+          {
+            "condition": {"min_prompt_tokens": 256000, "comparison": "strictly greater than"},
+            "raw_usd": {"prompt": "0.00000096", "completion": "0.00000384", "input_cache_read": "0.000000192", "input_cache_write": "0.0000012"},
+            "usd_per_million_tokens": {"prompt": "0.96", "completion": "3.84", "input_cache_read": "0.192", "input_cache_write": "1.2"}
+          }
+        ]
+      },
+      "endpoints": {
+        "listed": 1,
+        "structured_capable": 1,
+        "structured_tags": ["alibaba"],
+        "non_structured_tags": [],
+        "zdr_and_structured_tags": [],
+        "structured_price_range_usd_per_million": {"prompt": ["0.32", "0.32"], "completion": ["1.28", "1.28"]}
+      }
+    },
+    {
+      "id": "google/gemini-3.8-flash",
+      "canonical_slug": "google/gemini-3.8-flash-20260902",
+      "future_pilot_priority": "primary",
+      "capabilities": {
+        "input_modalities": ["text", "image", "video", "file", "audio"],
+        "output_modalities": ["text"],
+        "response_format": true,
+        "structured_outputs": true,
+        "context_tokens": 1048576,
+        "max_completion_tokens": 65536,
+        "reasoning_mandatory": true,
+        "reasoning_default_enabled": true,
+        "reasoning_default_effort": "medium"
+      },
+      "pricing": {
+        "raw_usd": {
+          "prompt": "0.00000075",
+          "completion": "0.00000375",
+          "image": "0.00000075",
+          "request": null,
+          "internal_reasoning": "0.00000375",
+          "input_cache_read": "0.000000075",
+          "input_cache_write": "0.0000000416666666666667",
+          "input_cache_write_1h": null
+        },
+        "usd_per_million_tokens": {
+          "prompt": "0.75",
+          "completion": "3.75",
+          "internal_reasoning": "3.75",
+          "input_cache_read": "0.075",
+          "input_cache_write": "0.0416666666666667",
+          "input_cache_write_1h": null
+        },
+        "overrides": []
+      },
+      "endpoints": {
+        "listed": 6,
+        "structured_capable": 6,
+        "structured_tags": ["google-ai-studio/flex", "google-vertex/global/flex", "google-ai-studio", "google-vertex/global", "google-ai-studio/priority", "google-vertex/global/priority"],
+        "non_structured_tags": [],
+        "nonzero_status_at_retrieval": [{"tag": "google-vertex/global/flex", "status": -2, "semantics": "not inferred"}],
+        "zdr_and_structured_tags": ["google-vertex/global/flex", "google-vertex/global", "google-vertex/global/priority"],
+        "structured_price_range_usd_per_million": {"prompt": ["0.375", "1.35"], "completion": ["1.875", "6.75"]},
+        "structured_image_price_range_usd_each": ["0.000000375", "0.00000135"]
+      }
+    },
+    {
+      "id": "mistralai/mistral-medium-3-5",
+      "canonical_slug": "mistralai/mistral-medium-3.5-20260430",
+      "future_pilot_priority": "fallback",
+      "capabilities": {
+        "input_modalities": ["text", "image", "file"],
+        "output_modalities": ["text"],
+        "response_format": true,
+        "structured_outputs": true,
+        "context_tokens": 262144,
+        "max_completion_tokens": 209715,
+        "reasoning_mandatory": false,
+        "reasoning_default_enabled": null,
+        "reasoning_default_effort": "high"
+      },
+      "pricing": {
+        "raw_usd": {
+          "prompt": "0.0000015",
+          "completion": "0.0000075",
+          "image": null,
+          "request": null,
+          "internal_reasoning": null,
+          "input_cache_read": null,
+          "input_cache_write": null,
+          "input_cache_write_1h": null
+        },
+        "usd_per_million_tokens": {"prompt": "1.5", "completion": "7.5", "internal_reasoning": null, "input_cache_read": null, "input_cache_write": null, "input_cache_write_1h": null},
+        "overrides": []
+      },
+      "endpoints": {
+        "listed": 3,
+        "structured_capable": 3,
+        "structured_tags": ["mistral/zdr", "mistral", "mistral/eu"],
+        "non_structured_tags": [],
+        "zdr_and_structured_tags": ["mistral/zdr", "mistral/eu"],
+        "structured_price_range_usd_per_million": {"prompt": ["1.5", "1.65"], "completion": ["7.5", "8.25"]}
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-sol",
+      "canonical_slug": "openai/gpt-5.6-sol-20260709",
+      "future_pilot_priority": "optional",
+      "capabilities": {
+        "input_modalities": ["file", "image", "text"],
+        "output_modalities": ["text"],
+        "response_format": true,
+        "structured_outputs": true,
+        "context_tokens": 1050000,
+        "max_completion_tokens": 128000,
+        "reasoning_mandatory": false,
+        "reasoning_default_enabled": true,
+        "reasoning_default_effort": "medium"
+      },
+      "pricing": {
+        "raw_usd": {
+          "prompt": "0.000002",
+          "completion": "0.00001",
+          "image": null,
+          "request": null,
+          "internal_reasoning": null,
+          "input_cache_read": "0.0000002",
+          "input_cache_write": "0.0000025",
+          "input_cache_write_1h": null
+        },
+        "usd_per_million_tokens": {"prompt": "2", "completion": "10", "internal_reasoning": null, "input_cache_read": "0.2", "input_cache_write": "2.5", "input_cache_write_1h": null},
+        "overrides": [
+          {
+            "condition": {"min_prompt_tokens": 272000, "comparison": "strictly greater than"},
+            "raw_usd": {"prompt": "0.000004", "completion": "0.000015", "input_cache_read": "0.0000004", "input_cache_write": "0.000005"},
+            "usd_per_million_tokens": {"prompt": "4", "completion": "15", "input_cache_read": "0.4", "input_cache_write": "5"}
+          }
+        ]
+      },
+      "endpoints": {
+        "listed": 7,
+        "structured_capable": 6,
+        "structured_tags": ["openai/flex", "openai", "openai/fast", "azure", "azure/us", "azure/eu"],
+        "non_structured_tags": ["amazon-bedrock/us-east-1"],
+        "zdr_and_structured_tags": ["azure", "azure/us", "azure/eu"],
+        "structured_price_range_usd_per_million": {"prompt": ["1", "5.5"], "completion": ["5", "33"]}
+      }
+    },
+    {
+      "id": "anthropic/claude-sonnet-5",
+      "canonical_slug": "anthropic/claude-sonnet-5-20260630",
+      "future_pilot_priority": "primary",
+      "capabilities": {
+        "input_modalities": ["text", "image", "file"],
+        "output_modalities": ["text"],
+        "response_format": true,
+        "structured_outputs": true,
+        "context_tokens": 1000000,
+        "max_completion_tokens": 128000,
+        "reasoning_mandatory": false,
+        "reasoning_default_enabled": true,
+        "reasoning_default_effort": "high"
+      },
+      "pricing": {
+        "raw_usd": {
+          "prompt": "0.000002",
+          "completion": "0.00001",
+          "image": null,
+          "request": null,
+          "internal_reasoning": null,
+          "input_cache_read": "0.0000002",
+          "input_cache_write": "0.0000025",
+          "input_cache_write_1h": "0.000004"
+        },
+        "usd_per_million_tokens": {"prompt": "2", "completion": "10", "internal_reasoning": null, "input_cache_read": "0.2", "input_cache_write": "2.5", "input_cache_write_1h": "4"},
+        "overrides": []
+      },
+      "endpoints": {
+        "listed": 9,
+        "structured_capable": 6,
+        "structured_tags": ["claude-on-aws", "azure/us", "azure/global", "amazon-bedrock/global", "anthropic", "amazon-bedrock/us-east-1"],
+        "non_structured_tags": ["google-vertex/global", "google-vertex/us", "google-vertex/europe"],
+        "zdr_and_structured_tags": ["amazon-bedrock/global", "amazon-bedrock/us-east-1"],
+        "structured_price_range_usd_per_million": {"prompt": ["2", "2.2"], "completion": ["10", "11"]}
+      }
+    }
+  ],
+  "future_pilot": {
+    "primary_candidates": ["qwen/qwen3.7-plus", "google/gemini-3.8-flash", "anthropic/claude-sonnet-5"],
+    "conditional_replacement": "mistralai/mistral-medium-3-5 if Qwen cannot meet native request or data-policy requirements",
+    "optional_additional_comparison": "openai/gpt-5.6-sol if a paid cap is explicitly approved",
+    "minimum_repeats_per_bundle": 3,
+    "holdout_rule": "Tune prompt/schema only on development bundles; freeze them before held-out evaluation",
+    "metrics": ["exact_group_match", "merge_mistakes", "split_mistakes", "assignment_coverage", "ambiguity_handling", "unassigned_page_handling", "schema_or_membership_failure", "provider_failure", "latency", "token_image_reasoning_usage", "recorded_usd_cost"]
+  }
+}
