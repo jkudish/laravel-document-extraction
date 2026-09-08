@@ -268,7 +268,7 @@ function liveGroupingApis(array $models, Closure $remaining, array $endpointOver
     };
 }
 
-it('freezes the canary history and the seven-model four-fixture development screen', function (): void {
+it('freezes the canary history and the four-model two-fixture prompt canary', function (): void {
     $models = LiveGroupingModels::all();
     $ids = array_column($models, 'id');
     $luna = LiveGroupingModels::find('openai/gpt-5.6-luna');
@@ -280,16 +280,21 @@ it('freezes the canary history and the seven-model four-fixture development scre
             'google/gemma-3-12b-it',
         )
         ->and(array_column(LiveGroupingModels::survivors(), 'id'))->toBe(LiveGroupingModels::SURVIVOR_IDS)
-        ->and(LiveGroupingModels::configurations())->toHaveCount(7)
+        ->and(LiveGroupingModels::SURVIVOR_IDS)->toBe([
+            'qwen/qwen2.5-vl-72b-instruct',
+            'google/gemini-2.5-flash',
+            'openai/gpt-5.6-luna',
+            'anthropic/claude-haiku-4.5',
+        ])
+        ->and(LiveGroupingModels::configurations())->toHaveCount(4)
         ->and($luna['endpoint'])->toBe('azure/eu')
         ->and($luna['route']['data_region'])->toBe('global')
         ->and(LiveGroupingModels::fixtureIds())->toBe([
-            'single-three-page-document',
-            'three-single-page-documents',
             'blank-separator',
-            'non-financial-documents',
+            'mixed-document-lengths',
         ])
-        ->not->toContain('same-issuer-invoices', 'ambiguous-orphan', 'scan-like-raster');
+        ->not->toContain('same-issuer-invoices', 'ambiguous-orphan', 'scan-like-raster')
+        ->and(LiveGroupingModels::MAX_SPEND_USD)->toBe(1.0);
 
     foreach ($models as $model) {
         $options = LiveGroupingModels::options($model)['openrouter'];
@@ -379,8 +384,8 @@ it('defaults to a network-free dry run', function (): void {
         ->and($result['runs'])->toBe([])
         ->and($result['output'])->toContain(
             'DRY RUN — no provider calls made',
-            'Calls: 28 paid detector calls',
-            'Logical spend cap: $5.00 USD',
+            'Calls: 8 paid detector calls',
+            'Logical spend cap: $1.00 USD',
         )
         ->and($fetches)->toBe(0);
 });
@@ -438,7 +443,7 @@ it('rejects unsafe key limits before the inference runner', function (array $key
 })->with([
     'unlimited' => [['limit' => null]],
     'oversized' => [['limit' => 50.01, 'limit_remaining' => 50.01]],
-    'insufficient remaining' => [['limit_remaining' => 4.99]],
+    'insufficient remaining' => [['limit_remaining' => 0.99]],
     'resetting daily' => [['limit_reset' => 'daily']],
     'free tier' => [['is_free_tier' => true]],
     'management key' => [['is_management_key' => true]],
@@ -590,7 +595,7 @@ it('runs one approved detector trial offline and removes private replay after fu
             ->and($run['fixture'])->toBe(LiveGroupingModels::fixtureIds()[0])
             ->and($run['cost_usd'])->toBe('0.012345')
             ->and($run['cost_source'])->toBe('provider_reported')
-            ->and($run['attempts'])->toBe(2)
+            ->and($run['attempts'])->toBe(3)
             ->and(is_file($run['scorecard']))->toBeTrue()
             ->and(is_file(dirname($run['scorecard']).'/replay.private.json'))->toBeFalse()
             ->and(fn () => $screen->execute([
@@ -727,23 +732,24 @@ it("does not attribute a delayed allowance change to a later call's reservation"
 
 it('retains the full reservation when a successful call has no authoritative cost', function (): void {
     $root = dirname(__DIR__, 2);
-    $model = LiveGroupingModels::survivors()[0];
+    $models = LiveGroupingModels::survivors();
+    [$first, $second] = [$models[0], $models[2]];
     $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
     $runner = new UnavailableLiveCostRunner($root);
     $screen = new LiveGroupingScreen(
         $root,
         $runner,
         liveGroupingApis(
-            [$model],
+            [$first, $second],
             static fn (int $check): string => (string) BigDecimal::of('50')
                 ->minus((string) (intdiv($check - 1, 2) * 0.001)),
             ['pricing' => [
                 'prompt' => '0.000000104',
                 'completion' => '0.000000416',
-                'input_cache_write_1h' => '0.00000225',
+                'input_cache_write_1h' => '0.00000045',
             ]],
         ),
-        [$model],
+        [$first, $second],
         offlineInference: true,
         authorizationPath: liveGroupingAuthorizationPath(),
     );
@@ -766,10 +772,10 @@ it('retains the full reservation when a successful call has no authoritative cos
             throw new RuntimeException('The authorization ledger did not decode to an object.');
         }
 
-        expect(BigDecimal::of($authorization['admission_spend'])->isEqualTo('4.500425984'))->toBeTrue()
+        expect(BigDecimal::of($authorization['admission_spend'])->isEqualTo('0.900425984'))->toBeTrue()
             ->and($authorization['completed_trials'] ?? null)->toBe([
-                $model['id'].'|'.LiveGroupingModels::fixtureIds()[0],
-                $model['id'].'|'.LiveGroupingModels::fixtureIds()[1],
+                $first['id'].'|'.LiveGroupingModels::fixtureIds()[0],
+                $first['id'].'|'.LiveGroupingModels::fixtureIds()[1],
             ])
             ->and(array_key_exists('pending', $authorization))->toBeTrue()
             ->and($authorization['pending'])->toBeNull();
@@ -788,18 +794,23 @@ it('retains the full reservation when a successful call has no authoritative cos
 
 it('retains the full reservation for a technical failure with no observed charge', function (): void {
     $root = dirname(__DIR__, 2);
-    $model = LiveGroupingModels::survivors()[0];
+    $models = LiveGroupingModels::survivors();
+    [$first, $second] = [$models[0], $models[2]];
     $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
     $runner = new UnavailableLiveCostRunner($root, technicalFailure: true);
     $screen = new LiveGroupingScreen(
         $root,
         $runner,
-        liveGroupingApi($model, endpointOverrides: ['pricing' => [
-            'prompt' => '0.000000104',
-            'completion' => '0.000000416',
-            'input_cache_write_1h' => '0.00000225',
-        ]], lagAllowance: true),
-        [$model],
+        liveGroupingApis(
+            [$first, $second],
+            static fn (): string => '50',
+            ['pricing' => [
+                'prompt' => '0.000000104',
+                'completion' => '0.000000416',
+                'input_cache_write_1h' => '0.00000045',
+            ]],
+        ),
+        [$first, $second],
         offlineInference: true,
         authorizationPath: liveGroupingAuthorizationPath(),
     );
@@ -823,7 +834,7 @@ it('retains the full reservation for a technical failure with no observed charge
         }
 
         expect($authorization['recorded_spend'] ?? null)->toBe('0')
-            ->and(BigDecimal::of($authorization['admission_spend'])->isEqualTo('4.500425984'))->toBeTrue();
+            ->and(BigDecimal::of($authorization['admission_spend'])->isEqualTo('0.900425984'))->toBeTrue();
     } finally {
         $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
 
@@ -839,21 +850,29 @@ it('retains the full reservation for a technical failure with no observed charge
 
 it('preserves admission reservations across a resumed run', function (): void {
     $root = dirname(__DIR__, 2);
-    $model = LiveGroupingModels::survivors()[0];
-    $trialIds = array_map(
-        static fn (string $fixture): string => $model['id'].'|'.$fixture,
-        LiveGroupingModels::fixtureIds(),
-    );
+    $models = LiveGroupingModels::survivors();
+    [$first, $second] = [$models[0], $models[2]];
+    $trialIds = collect([$first, $second])
+        ->flatMap(static fn (array $model): array => array_map(
+            static fn (string $fixture): string => $model['id'].'|'.$fixture,
+            LiveGroupingModels::fixtureIds(),
+        ))
+        ->values()
+        ->all();
     $runner = new InertLiveGroupingRunner;
     $screen = new LiveGroupingScreen(
         $root,
         $runner,
-        liveGroupingApi($model, keyOverrides: ['limit_remaining' => '49.999'], endpointOverrides: ['pricing' => [
-            'prompt' => '0.000000104',
-            'completion' => '0.000000416',
-            'input_cache_write_1h' => '0.00000225',
-        ]]),
-        [$model],
+        liveGroupingApis(
+            [$first, $second],
+            static fn (): string => '49.999',
+            ['pricing' => [
+                'prompt' => '0.000000104',
+                'completion' => '0.000000416',
+                'input_cache_write_1h' => '0.00000045',
+            ]],
+        ),
+        [$first, $second],
         offlineInference: true,
         authorizationPath: liveGroupingAuthorizationPath(),
     );
@@ -865,7 +884,7 @@ it('preserves admission reservations across a resumed run', function (): void {
         'trial_ids' => $trialIds,
         'initial_remaining' => '50',
         'recorded_spend' => '0.001',
-        'admission_spend' => '4.500425984',
+        'admission_spend' => '0.900425984',
         'completed_trials' => array_slice($trialIds, 0, 2),
         'pending' => null,
     ], JSON_THROW_ON_ERROR));

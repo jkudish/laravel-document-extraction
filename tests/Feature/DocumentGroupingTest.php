@@ -87,6 +87,14 @@ function configureGroupingPrice(): void
     ]);
 }
 
+it('defines omission and ambiguity semantics for contentless pages without fixture answer leakage', function (): void {
+    $agent = new DocumentDetectionAgent([], []);
+
+    expect($agent->instructions())
+        ->toBe("Identify separate logical documents among the supplied original physical pages. Assign a page only when its membership is clear. Include a blank or contentless page only when visible pagination or document continuity clearly establishes its membership; otherwise omit it from every group so it is reported as unassigned. Set a group's ambiguous flag only when document-bearing pages have genuinely uncertain membership or boundaries; do not use ambiguity for a page with no identifiable document. Never invent page numbers or document content.")
+        ->not->toContain('blank-separator', 'page 3', 'bundle-');
+});
+
 it('keeps detection off by default with no detector call or cost', function (): void {
     DocumentDetectionAgent::fake([['groups' => [['pages' => [1], 'ambiguous' => false]]]])
         ->preventStrayPrompts();

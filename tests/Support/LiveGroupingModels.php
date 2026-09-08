@@ -11,36 +11,31 @@ use Jkudish\PestAiBenchmarks\Configuration;
  */
 final class LiveGroupingModels
 {
-    public const string BENCHMARK = 'live OpenRouter grouping broad development screen';
+    public const string BENCHMARK = 'live OpenRouter grouping prompt clarification canary';
 
-    public const string CONFIRMATION = 'run-28-paid-detector-calls';
+    public const string CONFIRMATION = 'run-8-prompt-canary-detector-calls';
 
     public const string FIXTURE_ID = 'mixed-document-lengths';
 
     public const string FIXTURE_FILE = 'bundle-03.pdf';
 
-    public const string SCREEN = 'openrouter-live-grouping-development-v1';
+    public const string SCREEN = 'openrouter-live-grouping-prompt-canary-v1';
 
     /** @var list<string> */
     public const array FIXTURE_IDS = [
-        'single-three-page-document',
-        'three-single-page-documents',
         'blank-separator',
-        'non-financial-documents',
+        'mixed-document-lengths',
     ];
 
     /** @var list<string> */
     public const array SURVIVOR_IDS = [
-        'qwen/qwen3-vl-32b-instruct',
         'qwen/qwen2.5-vl-72b-instruct',
-        'google/gemini-3.1-flash-lite',
         'google/gemini-2.5-flash',
         'openai/gpt-5.6-luna',
         'anthropic/claude-haiku-4.5',
-        'meta-llama/llama-4-maverick',
     ];
 
-    public const float MAX_SPEND_USD = 5.0;
+    public const float MAX_SPEND_USD = 1.0;
 
     public const float MAX_KEY_LIMIT_USD = 50.0;
 

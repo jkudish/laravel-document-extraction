@@ -138,6 +138,24 @@ Gemini 2.5 Flash and Llama each passed three of four, with only the blank-separa
 failing. Qwen2.5 VL passed both scored fixtures but has incomplete coverage and the highest observed
 cost. Qwen3 VL has no broad quality scores because all four calls predated the metadata-polling fix.
 
+## Prompt clarification canary
+
+All three scored broad-screen misses occurred on `blank-separator`. The metric pattern is consistent
+with models either grouping the contentless page as its own document or marking it ambiguous, but the
+private raw responses were deleted, so those output shapes are interpretations rather than observed
+evidence. The detector instructions now state the existing result semantics explicitly: include a
+blank or contentless page only when visible pagination or document continuity establishes membership;
+otherwise omit it so it is reported as unassigned. Ambiguity is reserved for document-bearing pages
+with genuinely uncertain membership or boundaries. The text contains no fixture name, page number, or
+expected grouping.
+
+The authorized development-only canary holds schema, rendering, endpoint routes, reasoning, 512-token
+output limit, timeout, privacy, fallback, scorer, and source fixtures constant. It runs Haiku, Luna,
+Gemini 2.5 Flash, and Qwen2.5 VL once each against `blank-separator` and the previously clean
+`mixed-document-lengths` control: eight paid detector calls under a fresh $1 software cap. The prompt
+fingerprint differs from the prior screen, so these results must remain a separate contract rather than
+being pooled as repeats. Grouped extraction and OCR remain simulated; no holdout is used.
+
 ### Requested-name disposition
 
 - **GPT-5.6 Luna:** exact `openai/gpt-5.6-luna` is present and retained. The former Sol row is removed.
@@ -155,8 +173,8 @@ cost. Qwen3 VL has no broad quality scores because all four calls predated the m
 
 ## Cost-controlled evaluation design
 
-The 15-call compatibility canary and 28-call broad development screen are complete. Finalist repeats
-and holdout remain separately gated.
+The 15-call compatibility canary and 28-call broad development screen are complete. The eight-call
+prompt clarification canary is separately authorized; further repeats and holdout remain gated.
 Use the installed native package path and published evaluation dependencies:
 
 - Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
@@ -184,17 +202,19 @@ Run the evaluation in gates:
    survivors against each of the four remaining development bundles: 28 detector calls, no repeats.
    Grouped extraction and OCR remained simulated. Twenty calls produced grouping scores, including 17
    that passed every grouping check; eight retained technical evidence without a quality score.
-4. **Development finalists:** choose 3–5 models from measured evidence, not metadata. Add repeats to
-   reach at least three trials per finalist/development bundle. Prompt/schema changes remain confined
-   to development data.
-5. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
+4. **Prompt clarification canary (authorized):** run four finalists once on `blank-separator` and one
+   previously clean development control after the generic blank-page instruction change: eight calls,
+   no holdout, and no pooling with prior-prompt trials.
+5. **Development finalists:** use the canary outcome to decide whether to keep the prompt, then add
+   separately authorized repeats to reach at least three trials per finalist/development bundle.
+6. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
    and scoring before at least three repeats on each held-out bundle. Never tune on holdout outcomes.
 
-The canary removed technical and clearly unusable candidates, and the broad screen now supplies the
-development evidence above. A reasonable finalist slice would retain Haiku, Luna, Gemini 2.5 Flash,
-and Qwen2.5 VL: this keeps the only four-of-four route, the two scored-exact but incomplete routes,
-and the fastest/least-expensive mostly exact route. Llama is the first reserve; Qwen3 VL needs fresh
-quality evidence before promotion. Any finalist repeats remain separately authorized.
+The canary removed technical and clearly unusable candidates, and the broad screen supplies the
+development evidence above. The prompt canary retains Haiku, Luna, Gemini 2.5 Flash, and Qwen2.5 VL:
+this keeps the only four-of-four route, the two scored-exact but incomplete routes, and the
+fastest/least-expensive mostly exact route. Llama is the first reserve; Qwen3 VL needs fresh quality
+evidence before promotion. Any calls beyond the authorized eight remain separately gated.
 
 The executable screen is deliberately smaller than a manifest system: the test-owned model and
 fixture lists in `tests/Support/LiveGroupingModels.php`, one Pest benchmark, and
