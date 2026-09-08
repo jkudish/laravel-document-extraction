@@ -1210,15 +1210,33 @@ it('rejects detached scorer measurements and mismatched private replay output', 
             } else {
                 $path = $created[0].'/replay.private.json';
                 $replay = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+                $output = is_array($replay) && is_array($replay['trials'] ?? null) && is_array($replay['trials'][0] ?? null)
+                    ? ($replay['trials'][0]['output'] ?? null)
+                    : null;
+                $cost = is_array($output) ? ($output['cost'] ?? null) : null;
+                $currencies = is_array($cost) ? ($cost['known_by_currency'] ?? null) : null;
+                $usd = is_array($currencies) ? ($currencies['USD'] ?? null) : null;
 
                 if (! is_array($replay)
                     || ! is_array($replay['trials'] ?? null)
                     || ! is_array($replay['trials'][0] ?? null)
-                    || ! is_array($replay['trials'][0]['output'] ?? null)) {
+                    || ! is_array($output)
+                    || ! is_array($cost)
+                    || ! is_array($currencies)
+                    || ! is_array($usd)) {
                     throw new RuntimeException('The replay cannot be mutated for detached-evidence proof.');
                 }
 
-                $replay['trials'][0]['output']['fixture_id'] = 'same-issuer-invoices';
+                if ($this->mutation === 'replay groups') {
+                    $output['groups'] = [[1], [2], [3]];
+                } else {
+                    $usd['amount'] = '999';
+                    $currencies['USD'] = $usd;
+                    $cost['known_by_currency'] = $currencies;
+                    $output['cost'] = $cost;
+                }
+
+                $replay['trials'][0]['output'] = $output;
                 file_put_contents($path, json_encode($replay, JSON_THROW_ON_ERROR));
             }
 
@@ -1258,7 +1276,7 @@ it('rejects detached scorer measurements and mismatched private replay output', 
             rmdir($directory);
         }
     }
-})->with(['measurement', 'replay']);
+})->with(['measurement', 'replay groups', 'replay cost']);
 
 it('rejects malformed live price evidence without throwing', function (mixed $amount): void {
     $output = json_encode([

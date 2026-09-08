@@ -135,17 +135,22 @@ final class LiveGroupingAttemptScorer implements Scorer
         return $this->result(
             $valid,
             $valid
-                ? sprintf('One live detector used the approved route and %d simulated extraction attempt(s) were attributed exactly once.', count($simulatedReferences))
+                ? sprintf(
+                    'One live detector used the approved route and %d simulated extraction attempt(s) were attributed exactly once. Output SHA-256: %s.',
+                    count($simulatedReferences),
+                    hash('sha256', $output),
+                )
                 : 'Live detector route or simulated extraction pricing evidence was inconsistent.',
+            $valid ? 'live-detector-attempt-integrity@sha256:'.hash('sha256', $output) : null,
         );
     }
 
-    private function result(bool $passed, string $reasoning): ScorerResult
+    private function result(bool $passed, string $reasoning, ?string $scorer = null): ScorerResult
     {
         return new ScorerResult(
             score: $passed ? 1.0 : 0.0,
             reasoning: $reasoning,
-            scorer: 'live-detector-attempt-integrity',
+            scorer: $scorer ?? 'live-detector-attempt-integrity',
         );
     }
 }

@@ -11,6 +11,7 @@ use Illuminate\Http\Client\Factory;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\CommandRunner;
 use Jkudish\DocumentExtraction\Tests\Support\GroupingBenchmarkCorpus;
 use Jkudish\DocumentExtraction\Tests\Support\GroupingMetric;
+use Jkudish\DocumentExtraction\Tests\Support\LiveGroupingAttemptScorer;
 use Jkudish\DocumentExtraction\Tests\Support\LiveGroupingModels;
 use Jkudish\PestAiBenchmarks\Runs\RunId;
 use Jkudish\PestAiBenchmarks\Runs\RunPaths;
@@ -309,6 +310,7 @@ final class LiveGroupingScreen
             'scripts/LiveGroupingScreen.php',
             'scripts/live-grouping-screen',
             'tests/Evals/LiveGroupingBenchmarkTest.php',
+            'tests/Support/LiveGroupingAttemptScorer.php',
             'tests/Support/LiveGroupingModels.php',
         ]));
         $dependencies = [];
@@ -652,14 +654,14 @@ final class LiveGroupingScreen
         $expectedScorers = [
             'pest:test',
             ...array_map(static fn (GroupingMetric $metric): string => $metric->value, GroupingMetric::cases()),
-            'live-detector-attempt-integrity',
         ];
         $scorers = array_map(
             fn (mixed $result): mixed => $this->object($result, 'trial result')['scorer'] ?? null,
             $results,
         );
 
-        if ($scorers !== $expectedScorers) {
+        if (count($scorers) !== count($expectedScorers) + 1
+            || array_slice($scorers, 0, -1) !== $expectedScorers) {
             throw new RuntimeException('The live grouping scorecard does not match the approved configuration.');
         }
 
@@ -669,7 +671,8 @@ final class LiveGroupingScreen
 
         if (($primary['scorer'] ?? null) !== 'pest:test'
             || ($primary['passed'] ?? null) !== true
-            || ($integrity['scorer'] ?? null) !== 'live-detector-attempt-integrity'
+            || ! is_string($integrity['scorer'] ?? null)
+            || ! str_starts_with($integrity['scorer'], 'live-detector-attempt-integrity@sha256:')
             || ($integrity['passed'] ?? null) !== true
             || (! is_int($integrityScore) && ! is_float($integrityScore))
             || (float) $integrityScore !== 1.0
@@ -703,7 +706,7 @@ final class LiveGroupingScreen
             }
         }
 
-        $this->validateReplay($runDirectory, $trial, $model, $fixtureId);
+        $this->validateReplay($runDirectory, $trial, $integrity, $model, $fixtureId);
 
         return [
             'model' => $model['id'],
@@ -715,10 +718,16 @@ final class LiveGroupingScreen
     }
 
     /** @param array<string, mixed> $trial
+     * @param  array<string, mixed>  $integrity
      * @param  LiveModel  $model
      */
-    private function validateReplay(string $runDirectory, array $trial, array $model, string $fixtureId): void
-    {
+    private function validateReplay(
+        string $runDirectory,
+        array $trial,
+        array $integrity,
+        array $model,
+        string $fixtureId,
+    ): void {
         $caseId = $trial['case_id'] ?? null;
         $configuration = $trial['configuration'] ?? null;
         $repeat = $trial['repeat'] ?? null;
@@ -749,6 +758,10 @@ final class LiveGroupingScreen
         $output = GroupingBenchmarkCorpus::outputObject($saved['output']);
         $fixture = $this->fixture($fixtureId);
         $route = $this->object($output['openrouter_route'] ?? null, 'OpenRouter route evidence');
+        $replayedIntegrity = (new LiveGroupingAttemptScorer)->score(
+            '',
+            json_encode($output, JSON_THROW_ON_ERROR),
+        );
 
         if (($output['fixture_id'] ?? null) !== $fixtureId
             || ($output['source_sha256'] ?? null) !== $fixture['sha256']
@@ -757,8 +770,10 @@ final class LiveGroupingScreen
             || ($route['provider_name'] ?? null) !== $model['route']['provider_name']
             || ($route['data_region'] ?? null) !== $model['route']['data_region']
             || ($route['service_tier'] ?? null) !== $model['route']['service_tier']
-            || ($route['provider_attempts'] ?? null) !== 1) {
-            throw new RuntimeException('The private live replay does not match the approved fixture and route.');
+            || ($route['provider_attempts'] ?? null) !== 1
+            || $replayedIntegrity->score !== 1.0
+            || ($integrity['scorer'] ?? null) !== $replayedIntegrity->scorer) {
+            throw new RuntimeException('The private live replay does not match the approved scored output.');
         }
     }
 
