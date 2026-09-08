@@ -50,19 +50,30 @@ function liveGroupingApi(
     array $endpointOverrides = [],
     bool $omitZdr = false,
 ): Closure {
-    return static function (string $url, ?string $key) use ($model, $keyOverrides, $endpointOverrides, $omitZdr): array {
+    $keyChecks = 0;
+
+    return static function (string $url, ?string $key) use ($model, $keyOverrides, $endpointOverrides, $omitZdr, &$keyChecks): array {
         if ($url === 'https://openrouter.ai/api/v1/key') {
             expect($key)->toBe('synthetic-openrouter-canary');
+            $keyChecks++;
+            $remaining = $keyOverrides['limit_remaining'] ?? 50;
 
-            return ['data' => [
+            if ($keyChecks >= 3 && (is_int($remaining) || is_float($remaining) || is_string($remaining))) {
+                $remaining = (string) BigDecimal::of(is_float($remaining) ? (string) $remaining : $remaining)
+                    ->minus('0.012345');
+            }
+
+            $data = [
                 'limit' => 50,
-                'limit_remaining' => 50,
                 'limit_reset' => 'monthly',
                 'is_free_tier' => false,
                 'is_management_key' => false,
                 'is_provisioning_key' => false,
                 ...$keyOverrides,
-            ]];
+            ];
+            $data['limit_remaining'] = $remaining;
+
+            return ['data' => $data];
         }
 
         expect($key)->toBeNull();
@@ -358,6 +369,7 @@ it('runs one approved detector trial offline and removes private replay after fu
             ->and($result['output'])->toContain('Validated 1 paid detector calls')
             ->and($run['model'])->toBe($model['id'])
             ->and($run['cost_usd'])->toBe('0.012345')
+            ->and($run['cost_source'])->toBe('key_allowance_change')
             ->and($run['attempts'])->toBe(4)
             ->and(is_file($run['scorecard']))->toBeTrue()
             ->and(is_file(dirname($run['scorecard']).'/replay.private.json'))->toBeFalse()
@@ -373,6 +385,87 @@ it('runs one approved detector trial offline and removes private replay after fu
             $files = glob($directory.'/*') ?: [];
 
             foreach ($files as $file) {
+                unlink($file);
+            }
+
+            rmdir($directory);
+        }
+    }
+});
+
+it('uses immediate key allowance depletion when the observer cannot expose response pricing', function (): void {
+    $root = dirname(__DIR__, 2);
+    $model = LiveGroupingModels::all()[0];
+    $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $runner = new class($root) implements CommandRunner
+    {
+        public function __construct(private readonly string $root) {}
+
+        public function run(array $command, ?array $environment = null): CommandResult
+        {
+            $before = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+            $result = (new NativeCommandRunner($this->root))->run($command, $environment);
+            $after = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+            $created = array_values(array_diff($after, $before));
+            $scorecardPath = $created[0].'/scorecard.json';
+            $scorecard = json_decode((string) file_get_contents($scorecardPath), true, flags: JSON_THROW_ON_ERROR);
+
+            if (! is_array($scorecard)
+                || ! is_array($scorecard['trials'] ?? null)
+                || ! is_array($scorecard['trials'][0] ?? null)
+                || ! is_array($scorecard['trials'][0]['results'] ?? null)
+                || ! is_array($scorecard['trials'][0]['results'][0] ?? null)
+                || ! is_array($scorecard['trials'][0]['results'][0]['measurements'] ?? null)
+                || ! is_array($scorecard['trials'][0]['results'][0]['measurements'][0] ?? null)) {
+                throw new RuntimeException('The generated scorecard cannot be mutated for the allowance-cost test.');
+            }
+
+            $measurement = &$scorecard['trials'][0]['results'][0]['measurements'][0];
+            $measurement['effective_model'] = null;
+            $measurement['usage'] = [
+                'cached_input_tokens' => 0,
+                'input_tokens' => 0,
+                'output_tokens' => 0,
+                'reasoning_tokens' => 0,
+            ];
+            $measurement['pricing'] = [
+                'completeness' => 'unavailable',
+                'snapshot' => [
+                    'completeness' => 'unavailable',
+                    'cost' => null,
+                    'missing_units' => [],
+                    'provenance' => null,
+                    'snapshot' => null,
+                    'source' => 'unavailable',
+                ],
+            ];
+            file_put_contents($scorecardPath, json_encode($scorecard, JSON_THROW_ON_ERROR));
+
+            return $result;
+        }
+    };
+    $screen = new LiveGroupingScreen(
+        $root,
+        $runner,
+        liveGroupingApi($model),
+        [$model],
+        offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
+    );
+
+    try {
+        $result = $screen->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']);
+
+        expect($result['runs'][0]['cost_usd'])->toBe('0.012345')
+            ->and($result['runs'][0]['cost_source'])->toBe('key_allowance_change');
+    } finally {
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+
+        foreach (array_diff($after, $before) as $directory) {
+            foreach (glob($directory.'/*') ?: [] as $file) {
                 unlink($file);
             }
 

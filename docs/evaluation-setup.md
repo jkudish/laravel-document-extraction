@@ -154,8 +154,11 @@ The runner enforces a $5 software admission budget. Before each sequential reque
 plus a conservative reservation derived from the selected endpoint's full context capacity, the
 highest advertised base or override input/cache/image-token rate, 512 output and reasoning tokens,
 and six possible per-image charges must fit under $5. Unbounded applicable charges, incomplete cost
-evidence, or reservation overruns stop the run. This is a catalog-based safeguard, not a provider-level
-$5 cap: it cannot undo an in-flight provider charge or govern unrelated use of the same key.
+evidence, or reservation overruns stop the run. Immediately after each request, the runner refreshes
+the key allowance and requires a positive depletion no larger than that reservation. The cumulative
+allowance change—not catalog arithmetic—is the spend used for the $5 admission check. This is a
+software safeguard, not a provider-level $5 cap: it cannot undo an in-flight provider charge, and
+unrelated use of the same key is conservatively counted against this screen.
 The ignored, private authorization ledger survives command restarts, binds the run to the current key,
 and records a reservation before dispatch. A completed prefix can resume, but an unresolved in-flight
 call or a fully consumed 15-call authorization cannot be run again. The selected route and reservation
@@ -166,10 +169,13 @@ instead of aborting the screen; their numeric scores—not their `passed` flag�
 
 After every trial, the command applies the benchmark plugin's stable scorecard validator and checks
 fixture identity, all nine deterministic grouping scores, requested/effective model evidence, one
-live detector measurement, simulated grouped extraction measurements, unique call ordinals, and one
-positive provider-reported USD cost with matching extraction totals. Unknown cost, duplicate calls,
-invalid scorecard data, route drift, or reaching the logical spend cap stops the screen before the next
-model. The command removes private replay after validation and retains only the ignored scorecard path.
+live detector measurement, simulated grouped extraction measurements, and unique call ordinals. The
+production result's integrity scorer still requires one positive provider-reported USD cost with
+matching extraction totals. When the outer benchmark observer cannot expose response pricing after a
+locally rejected structured result, the command records the immediate key-allowance change instead of
+inventing a per-call quote. Zero, negative, or over-reservation depletion, duplicate calls, invalid
+scorecard data, route drift, or reaching the logical spend cap stops the screen before the next model.
+The command removes private replay after validation and retains only the ignored scorecard path.
 Scorecards contain bounded metrics and call evidence, not source documents, prompts, or raw provider
 responses.
 

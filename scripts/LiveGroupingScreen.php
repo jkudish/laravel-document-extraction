@@ -61,7 +61,7 @@ final class LiveGroupingScreen
     /**
      * @param  list<string>  $arguments
      * @param  array<string, string>  $environment
-     * @return array{live: bool, output: string, runs: list<array{model: string, endpoint: string, cost_usd: string, attempts: int, scorecard: string}>}
+     * @return array{live: bool, output: string, runs: list<array{model: string, endpoint: string, cost_usd: string, cost_source: string, attempts: int, scorecard: string}>}
      */
     public function execute(array $arguments, array $environment): array
     {
@@ -166,13 +166,17 @@ final class LiveGroupingScreen
                 $this->removePrivateReplay($runDirectory);
             }
 
-            $cost = BigDecimal::of($summary['cost_usd']);
+            $afterRemaining = $this->validateKey($key, requireFullCap: false);
+            $allowanceCost = $remaining->minus($afterRemaining);
 
-            if ($cost->isGreaterThan($reservation)) {
+            if ($allowanceCost->isLessThanOrEqualTo(BigDecimal::zero())
+                || $allowanceCost->isGreaterThan($reservation)
+                || ($summary['provider_cost_usd'] !== null
+                    && BigDecimal::of($summary['provider_cost_usd'])->isGreaterThan($reservation))) {
                 throw new RuntimeException('The live grouping trial exceeded its catalog-derived cost reservation.');
             }
 
-            $recordedSpend = $recordedSpend->plus($cost);
+            $recordedSpend = $initialRemaining->minus($afterRemaining);
             $authorization['completed_models'][] = $model['id'];
             $authorization['recorded_spend'] = (string) $recordedSpend;
             $authorization['pending'] = null;
@@ -182,7 +186,14 @@ final class LiveGroupingScreen
                 throw new RuntimeException('The live grouping screen exceeded its approved USD spend cap.');
             }
 
-            $summaries[] = [...$summary, 'scorecard' => $runDirectory.'/scorecard.json'];
+            $summaries[] = [
+                'model' => $summary['model'],
+                'endpoint' => $summary['endpoint'],
+                'cost_usd' => (string) $allowanceCost,
+                'cost_source' => 'key_allowance_change',
+                'attempts' => $summary['attempts'],
+                'scorecard' => $runDirectory.'/scorecard.json',
+            ];
         }
 
         $finalRemaining = $this->validateKey($key, requireFullCap: false);
@@ -196,9 +207,8 @@ final class LiveGroupingScreen
         return [
             'live' => true,
             'output' => sprintf(
-                'Validated %d paid detector calls; provider-reported cost was $%s (key allowance change $%s).',
+                'Validated %d paid detector calls; key allowance change was $%s.',
                 count($authorization['completed_models']),
-                (string) $recordedSpend,
                 (string) $spent,
             ),
             'runs' => $summaries,
@@ -407,7 +417,7 @@ final class LiveGroupingScreen
     }
 
     /** @param LiveModel $model
-     * @return array{model: string, endpoint: string, cost_usd: string, attempts: int}
+     * @return array{model: string, endpoint: string, provider_cost_usd: ?string, attempts: int}
      */
     private function validateRun(string $runDirectory, array $model): array
     {
@@ -455,46 +465,60 @@ final class LiveGroupingScreen
             throw new RuntimeException('The live grouping trial or its attempt-integrity scorer failed.');
         }
 
-        $cost = null;
+        $providerCost = null;
 
         foreach ($measurements as $index => $rawMeasurement) {
             $measurement = $this->object($rawMeasurement, 'target measurement');
             $requested = $this->object($measurement['requested_model'] ?? null, 'requested model');
-            $effective = $this->object($measurement['effective_model'] ?? null, 'effective model');
+            $effective = $measurement['effective_model'] ?? null;
 
             if (($measurement['component'] ?? null) !== 'target'
                 || $requested !== ['provider' => 'openrouter', 'model' => $model['id']]
-                || ($effective['provider'] ?? null) !== 'openrouter'
-                || ! in_array($effective['model'] ?? null, [$model['id'], $model['canonical']], true)) {
+                || ($index > 0 && $effective === null)
+                || ($effective !== null && (
+                    ! is_array($effective)
+                    || array_is_list($effective)
+                    || ($effective['provider'] ?? null) !== 'openrouter'
+                    || ! in_array($effective['model'] ?? null, [$model['id'], $model['canonical']], true)
+                ))) {
                 throw new RuntimeException('A target measurement has an unexpected identity.');
             }
 
             if ($index === 0) {
-                $cost = $this->liveCost($measurement);
+                $providerCost = $this->liveCost($measurement);
             } elseif (($measurement['mode'] ?? null) !== 'simulated'
                 || ($this->object($measurement['pricing'] ?? null, 'simulated pricing')['completeness'] ?? null) !== 'unavailable') {
                 throw new RuntimeException('A grouped extraction measurement was not simulated and unpriced.');
             }
         }
 
-        if (! is_string($cost) || ! is_file($runDirectory.'/replay.private.json')) {
-            throw new RuntimeException('The validated live cost or private replay is missing.');
+        if (! is_file($runDirectory.'/replay.private.json')) {
+            throw new RuntimeException('The private live replay is missing.');
         }
 
         return [
             'model' => $model['id'],
             'endpoint' => $model['endpoint'],
-            'cost_usd' => $cost,
+            'provider_cost_usd' => $providerCost,
             'attempts' => count($measurements),
         ];
     }
 
     /** @param array<string, mixed> $measurement */
-    private function liveCost(array $measurement): string
+    private function liveCost(array $measurement): ?string
     {
         $pricing = $this->object($measurement['pricing'] ?? null, 'live pricing');
         $snapshot = $this->object($pricing['snapshot'] ?? null, 'live pricing snapshot');
-        $money = $this->object($snapshot['cost'] ?? null, 'live cost');
+        $cost = $snapshot['cost'] ?? null;
+
+        if (($measurement['mode'] ?? null) === 'live'
+            && ($pricing['completeness'] ?? null) === 'unavailable'
+            && ($snapshot['source'] ?? null) === 'unavailable'
+            && $cost === null) {
+            return null;
+        }
+
+        $money = $this->object($cost, 'live cost');
         $amount = $money['amount'] ?? null;
 
         if (($measurement['mode'] ?? null) !== 'live'

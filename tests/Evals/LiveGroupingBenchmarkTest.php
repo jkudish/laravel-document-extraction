@@ -123,6 +123,7 @@ beforeEach(function (): void {
             ]);
         });
     } else {
+        Http::record();
         Http::allowStrayRequests(['https://openrouter.ai/api/v1/chat/completions']);
     }
 });
