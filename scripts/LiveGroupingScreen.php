@@ -18,7 +18,7 @@ use Throwable;
 /**
  * @phpstan-import-type LiveModel from LiveGroupingModels
  *
- * @phpstan-type LiveAuthorization array{schema_version: 1, confirmation: string, key_fingerprint: string, initial_remaining: string, recorded_spend: string, completed_models: list<string>, pending: array{model: string, reservation: string}|null}
+ * @phpstan-type LiveAuthorization array{schema_version: 1, confirmation: string, key_fingerprint: string, model_ids: list<string>, initial_remaining: string, recorded_spend: string, completed_models: list<string>, pending: array{model: string, reservation: string}|null}
  */
 final class LiveGroupingScreen
 {
@@ -27,6 +27,8 @@ final class LiveGroupingScreen
 
     /** @var list<LiveModel> */
     private array $models;
+
+    private readonly string $authorizationFile;
 
     /**
      * @param  Closure(string, ?string): array<string, mixed>|null  $fetch
@@ -38,9 +40,12 @@ final class LiveGroupingScreen
         ?Closure $fetch = null,
         ?array $models = null,
         private readonly bool $offlineInference = false,
+        ?string $authorizationPath = null,
     ) {
         $this->fetch = $fetch ?? $this->request(...);
         $this->models = $models ?? LiveGroupingModels::all();
+        $this->authorizationFile = $authorizationPath
+            ?? $this->repositoryRoot.'/storage/app/ai-evals/live-grouping-screen-v1.json';
 
         if ($this->models === [] || count(array_unique(array_column($this->models, 'id'))) !== count($this->models)) {
             throw new RuntimeException('The live grouping screen requires unique approved models.');
@@ -82,7 +87,7 @@ final class LiveGroupingScreen
         }
 
         $lock = $this->acquireLock();
-        $currentRemaining = $this->validateKey($key);
+        $currentRemaining = $this->validateKey($key, requireFullCap: ! is_file($this->authorizationPath()));
         $authorization = $this->authorization($key, $currentRemaining);
         $initialRemaining = BigDecimal::of($authorization['initial_remaining']);
         $summaries = [];
@@ -612,6 +617,7 @@ final class LiveGroupingScreen
                 'schema_version' => 1,
                 'confirmation' => LiveGroupingModels::CONFIRMATION,
                 'key_fingerprint' => hash('sha256', $key),
+                'model_ids' => array_column($this->models, 'id'),
                 'initial_remaining' => (string) $currentRemaining,
                 'recorded_spend' => '0',
                 'completed_models' => [],
@@ -623,6 +629,7 @@ final class LiveGroupingScreen
         }
 
         $authorization = $this->jsonObject($path);
+        $modelIds = $this->strings($authorization['model_ids'] ?? null, 'authorization models');
         $completed = $this->strings($authorization['completed_models'] ?? null, 'completed authorization models');
         $expected = array_column(array_slice($this->models, 0, count($completed)), 'id');
         $initial = $this->decimal($authorization['initial_remaining'] ?? null, 'authorization initial allowance');
@@ -632,6 +639,7 @@ final class LiveGroupingScreen
             || ($authorization['confirmation'] ?? null) !== LiveGroupingModels::CONFIRMATION
             || ! is_string($authorization['key_fingerprint'] ?? null)
             || ! hash_equals($authorization['key_fingerprint'], hash('sha256', $key))
+            || $modelIds !== array_column($this->models, 'id')
             || $initial->isLessThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
             || $recorded->isNegative()
             || $recorded->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
@@ -682,7 +690,7 @@ final class LiveGroupingScreen
 
     private function authorizationPath(): string
     {
-        return $this->repositoryRoot.'/storage/app/ai-evals/live-grouping-screen-v1.json';
+        return $this->authorizationFile;
     }
 
     /** @return resource */

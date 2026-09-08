@@ -36,7 +36,7 @@ afterEach(function (): void {
 
 function liveGroupingAuthorizationPath(): string
 {
-    return dirname(__DIR__, 2).'/storage/app/ai-evals/live-grouping-screen-v1.json';
+    return sys_get_temp_dir().'/lde-live-grouping-screen-test-'.getmypid().'.json';
 }
 
 /** @param array{id: string, canonical: string, endpoint: string, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}} $model
@@ -147,6 +147,7 @@ it('defaults to a network-free dry run', function (): void {
 
             throw new RuntimeException('Dry-run should not fetch.');
         },
+        authorizationPath: liveGroupingAuthorizationPath(),
     );
     $result = $screen->execute([], []);
 
@@ -172,6 +173,7 @@ it('refuses live execution without the exact confirmation or key', function (arr
 
             return [];
         },
+        authorizationPath: liveGroupingAuthorizationPath(),
     );
 
     expect(fn () => $screen->execute($arguments, $environment))->toThrow(RuntimeException::class)
@@ -200,6 +202,7 @@ it('rejects unsafe key limits before the inference runner', function (array $key
         liveGroupingApi($model, $keyOverrides),
         [$model],
         offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
     );
 
     expect(fn () => $screen->execute([
@@ -227,6 +230,7 @@ it('rejects stale route capabilities and prices before the inference runner', fu
         liveGroupingApi($model, endpointOverrides: $endpointOverrides),
         [$model],
         offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
     );
 
     expect(fn () => $screen->execute([
@@ -263,6 +267,7 @@ it('refuses a call whose catalog-derived reservation cannot fit the software bud
         ]]),
         [$model],
         offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
     );
 
     expect(fn () => $screen->execute([
@@ -282,6 +287,7 @@ it('rejects a route that is no longer ZDR before the inference runner', function
         liveGroupingApi($model, omitZdr: true),
         [$model],
         offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
     );
 
     expect(fn () => $screen->execute([
@@ -311,6 +317,7 @@ it('refuses a concurrent screen before any preflight request', function (): void
 
             return [];
         },
+        authorizationPath: liveGroupingAuthorizationPath(),
     );
 
     try {
@@ -337,6 +344,7 @@ it('runs one approved detector trial offline and removes private replay after fu
         liveGroupingApi($model),
         [$model],
         offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
     );
 
     try {
@@ -373,6 +381,57 @@ it('runs one approved detector trial offline and removes private replay after fu
     }
 });
 
+it('resumes a clean completed prefix against the original allowance baseline', function (): void {
+    $root = dirname(__DIR__, 2);
+    [$first, $second] = array_slice(LiveGroupingModels::all(), 0, 2);
+    $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $authorization = [
+        'schema_version' => 1,
+        'confirmation' => LiveGroupingModels::CONFIRMATION,
+        'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
+        'model_ids' => [$first['id'], $second['id']],
+        'initial_remaining' => '50',
+        'recorded_spend' => '0.012345',
+        'completed_models' => [$first['id']],
+        'pending' => null,
+    ];
+    file_put_contents(
+        liveGroupingAuthorizationPath(),
+        json_encode($authorization, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR),
+    );
+    $screen = new LiveGroupingScreen(
+        $root,
+        new NativeCommandRunner($root),
+        liveGroupingApi($second, keyOverrides: ['limit_remaining' => 49.99]),
+        [$first, $second],
+        offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
+    );
+
+    try {
+        $result = $screen->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']);
+
+        expect($result['output'])->toContain('Validated 2 paid detector calls')
+            ->and($result['runs'])->toHaveCount(1)
+            ->and($result['runs'][0]['model'])->toBe($second['id']);
+    } finally {
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+
+        foreach (array_diff($after, $before) as $directory) {
+            $files = glob($directory.'/*') ?: [];
+
+            foreach ($files as $file) {
+                unlink($file);
+            }
+
+            rmdir($directory);
+        }
+    }
+});
+
 it('removes private replay when a completed child trial is rejected', function (): void {
     $root = dirname(__DIR__, 2);
     $model = LiveGroupingModels::all()[0];
@@ -394,6 +453,7 @@ it('removes private replay when a completed child trial is rejected', function (
         liveGroupingApi($model),
         [$model],
         offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
     );
 
     try {
@@ -465,6 +525,7 @@ it('rejects an unexpected scorer set and removes its private replay', function (
         liveGroupingApi($model),
         [$model],
         offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
     );
 
     try {
