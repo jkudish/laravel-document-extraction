@@ -7,7 +7,7 @@ namespace Jkudish\DocumentExtraction\Tests\Support;
 use Jkudish\PestAiBenchmarks\Configuration;
 
 /**
- * @phpstan-type LiveModel array{id: string, endpoint: string, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}}
+ * @phpstan-type LiveModel array{id: string, canonical: string, endpoint: string, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}}
  */
 final class LiveGroupingModels
 {
@@ -21,7 +21,7 @@ final class LiveGroupingModels
 
     public const float MAX_SPEND_USD = 5.0;
 
-    public const float MAX_KEY_LIMIT_USD = 50.0;
+    public const float MAX_KEY_LIMIT_USD = 5.0;
 
     public const int MAX_OUTPUT_TOKENS = 512;
 
@@ -29,21 +29,21 @@ final class LiveGroupingModels
     public static function all(): array
     {
         return [
-            self::model('qwen/qwen3.8-flash', 'alibaba', false, true, 0.15, 0.47),
-            self::model('qwen/qwen3.7-plus', 'alibaba', false, true, 0.32, 1.28),
+            self::model('qwen/qwen3.8-flash', 'alibaba', false, true, 0.15, 0.47, canonical: 'qwen/qwen3.8-flash-20260826'),
+            self::model('qwen/qwen3.7-plus', 'alibaba', false, true, 0.32, 1.28, canonical: 'qwen/qwen3.7-plus-20260602'),
             self::model('qwen/qwen3.6-flash', 'alibaba', false, true, 0.1875, 1.125),
-            self::model('qwen/qwen3.5-flash-02-23', 'alibaba', false, true, 0.065, 0.26),
+            self::model('qwen/qwen3.5-flash-02-23', 'alibaba', false, true, 0.065, 0.26, canonical: 'qwen/qwen3.5-flash-20260224'),
             self::model('qwen/qwen3-vl-32b-instruct', 'alibaba', false, false, 0.104, 0.416),
             self::model('qwen/qwen2.5-vl-72b-instruct', 'parasail/fp8', true, false, 0.8, 1.0),
-            self::model('google/gemini-3.8-flash', 'google-vertex/global', true, true, 0.75, 3.75, 0.000_000_75),
-            self::model('google/gemini-3.1-flash-lite', 'google-vertex/global', true, true, 0.25, 1.5, 0.000_000_25),
+            self::model('google/gemini-3.8-flash', 'google-vertex/global', true, true, 0.75, 3.75, 0.000_000_75, canonical: 'google/gemini-3.8-flash-20260902'),
+            self::model('google/gemini-3.1-flash-lite', 'google-vertex/global', true, true, 0.25, 1.5, 0.000_000_25, canonical: 'google/gemini-3.1-flash-lite-20260507'),
             self::model('google/gemini-2.5-flash', 'google-vertex/global', true, true, 0.3, 2.5, 0.000_000_3),
             self::model('google/gemini-2.5-pro', 'google-vertex/global', true, true, 1.25, 10.0, 0.000_001_25),
-            self::model('openai/gpt-5.6-luna', 'azure/eu', true, true, 0.22, 1.32, completionTokenParameter: true),
-            self::model('anthropic/claude-sonnet-5', 'amazon-bedrock/global', true, true, 2.0, 10.0),
-            self::model('anthropic/claude-haiku-4.5', 'amazon-bedrock/global', true, true, 1.0, 5.0),
+            self::model('openai/gpt-5.6-luna', 'azure/eu', true, true, 0.22, 1.32, completionTokenParameter: true, canonical: 'openai/gpt-5.6-luna-20260709'),
+            self::model('anthropic/claude-sonnet-5', 'amazon-bedrock/global', true, true, 2.0, 10.0, canonical: 'anthropic/claude-sonnet-5-20260630'),
+            self::model('anthropic/claude-haiku-4.5', 'amazon-bedrock/global', true, true, 1.0, 5.0, canonical: 'anthropic/claude-4.5-haiku-20251001'),
             self::model('mistralai/mistral-small-2603', 'mistral/zdr', true, true, 0.15, 0.6),
-            self::model('meta-llama/llama-4-maverick', 'digitalocean', true, false, 0.2, 0.696),
+            self::model('meta-llama/llama-4-maverick', 'digitalocean', true, false, 0.2, 0.696, canonical: 'meta-llama/llama-4-maverick-17b-128e-instruct'),
         ];
     }
 
@@ -128,6 +128,7 @@ final class LiveGroupingModels
         float $completion,
         ?float $image = null,
         bool $completionTokenParameter = false,
+        ?string $canonical = null,
     ): array {
         $maxPrice = ['prompt' => $prompt, 'completion' => $completion];
 
@@ -137,6 +138,7 @@ final class LiveGroupingModels
 
         return [
             'id' => $id,
+            'canonical' => $canonical ?? $id,
             'endpoint' => $endpoint,
             'zdr' => $zdr,
             'reasoning' => $reasoning,

@@ -133,7 +133,7 @@ scripts/live-grouping-screen
 
 The live mode is intentionally narrow. It requires the exact printed confirmation and an
 `OPENROUTER_API_KEY`; do not paste the key into the command line or logs. Before inference it verifies
-that the key has a finite monthly limit no larger than $50 and at least $5 remaining. It then fetches
+that the dedicated key has a finite $5 monthly limit with $5 remaining. It then fetches
 the current public catalog and rejects missing models, stale endpoints, unsupported image/structured
 output, endpoint price increases, unavailable routes, or missing ZDR where the selected route requires
 it. The five Alibaba Qwen routes do not advertise ZDR and instead pin `data_collection = deny`; every
@@ -149,6 +149,9 @@ through OpenRouter with the exact model and endpoint, `allow_fallbacks = false`,
 `require_parameters = true`, a 512-token output limit, reasoning disabled where supported, and the
 recorded rate ceilings. The application extraction agent remains Laravel AI-faked, so each trial has
 exactly one paid detector request even when it detects several groups. No holdout fixture is selectable.
+
+The nine quality scorers deliberately use a zero threshold so weak models remain recorded evidence
+instead of aborting the screen; their numeric scores—not their `passed` flag—are the quality result.
 
 After every trial, the command applies the benchmark plugin's stable scorecard validator and checks
 fixture identity, all nine deterministic grouping scores, requested/effective model evidence, one

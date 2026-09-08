@@ -22,7 +22,7 @@ final class InertLiveGroupingRunner implements CommandRunner
     }
 }
 
-/** @param array{id: string, endpoint: string, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}} $model
+/** @param array{id: string, canonical: string, endpoint: string, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}} $model
  * @param  array<string, mixed>  $keyOverrides
  * @param  array<string, mixed>  $endpointOverrides
  * @return Closure(string, ?string): array<string, mixed>
@@ -38,8 +38,8 @@ function liveGroupingApi(
             expect($key)->toBe('synthetic-openrouter-canary');
 
             return ['data' => [
-                'limit' => 50,
-                'limit_remaining' => 50,
+                'limit' => 5,
+                'limit_remaining' => 5,
                 'limit_reset' => 'monthly',
                 'is_free_tier' => false,
                 'is_management_key' => false,
@@ -53,6 +53,7 @@ function liveGroupingApi(
         if ($url === 'https://openrouter.ai/api/v1/models') {
             return ['data' => [[
                 'id' => $model['id'],
+                'canonical_slug' => $model['canonical'],
                 'architecture' => [
                     'input_modalities' => ['text', 'image'],
                     'output_modalities' => ['text'],
@@ -191,7 +192,7 @@ it('rejects unsafe key limits before the inference runner', function (array $key
         ->and($runner->calls)->toBe(0);
 })->with([
     'unlimited' => [['limit' => null]],
-    'oversized' => [['limit' => 51, 'limit_remaining' => 51]],
+    'oversized' => [['limit' => 5.01, 'limit_remaining' => 5.01]],
     'insufficient remaining' => [['limit_remaining' => 4.99]],
     'resetting daily' => [['limit_reset' => 'daily']],
     'free tier' => [['is_free_tier' => true]],
@@ -221,6 +222,8 @@ it('rejects stale route capabilities and prices before the inference runner', fu
     'missing structured output' => [['supported_parameters' => ['response_format']]],
     'missing output token parameter' => [['supported_parameters' => ['response_format', 'structured_outputs']]],
     'excessive prompt rate' => [['pricing' => ['prompt' => '1', 'completion' => '0.00000047']]],
+    'unexpected image rate' => [['pricing' => ['prompt' => '0.00000015', 'completion' => '0.00000047', 'image' => '1']]],
+    'unexpected request rate' => [['pricing' => ['prompt' => '0.00000015', 'completion' => '0.00000047', 'request' => '1']]],
 ]);
 
 it('rejects a route that is no longer ZDR before the inference runner', function (): void {
@@ -240,6 +243,41 @@ it('rejects a route that is no longer ZDR before the inference runner', function
     ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
         ->toThrow(RuntimeException::class, 'is no longer ZDR')
         ->and($runner->calls)->toBe(0);
+});
+
+it('refuses a concurrent screen before any preflight request', function (): void {
+    $root = dirname(__DIR__, 2);
+    $lockPath = sys_get_temp_dir().'/lde-live-grouping-'.hash('sha256', $root).'.lock';
+    $lock = fopen($lockPath, 'c+');
+
+    if ($lock === false) {
+        throw new RuntimeException('Unable to create the concurrency-test lock.');
+    }
+
+    flock($lock, LOCK_EX | LOCK_NB);
+    $fetches = 0;
+    $screen = new LiveGroupingScreen(
+        $root,
+        new InertLiveGroupingRunner,
+        function () use (&$fetches): array {
+            $fetches++;
+
+            return [];
+        },
+    );
+
+    try {
+        expect(fn () => $screen->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+            ->toThrow(RuntimeException::class, 'already running')
+            ->and($fetches)->toBe(0);
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+        unlink($lockPath);
+    }
 });
 
 it('runs one approved detector trial offline and removes private replay after full validation', function (): void {
@@ -283,6 +321,122 @@ it('runs one approved detector trial offline and removes private replay after fu
     }
 });
 
+it('removes private replay when a completed child trial is rejected', function (): void {
+    $root = dirname(__DIR__, 2);
+    $model = LiveGroupingModels::all()[0];
+    $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $runner = new class($root) implements CommandRunner
+    {
+        public function __construct(private readonly string $root) {}
+
+        public function run(array $command, ?array $environment = null): CommandResult
+        {
+            $result = (new NativeCommandRunner($this->root))->run($command, $environment);
+
+            return new CommandResult(99, $result->stdout, $result->stderr);
+        }
+    };
+    $screen = new LiveGroupingScreen(
+        $root,
+        $runner,
+        liveGroupingApi($model),
+        [$model],
+        offlineInference: true,
+    );
+
+    try {
+        expect(fn () => $screen->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+            ->toThrow(RuntimeException::class, 'failed before producing one complete scorecard');
+
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+        $created = array_values(array_diff($after, $before));
+
+        expect($created)->toHaveCount(1)
+            ->and(is_file($created[0].'/replay.private.json'))->toBeFalse();
+    } finally {
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+
+        foreach (array_diff($after, $before) as $directory) {
+            $files = glob($directory.'/*') ?: [];
+
+            foreach ($files as $file) {
+                unlink($file);
+            }
+
+            rmdir($directory);
+        }
+    }
+});
+
+it('rejects an unexpected scorer set and removes its private replay', function (): void {
+    $root = dirname(__DIR__, 2);
+    $model = LiveGroupingModels::all()[0];
+    $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $runner = new class($root) implements CommandRunner
+    {
+        public function __construct(private readonly string $root) {}
+
+        public function run(array $command, ?array $environment = null): CommandResult
+        {
+            $before = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+            $result = (new NativeCommandRunner($this->root))->run($command, $environment);
+            $after = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+            $created = array_values(array_diff($after, $before));
+            $scorecardPath = $created[0].'/scorecard.json';
+            $scorecard = json_decode((string) file_get_contents($scorecardPath), true, flags: JSON_THROW_ON_ERROR);
+
+            if (! is_array($scorecard)
+                || ! is_array($scorecard['trials'] ?? null)
+                || ! is_array($scorecard['trials'][0] ?? null)
+                || ! is_array($scorecard['trials'][0]['results'] ?? null)
+                || ! is_array($scorecard['trials'][0]['results'][1] ?? null)) {
+                throw new RuntimeException('The generated scorecard cannot be mutated for the scorer-set test.');
+            }
+
+            $scorecard['trials'][0]['results'][1]['scorer'] = 'unexpected-scorer';
+            file_put_contents($scorecardPath, json_encode($scorecard, JSON_THROW_ON_ERROR));
+
+            return $result;
+        }
+    };
+    $screen = new LiveGroupingScreen(
+        $root,
+        $runner,
+        liveGroupingApi($model),
+        [$model],
+        offlineInference: true,
+    );
+
+    try {
+        expect(fn () => $screen->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+            ->toThrow(RuntimeException::class, 'does not match the approved configuration');
+
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+        $created = array_values(array_diff($after, $before));
+
+        expect($created)->toHaveCount(1)
+            ->and(is_file($created[0].'/replay.private.json'))->toBeFalse();
+    } finally {
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+
+        foreach (array_diff($after, $before) as $directory) {
+            $files = glob($directory.'/*') ?: [];
+
+            foreach ($files as $file) {
+                unlink($file);
+            }
+
+            rmdir($directory);
+        }
+    }
+});
+
 it('rejects malformed live price evidence without throwing', function (mixed $amount): void {
     $output = json_encode([
         'calls' => [
@@ -291,8 +445,8 @@ it('rejects malformed live price evidence without throwing', function (mixed $am
                 'ordinal' => 1,
                 'stage' => 'detection',
                 'mode' => 'live',
-                'requested_identity' => ['provider' => 'openrouter', 'model' => 'approved/model'],
-                'effective_identity' => ['provider' => 'openrouter', 'model' => 'approved/model'],
+                'requested_identity' => ['provider' => 'openrouter', 'model' => 'qwen/qwen3.8-flash'],
+                'effective_identity' => ['provider' => 'openrouter', 'model' => 'qwen/qwen3.8-flash'],
                 'cost_quote' => ['cost' => ['amount' => $amount, 'currency' => 'USD']],
             ],
             [
@@ -300,8 +454,8 @@ it('rejects malformed live price evidence without throwing', function (mixed $am
                 'ordinal' => 2,
                 'stage' => 'extraction',
                 'mode' => 'simulated',
-                'requested_identity' => ['provider' => 'openrouter', 'model' => 'approved/model'],
-                'effective_identity' => ['provider' => 'openrouter', 'model' => 'approved/model'],
+                'requested_identity' => ['provider' => 'openrouter', 'model' => 'qwen/qwen3.8-flash'],
+                'effective_identity' => ['provider' => 'openrouter', 'model' => 'qwen/qwen3.8-flash'],
                 'cost_quote' => null,
             ],
         ],
@@ -320,15 +474,15 @@ it('rejects malformed live price evidence without throwing', function (mixed $am
     'wrong type' => [[]],
 ]);
 
-it('accepts a priced detector result even when the model produces no extractable groups', function (): void {
+it('validates effective identity for a priced detector with no extractable groups', function (string $effective, float $expected): void {
     $output = json_encode([
         'calls' => [[
             'reference' => 'invocation:1',
             'ordinal' => 1,
             'stage' => 'detection',
             'mode' => 'live',
-            'requested_identity' => ['provider' => 'openrouter', 'model' => 'approved/model'],
-            'effective_identity' => ['provider' => 'openrouter', 'model' => 'approved/model'],
+            'requested_identity' => ['provider' => 'openrouter', 'model' => 'qwen/qwen3.8-flash'],
+            'effective_identity' => ['provider' => 'openrouter', 'model' => $effective],
             'cost_quote' => ['cost' => ['amount' => '0.012345', 'currency' => 'USD']],
         ]],
         'cost' => [
@@ -339,5 +493,9 @@ it('accepts a priced detector result even when the model produces no extractable
         ],
     ], JSON_THROW_ON_ERROR);
 
-    expect((new LiveGroupingAttemptScorer)->score('', $output)->score)->toBe(1.0);
-});
+    expect((new LiveGroupingAttemptScorer)->score('', $output)->score)->toBe($expected);
+})->with([
+    'requested alias' => ['qwen/qwen3.8-flash', 1.0],
+    'pinned canonical model' => ['qwen/qwen3.8-flash-20260826', 1.0],
+    'unexpected model' => ['other/model', 0.0],
+]);

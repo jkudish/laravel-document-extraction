@@ -51,13 +51,17 @@ final class LiveGroupingAttemptScorer implements Scorer
                 $requested = $call['requested_identity'] ?? null;
                 $effective = $call['effective_identity'] ?? null;
                 $costQuote = $call['cost_quote'] ?? null;
+                $model = is_array($requested) && is_string($requested['model'] ?? null)
+                    ? LiveGroupingModels::find($requested['model'])
+                    : null;
 
                 if (! is_array($requested)
                     || ($requested['provider'] ?? null) !== 'openrouter'
                     || ! is_string($requested['model'] ?? null)
                     || ! is_array($effective)
                     || ($effective['provider'] ?? null) !== 'openrouter'
-                    || ! is_string($effective['model'] ?? null)
+                    || ! is_array($model)
+                    || ! in_array($effective['model'] ?? null, [$model['id'], $model['canonical']], true)
                     || ($requestedModel !== null && $requested['model'] !== $requestedModel)) {
                     $valid = false;
                 }

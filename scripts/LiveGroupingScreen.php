@@ -77,6 +77,7 @@ final class LiveGroupingScreen
             throw new RuntimeException('OPENROUTER_API_KEY is required for live execution.');
         }
 
+        $lock = $this->acquireLock();
         $initialRemaining = $this->validateKey($key);
         $this->validateCatalog();
         $summaries = [];
@@ -128,16 +129,22 @@ final class LiveGroupingScreen
 
             $created = array_values(array_diff($this->runDirectories(), $before));
 
-            if ($result->exitCode !== 0 || count($created) !== 1) {
+            if (count($created) !== 1) {
+                $this->removePrivateReplays($created);
+
                 throw new RuntimeException('The live grouping trial failed before producing one complete scorecard.');
             }
 
-            $runDirectory = $this->runsDirectory().'/'.$created[0];
-            $summary = $this->validateRun($runDirectory, $model);
-            $replay = $runDirectory.'/replay.private.json';
+            $runDirectory = $this->ownedRunDirectory($created[0]);
 
-            if (! unlink($replay)) {
-                throw new RuntimeException('The validated private replay could not be removed.');
+            try {
+                if ($result->exitCode !== 0) {
+                    throw new RuntimeException('The live grouping trial failed before producing one complete scorecard.');
+                }
+
+                $summary = $this->validateRun($runDirectory, $model);
+            } finally {
+                $this->removePrivateReplay($runDirectory);
             }
 
             $recordedSpend = $recordedSpend->plus($summary['cost_usd']);
@@ -227,7 +234,8 @@ final class LiveGroupingScreen
             $architecture = $this->object($catalogModel['architecture'] ?? null, 'OpenRouter model architecture');
             $modelParameters = $this->strings($catalogModel['supported_parameters'] ?? null, 'model parameters');
 
-            if (! in_array('image', $this->strings($architecture['input_modalities'] ?? null, 'input modalities'), true)
+            if (($catalogModel['canonical_slug'] ?? null) !== $model['canonical']
+                || ! in_array('image', $this->strings($architecture['input_modalities'] ?? null, 'input modalities'), true)
                 || ! in_array('text', $this->strings($architecture['output_modalities'] ?? null, 'output modalities'), true)
                 || ! in_array($model['output_parameter'], $modelParameters, true)
                 || ! $this->supportsStructuredOutput($modelParameters)) {
@@ -279,6 +287,12 @@ final class LiveGroupingScreen
             if ($actual->isNegative() || $actual->isGreaterThan(BigDecimal::of((string) $model['max_price']['image']))) {
                 throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] exceeds its image price ceiling.");
             }
+        } elseif (isset($pricing['image']) && ! $this->decimal($pricing['image'], 'endpoint image price')->isZero()) {
+            throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] added an image price.");
+        }
+
+        if (isset($pricing['request']) && ! $this->decimal($pricing['request'], 'endpoint request price')->isZero()) {
+            throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] added a request price.");
         }
     }
 
@@ -301,9 +315,18 @@ final class LiveGroupingScreen
 
         $trial = $this->object($trials[0], 'scorecard trial');
         $results = $this->list($trial['results'] ?? null, 'trial results');
+        $expectedScorers = [
+            'pest:test',
+            ...array_map(static fn (GroupingMetric $metric): string => $metric->value, GroupingMetric::cases()),
+            'live-detector-attempt-integrity',
+        ];
+        $scorers = array_map(
+            fn (mixed $result): mixed => $this->object($result, 'trial result')['scorer'] ?? null,
+            $results,
+        );
 
         if (($trial['configuration'] ?? null) !== $model['id'].' @ '.$model['endpoint']
-            || count($results) !== count(GroupingMetric::cases()) + 2) {
+            || $scorers !== $expectedScorers) {
             throw new RuntimeException('The live grouping scorecard does not match the approved configuration.');
         }
 
@@ -332,7 +355,7 @@ final class LiveGroupingScreen
             if (($measurement['component'] ?? null) !== 'target'
                 || $requested !== ['provider' => 'openrouter', 'model' => $model['id']]
                 || ($effective['provider'] ?? null) !== 'openrouter'
-                || ! is_string($effective['model'] ?? null)) {
+                || ! in_array($effective['model'] ?? null, [$model['id'], $model['canonical']], true)) {
                 throw new RuntimeException('A target measurement has an unexpected identity.');
             }
 
@@ -470,6 +493,27 @@ final class LiveGroupingScreen
         }
     }
 
+    /** @return resource */
+    private function acquireLock()
+    {
+        $path = sys_get_temp_dir().'/lde-live-grouping-'.hash('sha256', $this->repositoryRoot).'.lock';
+        $handle = fopen($path, 'c+');
+
+        if ($handle === false) {
+            throw new RuntimeException('Unable to create the live grouping execution lock.');
+        }
+
+        chmod($path, 0600);
+
+        if (! flock($handle, LOCK_EX | LOCK_NB)) {
+            fclose($handle);
+
+            throw new RuntimeException('Another live grouping screen is already running in this checkout.');
+        }
+
+        return $handle;
+    }
+
     /** @return list<string> */
     private function runDirectories(): array
     {
@@ -483,6 +527,41 @@ final class LiveGroupingScreen
     private function runsDirectory(): string
     {
         return $this->repositoryRoot.'/storage/app/ai-evals/runs';
+    }
+
+    private function ownedRunDirectory(string $name): string
+    {
+        $root = realpath($this->runsDirectory());
+        $candidate = $this->runsDirectory().'/'.$name;
+        $directory = realpath($candidate);
+
+        if ($name !== basename($name)
+            || $root === false
+            || $directory === false
+            || is_link($candidate)
+            || dirname($directory) !== $root) {
+            throw new RuntimeException('The live grouping run directory is not an owned direct child.');
+        }
+
+        return $directory;
+    }
+
+    /** @param list<string> $names */
+    private function removePrivateReplays(array $names): void
+    {
+        foreach ($names as $name) {
+            $this->removePrivateReplay($this->ownedRunDirectory($name));
+        }
+    }
+
+    private function removePrivateReplay(string $runDirectory): void
+    {
+        $replay = $runDirectory.'/replay.private.json';
+
+        if (is_link($replay)
+            || (is_file($replay) && ! unlink($replay))) {
+            throw new RuntimeException('The private replay could not be removed safely.');
+        }
     }
 
     /** @return array<string, mixed> */
