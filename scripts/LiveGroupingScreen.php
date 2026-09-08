@@ -15,7 +15,11 @@ use Jkudish\PestAiBenchmarks\Runs\StableScorecardValidator;
 use RuntimeException;
 use Throwable;
 
-/** @phpstan-import-type LiveModel from LiveGroupingModels */
+/**
+ * @phpstan-import-type LiveModel from LiveGroupingModels
+ *
+ * @phpstan-type LiveAuthorization array{schema_version: 1, confirmation: string, key_fingerprint: string, initial_remaining: string, recorded_spend: string, completed_models: list<string>, pending: array{model: string, reservation: string}|null}
+ */
 final class LiveGroupingScreen
 {
     /** @var Closure(string, ?string): array<string, mixed> */
@@ -78,15 +82,17 @@ final class LiveGroupingScreen
         }
 
         $lock = $this->acquireLock();
-        $initialRemaining = $this->validateKey($key);
-        $reservations = $this->validateCatalog();
+        $currentRemaining = $this->validateKey($key);
+        $authorization = $this->authorization($key, $currentRemaining);
+        $initialRemaining = BigDecimal::of($authorization['initial_remaining']);
         $summaries = [];
-        $recordedSpend = BigDecimal::zero();
+        $recordedSpend = BigDecimal::of($authorization['recorded_spend']);
+        $completed = count($authorization['completed_models']);
 
-        foreach ($this->models as $model) {
+        foreach (array_slice($this->models, $completed) as $model) {
+            $reservation = $this->validateCatalog($model);
             $remaining = $this->validateKey($key, requireFullCap: false);
             $spent = $initialRemaining->minus($remaining);
-            $reservation = $reservations[$model['id']];
 
             if ($spent->isNegative()
                 || $remaining->isLessThan($reservation)
@@ -94,6 +100,12 @@ final class LiveGroupingScreen
                 || $recordedSpend->plus($reservation)->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
                 throw new RuntimeException('The next live grouping trial cannot fit within the approved USD admission budget.');
             }
+
+            $authorization['pending'] = [
+                'model' => $model['id'],
+                'reservation' => (string) $reservation,
+            ];
+            $this->writeAuthorization($authorization);
 
             $before = $this->runDirectories();
             $home = sys_get_temp_dir().'/lde-live-grouping-'.bin2hex(random_bytes(8));
@@ -156,6 +168,10 @@ final class LiveGroupingScreen
             }
 
             $recordedSpend = $recordedSpend->plus($cost);
+            $authorization['completed_models'][] = $model['id'];
+            $authorization['recorded_spend'] = (string) $recordedSpend;
+            $authorization['pending'] = null;
+            $this->writeAuthorization($authorization);
 
             if ($recordedSpend->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
                 throw new RuntimeException('The live grouping screen exceeded its approved USD spend cap.');
@@ -176,7 +192,7 @@ final class LiveGroupingScreen
             'live' => true,
             'output' => sprintf(
                 'Validated %d paid detector calls; provider-reported cost was $%s (key allowance change $%s).',
-                count($summaries),
+                count($authorization['completed_models']),
                 (string) $recordedSpend,
                 (string) $spent,
             ),
@@ -230,53 +246,48 @@ final class LiveGroupingScreen
         return $remaining;
     }
 
-    /** @return array<string, BigDecimal> */
-    private function validateCatalog(): array
+    /** @param LiveModel $model */
+    private function validateCatalog(array $model): BigDecimal
     {
         $catalogResponse = ($this->fetch)('https://openrouter.ai/api/v1/models', null);
         $catalog = $this->list($catalogResponse['data'] ?? null, 'OpenRouter model catalog');
         $zdrResponse = ($this->fetch)('https://openrouter.ai/api/v1/endpoints/zdr', null);
         $zdrEndpoints = $this->list($zdrResponse['data'] ?? null, 'OpenRouter ZDR endpoints');
-        $reservations = [];
+        $catalogModel = $this->findObject($catalog, 'id', $model['id'], 'OpenRouter model');
+        $architecture = $this->object($catalogModel['architecture'] ?? null, 'OpenRouter model architecture');
+        $modelParameters = $this->strings($catalogModel['supported_parameters'] ?? null, 'model parameters');
 
-        foreach ($this->models as $model) {
-            $catalogModel = $this->findObject($catalog, 'id', $model['id'], 'OpenRouter model');
-            $architecture = $this->object($catalogModel['architecture'] ?? null, 'OpenRouter model architecture');
-            $modelParameters = $this->strings($catalogModel['supported_parameters'] ?? null, 'model parameters');
-
-            if (($catalogModel['canonical_slug'] ?? null) !== $model['canonical']
-                || ! in_array('image', $this->strings($architecture['input_modalities'] ?? null, 'input modalities'), true)
-                || ! in_array('text', $this->strings($architecture['output_modalities'] ?? null, 'output modalities'), true)
-                || ! in_array($model['output_parameter'], $modelParameters, true)
-                || ! $this->supportsStructuredOutput($modelParameters)) {
-                throw new RuntimeException("OpenRouter model [{$model['id']}] no longer supports the pinned request.");
-            }
-
-            $endpointResponse = ($this->fetch)(
-                'https://openrouter.ai/api/v1/models/'.$model['id'].'/endpoints',
-                null,
-            );
-            $endpointData = $this->object($endpointResponse['data'] ?? null, 'OpenRouter endpoint data');
-            $endpoints = $this->list($endpointData['endpoints'] ?? null, 'OpenRouter endpoints');
-            $endpoint = $this->findObject($endpoints, 'tag', $model['endpoint'], 'OpenRouter endpoint');
-            $parameters = $this->strings($endpoint['supported_parameters'] ?? null, 'endpoint parameters');
-
-            if (($endpoint['model_id'] ?? null) !== $model['id']
-                || ($endpoint['status'] ?? null) !== 0
-                || ! in_array($model['output_parameter'], $parameters, true)
-                || ! $this->supportsStructuredOutput($parameters)) {
-                throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] is unavailable or incompatible.");
-            }
-
-            $this->validatePrices($endpoint, $model);
-            $reservations[$model['id']] = $this->maximumCallCost($endpoint);
-
-            if ($model['zdr'] && ! $this->containsEndpoint($zdrEndpoints, $model['id'], $model['endpoint'])) {
-                throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] is no longer ZDR.");
-            }
+        if (($catalogModel['canonical_slug'] ?? null) !== $model['canonical']
+            || ! in_array('image', $this->strings($architecture['input_modalities'] ?? null, 'input modalities'), true)
+            || ! in_array('text', $this->strings($architecture['output_modalities'] ?? null, 'output modalities'), true)
+            || ! in_array($model['output_parameter'], $modelParameters, true)
+            || ! $this->supportsStructuredOutput($modelParameters)) {
+            throw new RuntimeException("OpenRouter model [{$model['id']}] no longer supports the pinned request.");
         }
 
-        return $reservations;
+        $endpointResponse = ($this->fetch)(
+            'https://openrouter.ai/api/v1/models/'.$model['id'].'/endpoints',
+            null,
+        );
+        $endpointData = $this->object($endpointResponse['data'] ?? null, 'OpenRouter endpoint data');
+        $endpoints = $this->list($endpointData['endpoints'] ?? null, 'OpenRouter endpoints');
+        $endpoint = $this->findObject($endpoints, 'tag', $model['endpoint'], 'OpenRouter endpoint');
+        $parameters = $this->strings($endpoint['supported_parameters'] ?? null, 'endpoint parameters');
+
+        if (($endpoint['model_id'] ?? null) !== $model['id']
+            || ($endpoint['status'] ?? null) !== 0
+            || ! in_array($model['output_parameter'], $parameters, true)
+            || ! $this->supportsStructuredOutput($parameters)) {
+            throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] is unavailable or incompatible.");
+        }
+
+        $this->validatePrices($endpoint, $model);
+
+        if ($model['zdr'] && ! $this->containsEndpoint($zdrEndpoints, $model['id'], $model['endpoint'])) {
+            throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] is no longer ZDR.");
+        }
+
+        return $this->maximumCallCost($endpoint);
     }
 
     /** @param array<string, mixed> $endpoint
@@ -585,6 +596,93 @@ final class LiveGroupingScreen
         } catch (Throwable $exception) {
             throw new RuntimeException("The {$label} must be a finite decimal.", previous: $exception);
         }
+    }
+
+    /** @return LiveAuthorization */
+    private function authorization(string $key, BigDecimal $currentRemaining): array
+    {
+        $path = $this->authorizationPath();
+
+        if (is_link($path)) {
+            throw new RuntimeException('The live grouping authorization ledger must not be a symbolic link.');
+        }
+
+        if (! is_file($path)) {
+            $authorization = [
+                'schema_version' => 1,
+                'confirmation' => LiveGroupingModels::CONFIRMATION,
+                'key_fingerprint' => hash('sha256', $key),
+                'initial_remaining' => (string) $currentRemaining,
+                'recorded_spend' => '0',
+                'completed_models' => [],
+                'pending' => null,
+            ];
+            $this->writeAuthorization($authorization);
+
+            return $authorization;
+        }
+
+        $authorization = $this->jsonObject($path);
+        $completed = $this->strings($authorization['completed_models'] ?? null, 'completed authorization models');
+        $expected = array_column(array_slice($this->models, 0, count($completed)), 'id');
+        $initial = $this->decimal($authorization['initial_remaining'] ?? null, 'authorization initial allowance');
+        $recorded = $this->decimal($authorization['recorded_spend'] ?? null, 'authorization recorded spend');
+
+        if (($authorization['schema_version'] ?? null) !== 1
+            || ($authorization['confirmation'] ?? null) !== LiveGroupingModels::CONFIRMATION
+            || ! is_string($authorization['key_fingerprint'] ?? null)
+            || ! hash_equals($authorization['key_fingerprint'], hash('sha256', $key))
+            || $initial->isLessThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
+            || $recorded->isNegative()
+            || $recorded->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
+            || $completed !== $expected) {
+            throw new RuntimeException('The live grouping authorization ledger is invalid or belongs to another key.');
+        }
+
+        if (($authorization['pending'] ?? null) !== null) {
+            throw new RuntimeException('The live grouping authorization has an unresolved paid call and cannot be resumed.');
+        }
+
+        if (count($completed) === count($this->models)) {
+            throw new RuntimeException('The live grouping authorization has already been consumed.');
+        }
+
+        /** @var LiveAuthorization $authorization */
+        return $authorization;
+    }
+
+    /** @param LiveAuthorization $authorization */
+    private function writeAuthorization(array $authorization): void
+    {
+        $path = $this->authorizationPath();
+        $directory = dirname($path);
+
+        if ((! is_dir($directory) && ! mkdir($directory, 0700, true))
+            || is_link($directory)
+            || is_link($path)) {
+            throw new RuntimeException('Unable to create the private live grouping authorization ledger.');
+        }
+
+        $temporary = $path.'.'.bin2hex(random_bytes(8));
+
+        try {
+            $contents = json_encode($authorization, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR).PHP_EOL;
+
+            if (file_put_contents($temporary, $contents, LOCK_EX) === false
+                || ! chmod($temporary, 0600)
+                || ! rename($temporary, $path)) {
+                throw new RuntimeException('Unable to persist the live grouping authorization ledger.');
+            }
+        } finally {
+            if (is_file($temporary)) {
+                unlink($temporary);
+            }
+        }
+    }
+
+    private function authorizationPath(): string
+    {
+        return $this->repositoryRoot.'/storage/app/ai-evals/live-grouping-screen-v1.json';
     }
 
     /** @return resource */

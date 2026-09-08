@@ -22,6 +22,23 @@ final class InertLiveGroupingRunner implements CommandRunner
     }
 }
 
+beforeEach(function (): void {
+    if (is_file(liveGroupingAuthorizationPath())) {
+        unlink(liveGroupingAuthorizationPath());
+    }
+});
+
+afterEach(function (): void {
+    if (is_file(liveGroupingAuthorizationPath())) {
+        unlink(liveGroupingAuthorizationPath());
+    }
+});
+
+function liveGroupingAuthorizationPath(): string
+{
+    return dirname(__DIR__, 2).'/storage/app/ai-evals/live-grouping-screen-v1.json';
+}
+
 /** @param array{id: string, canonical: string, endpoint: string, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}} $model
  * @param  array<string, mixed>  $keyOverrides
  * @param  array<string, mixed>  $endpointOverrides
@@ -335,7 +352,12 @@ it('runs one approved detector trial offline and removes private replay after fu
             ->and($run['cost_usd'])->toBe('0.012345')
             ->and($run['attempts'])->toBe(4)
             ->and(is_file($run['scorecard']))->toBeTrue()
-            ->and(is_file(dirname($run['scorecard']).'/replay.private.json'))->toBeFalse();
+            ->and(is_file(dirname($run['scorecard']).'/replay.private.json'))->toBeFalse()
+            ->and(fn () => $screen->execute([
+                '--live',
+                '--confirm='.LiveGroupingModels::CONFIRMATION,
+            ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+            ->toThrow(RuntimeException::class, 'already been consumed');
     } finally {
         $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
 
@@ -385,7 +407,12 @@ it('removes private replay when a completed child trial is rejected', function (
         $created = array_values(array_diff($after, $before));
 
         expect($created)->toHaveCount(1)
-            ->and(is_file($created[0].'/replay.private.json'))->toBeFalse();
+            ->and(is_file($created[0].'/replay.private.json'))->toBeFalse()
+            ->and(fn () => $screen->execute([
+                '--live',
+                '--confirm='.LiveGroupingModels::CONFIRMATION,
+            ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+            ->toThrow(RuntimeException::class, 'unresolved paid call');
     } finally {
         $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
 

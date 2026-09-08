@@ -156,6 +156,10 @@ highest advertised base or override input/cache/image-token rate, 512 output and
 and six possible per-image charges must fit under $5. Unbounded applicable charges, incomplete cost
 evidence, or reservation overruns stop the run. This is a catalog-based safeguard, not a provider-level
 $5 cap: it cannot undo an in-flight provider charge or govern unrelated use of the same key.
+The ignored, private authorization ledger survives command restarts, binds the run to the current key,
+and records a reservation before dispatch. A completed prefix can resume, but an unresolved in-flight
+call or a fully consumed 15-call authorization cannot be run again. The selected route and reservation
+are refreshed from the catalog immediately before every request.
 
 The nine quality scorers deliberately use a zero threshold so weak models remain recorded evidence
 instead of aborting the screen; their numeric scores—not their `passed` flag—are the quality result.
