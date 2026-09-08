@@ -79,18 +79,20 @@ final class LiveGroupingScreen
 
         $lock = $this->acquireLock();
         $initialRemaining = $this->validateKey($key);
-        $this->validateCatalog();
+        $reservations = $this->validateCatalog();
         $summaries = [];
         $recordedSpend = BigDecimal::zero();
 
         foreach ($this->models as $model) {
             $remaining = $this->validateKey($key, requireFullCap: false);
             $spent = $initialRemaining->minus($remaining);
+            $reservation = $reservations[$model['id']];
 
             if ($spent->isNegative()
-                || $spent->isGreaterThanOrEqualTo(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
-                || $recordedSpend->isGreaterThanOrEqualTo(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
-                throw new RuntimeException('The live grouping screen reached its approved USD spend cap.');
+                || $remaining->isLessThan($reservation)
+                || $spent->plus($reservation)->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
+                || $recordedSpend->plus($reservation)->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
+                throw new RuntimeException('The next live grouping trial cannot fit within the approved USD admission budget.');
             }
 
             $before = $this->runDirectories();
@@ -147,7 +149,13 @@ final class LiveGroupingScreen
                 $this->removePrivateReplay($runDirectory);
             }
 
-            $recordedSpend = $recordedSpend->plus($summary['cost_usd']);
+            $cost = BigDecimal::of($summary['cost_usd']);
+
+            if ($cost->isGreaterThan($reservation)) {
+                throw new RuntimeException('The live grouping trial exceeded its catalog-derived cost reservation.');
+            }
+
+            $recordedSpend = $recordedSpend->plus($cost);
 
             if ($recordedSpend->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
                 throw new RuntimeException('The live grouping screen exceeded its approved USD spend cap.');
@@ -222,12 +230,14 @@ final class LiveGroupingScreen
         return $remaining;
     }
 
-    private function validateCatalog(): void
+    /** @return array<string, BigDecimal> */
+    private function validateCatalog(): array
     {
         $catalogResponse = ($this->fetch)('https://openrouter.ai/api/v1/models', null);
         $catalog = $this->list($catalogResponse['data'] ?? null, 'OpenRouter model catalog');
         $zdrResponse = ($this->fetch)('https://openrouter.ai/api/v1/endpoints/zdr', null);
         $zdrEndpoints = $this->list($zdrResponse['data'] ?? null, 'OpenRouter ZDR endpoints');
+        $reservations = [];
 
         foreach ($this->models as $model) {
             $catalogModel = $this->findObject($catalog, 'id', $model['id'], 'OpenRouter model');
@@ -259,11 +269,14 @@ final class LiveGroupingScreen
             }
 
             $this->validatePrices($endpoint, $model);
+            $reservations[$model['id']] = $this->maximumCallCost($endpoint);
 
             if ($model['zdr'] && ! $this->containsEndpoint($zdrEndpoints, $model['id'], $model['endpoint'])) {
                 throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] is no longer ZDR.");
             }
         }
+
+        return $reservations;
     }
 
     /** @param array<string, mixed> $endpoint
@@ -274,7 +287,7 @@ final class LiveGroupingScreen
         $pricing = $this->object($endpoint['pricing'] ?? null, 'OpenRouter endpoint pricing');
 
         foreach (['prompt', 'completion'] as $unit) {
-            $actual = $this->decimal($pricing[$unit] ?? null, "endpoint {$unit} price")->multipliedBy('1000000');
+            $actual = $this->maximumUnitPrice($pricing, [$unit], "endpoint {$unit} price")->multipliedBy('1000000');
 
             if ($actual->isNegative() || $actual->isGreaterThan(BigDecimal::of((string) $model['max_price'][$unit]))) {
                 throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] exceeds its {$unit} price ceiling.");
@@ -282,18 +295,99 @@ final class LiveGroupingScreen
         }
 
         if (isset($model['max_price']['image'])) {
-            $actual = $this->decimal($pricing['image'] ?? null, 'endpoint image price');
+            $actual = $this->maximumUnitPrice($pricing, ['image'], 'endpoint image price');
 
             if ($actual->isNegative() || $actual->isGreaterThan(BigDecimal::of((string) $model['max_price']['image']))) {
                 throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] exceeds its image price ceiling.");
             }
-        } elseif (isset($pricing['image']) && ! $this->decimal($pricing['image'], 'endpoint image price')->isZero()) {
+        } elseif (! $this->maximumUnitPrice($pricing, ['image'], 'endpoint image price', required: false)->isZero()) {
             throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] added an image price.");
         }
 
-        if (isset($pricing['request']) && ! $this->decimal($pricing['request'], 'endpoint request price')->isZero()) {
+        if (! $this->maximumUnitPrice($pricing, ['request'], 'endpoint request price', required: false)->isZero()) {
             throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] added a request price.");
         }
+    }
+
+    /** @param array<string, mixed> $endpoint */
+    private function maximumCallCost(array $endpoint): BigDecimal
+    {
+        $contextLength = $endpoint['context_length'] ?? null;
+
+        if (! is_int($contextLength) || $contextLength <= 0) {
+            throw new RuntimeException('The OpenRouter endpoint lacks a finite positive context length.');
+        }
+
+        $pricing = $this->object($endpoint['pricing'] ?? null, 'OpenRouter endpoint pricing');
+        $inputRate = $this->maximumUnitPrice(
+            $pricing,
+            ['prompt', 'image_token', 'input_cache_read', 'input_cache_write', 'input_cache_write_1h'],
+            'endpoint input price',
+        );
+        $completionRate = $this->maximumUnitPrice($pricing, ['completion'], 'endpoint completion price');
+        $reasoningRate = $this->maximumUnitPrice(
+            $pricing,
+            ['internal_reasoning'],
+            'endpoint reasoning price',
+            required: false,
+        );
+        $imageRate = $this->maximumUnitPrice($pricing, ['image'], 'endpoint image price', required: false);
+
+        return $inputRate->multipliedBy($contextLength)
+            ->plus($completionRate->plus($reasoningRate)->multipliedBy(LiveGroupingModels::MAX_OUTPUT_TOKENS))
+            ->plus($imageRate->multipliedBy(6));
+    }
+
+    /**
+     * @param  array<string, mixed>  $pricing
+     * @param  non-empty-list<string>  $units
+     */
+    private function maximumUnitPrice(array $pricing, array $units, string $label, bool $required = true): BigDecimal
+    {
+        $prices = [];
+
+        foreach ([$pricing, ...$this->pricingOverrides($pricing)] as $candidate) {
+            foreach ($units as $unit) {
+                if (array_key_exists($unit, $candidate)) {
+                    $price = $this->decimal($candidate[$unit], $label);
+
+                    if ($price->isNegative()) {
+                        throw new RuntimeException("The {$label} must not be negative.");
+                    }
+
+                    $prices[] = $price;
+                }
+            }
+        }
+
+        if ($prices === []) {
+            if ($required) {
+                throw new RuntimeException("The {$label} is missing.");
+            }
+
+            return BigDecimal::zero();
+        }
+
+        return array_reduce(
+            $prices,
+            static fn (BigDecimal $maximum, BigDecimal $price): BigDecimal => $price->isGreaterThan($maximum) ? $price : $maximum,
+            BigDecimal::zero(),
+        );
+    }
+
+    /** @param array<string, mixed> $pricing
+     * @return list<array<string, mixed>>
+     */
+    private function pricingOverrides(array $pricing): array
+    {
+        if (! array_key_exists('overrides', $pricing)) {
+            return [];
+        }
+
+        return array_map(
+            fn (mixed $override): array => $this->object($override, 'endpoint pricing override'),
+            $this->list($pricing['overrides'], 'endpoint pricing overrides'),
+        );
     }
 
     /** @param LiveModel $model

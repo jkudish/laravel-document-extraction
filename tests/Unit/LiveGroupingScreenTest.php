@@ -38,8 +38,8 @@ function liveGroupingApi(
             expect($key)->toBe('synthetic-openrouter-canary');
 
             return ['data' => [
-                'limit' => 5,
-                'limit_remaining' => 5,
+                'limit' => 50,
+                'limit_remaining' => 50,
                 'limit_reset' => 'monthly',
                 'is_free_tier' => false,
                 'is_management_key' => false,
@@ -83,6 +83,7 @@ function liveGroupingApi(
                 'model_id' => $model['id'],
                 'tag' => $model['endpoint'],
                 'status' => 0,
+                'context_length' => 1_000_000,
                 'supported_parameters' => ['response_format', 'structured_outputs', $model['output_parameter']],
                 'pricing' => $pricing,
                 ...$endpointOverrides,
@@ -192,7 +193,7 @@ it('rejects unsafe key limits before the inference runner', function (array $key
         ->and($runner->calls)->toBe(0);
 })->with([
     'unlimited' => [['limit' => null]],
-    'oversized' => [['limit' => 5.01, 'limit_remaining' => 5.01]],
+    'oversized' => [['limit' => 50.01, 'limit_remaining' => 50.01]],
     'insufficient remaining' => [['limit_remaining' => 4.99]],
     'resetting daily' => [['limit_reset' => 'daily']],
     'free tier' => [['is_free_tier' => true]],
@@ -221,10 +222,39 @@ it('rejects stale route capabilities and prices before the inference runner', fu
     'unavailable endpoint' => [['status' => 1]],
     'missing structured output' => [['supported_parameters' => ['response_format']]],
     'missing output token parameter' => [['supported_parameters' => ['response_format', 'structured_outputs']]],
+    'missing context length' => [['context_length' => null]],
     'excessive prompt rate' => [['pricing' => ['prompt' => '1', 'completion' => '0.00000047']]],
+    'excessive override prompt rate' => [['pricing' => [
+        'prompt' => '0.00000015',
+        'completion' => '0.00000047',
+        'overrides' => [['min_prompt_tokens' => 1, 'prompt' => '1']],
+    ]]],
     'unexpected image rate' => [['pricing' => ['prompt' => '0.00000015', 'completion' => '0.00000047', 'image' => '1']]],
     'unexpected request rate' => [['pricing' => ['prompt' => '0.00000015', 'completion' => '0.00000047', 'request' => '1']]],
 ]);
+
+it('refuses a call whose catalog-derived reservation cannot fit the software budget', function (): void {
+    $model = LiveGroupingModels::all()[0];
+    $runner = new InertLiveGroupingRunner;
+    $screen = new LiveGroupingScreen(
+        dirname(__DIR__, 2),
+        $runner,
+        liveGroupingApi($model, endpointOverrides: ['pricing' => [
+            'prompt' => '0.00000015',
+            'completion' => '0.00000047',
+            'input_cache_write_1h' => '0.000006',
+        ]]),
+        [$model],
+        offlineInference: true,
+    );
+
+    expect(fn () => $screen->execute([
+        '--live',
+        '--confirm='.LiveGroupingModels::CONFIRMATION,
+    ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+        ->toThrow(RuntimeException::class, 'cannot fit within the approved USD admission budget')
+        ->and($runner->calls)->toBe(0);
+});
 
 it('rejects a route that is no longer ZDR before the inference runner', function (): void {
     $model = LiveGroupingModels::find('qwen/qwen2.5-vl-72b-instruct');
