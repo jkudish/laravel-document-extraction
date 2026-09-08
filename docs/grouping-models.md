@@ -44,8 +44,8 @@ and must come from recorded usage/provider cost evidence rather than these catal
 | Gemini current | `google/gemini-3.8-flash` | 1,048,576 / 65,536 | $0.75 / $3.75 | $0.00000075/image; internal reasoning $3.75/M; endpoint range $0.375/$1.875–$1.35/$6.75 |
 | Gemini older stable | `google/gemini-3.1-flash-lite` | 1,048,576 / 65,536 | $0.25 / $1.50 | $0.00000025/image; eight strict endpoints; range $0.125/$0.75–$0.45/$2.70 |
 | Gemini older stable | `google/gemini-2.5-flash` | 1,048,576 / 65,535 | $0.30 / $2.50 | $0.00000030/image; seven strict endpoints; range $0.15/$1.25–$0.54/$4.50 |
-| Gemini older stable | `google/gemini-2.5-pro` | 1,048,576 / 65,536 | $1.25 / $10.00 | $0.00000125/image; above 200k: $2.50/$15; seven strict endpoints |
-| OpenAI requested | `openai/gpt-5.6-luna` | 1,050,000 / 128,000 | $0.22 / $1.32 | Replaces Sol; canary pins current ZDR `azure/eu`; strict endpoint range $0.10/$0.60–$0.40/$2.40 |
+| Gemini older stable | `google/gemini-2.5-pro` | 1,048,576 / 65,536 | $1.25 / $10.00 | $0.00000125/image; above 200k: $2.50/$15; canary pins healthy ZDR `google-vertex/us` |
+| OpenAI requested | `openai/gpt-5.6-luna` | 1,050,000 / 128,000 | $0.22 / $1.32 | Replaces Sol; canary pins current ZDR `azure/us`; strict endpoint range $0.10/$0.60–$0.40/$2.40 |
 | Anthropic retained | `anthropic/claude-sonnet-5` | 1,000,000 / 128,000 | $2.00 / $10.00 | Six of nine endpoints strict; strict range $2/$10–$2.20/$11 |
 | Anthropic added | `anthropic/claude-haiku-4.5` | 200,000 / 64,000 | $1.00 / $5.00 | Version-pinned Haiku; five of eight endpoints strict; range $1/$5–$1.10/$5.50 |
 | Mistral diversity | `mistralai/mistral-small-2603` | 262,144 / 209,715 | $0.15 / $0.60 | Four strict endpoints; range $0.15/$0.60–$0.1875/$0.75; three ZDR entries |
