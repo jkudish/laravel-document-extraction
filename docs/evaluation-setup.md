@@ -72,3 +72,51 @@ rm -rf "$proof_dir"
 Never add `--evals` to the package's normal test command. Future paid evaluations need a separately
 reviewed corpus, provider credentials, model list, spend ceiling, and explicit authorization; none are
 part of this setup proof.
+
+## Offline document-grouping scorecard
+
+`tests/Evals/GroupingBenchmarkTest.php` is the credential-free gate before any live model screen. It
+runs both an offline production configuration and an offline candidate configuration over all eight
+synthetic PDFs (33 unique physical pages) through the public `detectDocuments()` API. The native
+Laravel AI fake uses manifest truth to construct simulated gateway output, and the scorer receives the
+same truth only after extraction. Assertions prove that manifest fixture IDs, split names, and
+answer-label terminology do not enter detector or extraction prompts; attachments remain the ordinary
+normalized source pages.
+
+Nine deterministic Pest Evals scorers separately cover exact group sets, merged page pairs, split page
+pairs, selected-page coverage, ambiguity, unassigned pages, invalid structured output, invalid
+membership, and provider failure. A tenth scorer checks native attempt identity and simulated cost
+evidence. Focused mutation cases prove that each metric fails independently instead of merely
+confirming the perfect fake response.
+
+The benchmark dependency fingerprint includes the complete package `src/` tree, scorer definitions,
+all fixture bytes and truth, configuration, Composer lock, and the locked benchmark/Evals execution
+owners. Configuration fingerprints include full provider/model/timeout, endpoint, routing, fallback,
+reasoning, preparation, and resource-limit settings. PHP, Imagick, ImageMagick, and Poppler versions
+are also part of each case identity, so runtime drift invalidates replay.
+
+Run the complete proof from the repository root:
+
+```sh
+scripts/prove-grouping-benchmark
+```
+
+The script uses a credential-empty child environment, first proves normal mode skips all benchmark
+trials, then executes the offline `--evals` run, applies the benchmark plugin's complete stable
+scorecard validator, and cross-checks the private replay output. For each trial, the validator requires
+one target measurement per actual native call with matching model identity and token usage,
+simulated/unavailable pricing, no duplicate ingestion of extraction totals, all ten scorer results,
+and both configurations across eight fixtures / 33 pages. It rejects a deliberately tampered
+measurement/call identity, then changes the runtime fingerprint and proves the prior run cannot be
+replayed.
+
+The expected summary is 16 trials, 50 native attempts, and 176 results (the Pest test result plus ten
+scorers per trial). Generated run evidence is removed after validation. Set
+`LDE_KEEP_GROUPING_RUN=1` only when a local reviewer needs to inspect the synthetic run files; do not
+commit `replay.private.json`, and continue to treat replay payloads as private application data for any
+future real corpus.
+
+This dry run proves wiring, deterministic scoring, custody, configuration restoration, evidence
+cardinality, and replay invalidation. Because every AI response is simulated, it does not establish
+semantic grouping quality, transport compatibility, billable cost, or a winning model. The documented
+18-model screen remains separately gated on an approved total spend cap and data/routing policy.
