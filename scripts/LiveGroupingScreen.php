@@ -1,0 +1,530 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Jkudish\DocumentExtraction\Dev;
+
+use Brick\Math\BigDecimal;
+use Closure;
+use Illuminate\Filesystem\Filesystem;
+use Illuminate\Http\Client\Factory;
+use Jkudish\DocumentExtraction\Dev\PrWorkflow\CommandRunner;
+use Jkudish\DocumentExtraction\Tests\Support\GroupingMetric;
+use Jkudish\DocumentExtraction\Tests\Support\LiveGroupingModels;
+use Jkudish\PestAiBenchmarks\Runs\StableScorecardValidator;
+use RuntimeException;
+use Throwable;
+
+/** @phpstan-import-type LiveModel from LiveGroupingModels */
+final class LiveGroupingScreen
+{
+    /** @var Closure(string, ?string): array<string, mixed> */
+    private Closure $fetch;
+
+    /** @var list<LiveModel> */
+    private array $models;
+
+    /**
+     * @param  Closure(string, ?string): array<string, mixed>|null  $fetch
+     * @param  list<LiveModel>|null  $models
+     */
+    public function __construct(
+        private readonly string $repositoryRoot,
+        private readonly CommandRunner $runner,
+        ?Closure $fetch = null,
+        ?array $models = null,
+        private readonly bool $offlineInference = false,
+    ) {
+        $this->fetch = $fetch ?? $this->request(...);
+        $this->models = $models ?? LiveGroupingModels::all();
+
+        if ($this->models === [] || count(array_unique(array_column($this->models, 'id'))) !== count($this->models)) {
+            throw new RuntimeException('The live grouping screen requires unique approved models.');
+        }
+
+        foreach ($this->models as $model) {
+            if (LiveGroupingModels::find($model['id']) !== $model) {
+                throw new RuntimeException('The live grouping screen contains an unapproved configuration.');
+            }
+        }
+    }
+
+    /**
+     * @param  list<string>  $arguments
+     * @param  array<string, string>  $environment
+     * @return array{live: bool, output: string, runs: list<array{model: string, endpoint: string, cost_usd: string, attempts: int, scorecard: string}>}
+     */
+    public function execute(array $arguments, array $environment): array
+    {
+        if ($arguments === []) {
+            return ['live' => false, 'output' => $this->plan(), 'runs' => []];
+        }
+
+        $expected = ['--live', '--confirm='.LiveGroupingModels::CONFIRMATION];
+        $supplied = array_values(array_unique($arguments));
+        sort($expected);
+        sort($supplied);
+
+        if ($supplied !== $expected || count($arguments) !== count($expected)) {
+            throw new RuntimeException(
+                'Live execution requires exactly --live --confirm='.LiveGroupingModels::CONFIRMATION.'.',
+            );
+        }
+
+        $key = $environment['OPENROUTER_API_KEY'] ?? '';
+
+        if (trim($key) === '') {
+            throw new RuntimeException('OPENROUTER_API_KEY is required for live execution.');
+        }
+
+        $initialRemaining = $this->validateKey($key);
+        $this->validateCatalog();
+        $summaries = [];
+        $recordedSpend = BigDecimal::zero();
+
+        foreach ($this->models as $model) {
+            $remaining = $this->validateKey($key, requireFullCap: false);
+            $spent = $initialRemaining->minus($remaining);
+
+            if ($spent->isNegative()
+                || $spent->isGreaterThanOrEqualTo(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
+                || $recordedSpend->isGreaterThanOrEqualTo(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
+                throw new RuntimeException('The live grouping screen reached its approved USD spend cap.');
+            }
+
+            $before = $this->runDirectories();
+            $home = sys_get_temp_dir().'/lde-live-grouping-'.bin2hex(random_bytes(8));
+
+            if (! mkdir($home, 0700, true) || ! mkdir($home.'/tmp', 0700, true)) {
+                throw new RuntimeException('Unable to create the private live grouping environment.');
+            }
+
+            try {
+                $childEnvironment = [
+                    'HOME' => $home,
+                    'TMPDIR' => $home.'/tmp',
+                    'PATH' => '/usr/local/bin:/usr/bin:/bin',
+                    'PAO_DISABLE' => '1',
+                    'OPENROUTER_API_KEY' => $key,
+                    'LDE_LIVE_GROUPING_CONFIRM' => LiveGroupingModels::CONFIRMATION,
+                    'LDE_LIVE_GROUPING_MODEL' => $model['id'],
+                ];
+
+                if ($this->offlineInference) {
+                    $childEnvironment['LDE_LIVE_GROUPING_OFFLINE'] = '1';
+                }
+
+                $result = $this->runner->run([
+                    PHP_BINARY,
+                    'vendor/bin/pest',
+                    'tests/Evals/LiveGroupingBenchmarkTest.php',
+                    '--no-tia',
+                    '--evals',
+                    '--colors=never',
+                ], $childEnvironment);
+            } finally {
+                $this->removeDirectory($home);
+            }
+
+            $created = array_values(array_diff($this->runDirectories(), $before));
+
+            if ($result->exitCode !== 0 || count($created) !== 1) {
+                throw new RuntimeException('The live grouping trial failed before producing one complete scorecard.');
+            }
+
+            $runDirectory = $this->runsDirectory().'/'.$created[0];
+            $summary = $this->validateRun($runDirectory, $model);
+            $replay = $runDirectory.'/replay.private.json';
+
+            if (! unlink($replay)) {
+                throw new RuntimeException('The validated private replay could not be removed.');
+            }
+
+            $recordedSpend = $recordedSpend->plus($summary['cost_usd']);
+
+            if ($recordedSpend->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
+                throw new RuntimeException('The live grouping screen exceeded its approved USD spend cap.');
+            }
+
+            $summaries[] = [...$summary, 'scorecard' => $runDirectory.'/scorecard.json'];
+        }
+
+        $finalRemaining = $this->validateKey($key, requireFullCap: false);
+        $spent = $initialRemaining->minus($finalRemaining);
+
+        if ($spent->isNegative()
+            || $spent->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
+            throw new RuntimeException('The live grouping screen exceeded its approved USD spend cap.');
+        }
+
+        return [
+            'live' => true,
+            'output' => sprintf(
+                'Validated %d paid detector calls; provider-reported cost was $%s (key allowance change $%s).',
+                count($summaries),
+                (string) $recordedSpend,
+                (string) $spent,
+            ),
+            'runs' => $summaries,
+        ];
+    }
+
+    public function plan(): string
+    {
+        $lines = [
+            'DRY RUN — no provider calls made',
+            sprintf('Fixture: %s (%s)', LiveGroupingModels::FIXTURE_ID, LiveGroupingModels::FIXTURE_FILE),
+            sprintf('Calls: %d paid detector calls; grouped extraction/OCR simulated', count($this->models)),
+            sprintf('Logical spend cap: $%.2f USD', LiveGroupingModels::MAX_SPEND_USD),
+            'Routes:',
+        ];
+
+        foreach ($this->models as $model) {
+            $lines[] = sprintf(
+                '- %s @ %s (fallbacks off, parameters required, data collection denied, ZDR %s)',
+                $model['id'],
+                $model['endpoint'],
+                $model['zdr'] ? 'required' : 'not advertised',
+            );
+        }
+
+        $lines[] = 'To execute: scripts/live-grouping-screen --live --confirm='.LiveGroupingModels::CONFIRMATION;
+
+        return implode(PHP_EOL, $lines);
+    }
+
+    private function validateKey(string $key, bool $requireFullCap = true): BigDecimal
+    {
+        $response = ($this->fetch)('https://openrouter.ai/api/v1/key', $key);
+        $data = $this->object($response['data'] ?? null, 'OpenRouter key data');
+        $limit = $this->decimal($data['limit'] ?? null, 'OpenRouter key limit');
+        $remaining = $this->decimal($data['limit_remaining'] ?? null, 'OpenRouter key remaining allowance');
+
+        if ($limit->isLessThanOrEqualTo(BigDecimal::zero())
+            || $limit->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_KEY_LIMIT_USD))
+            || $remaining->isLessThanOrEqualTo(BigDecimal::zero())
+            || ($requireFullCap && $remaining->isLessThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD)))
+            || $remaining->isGreaterThan($limit)
+            || ($data['limit_reset'] ?? null) !== 'monthly'
+            || ($data['is_free_tier'] ?? null) !== false
+            || ($data['is_management_key'] ?? false) !== false
+            || ($data['is_provisioning_key'] ?? false) !== false) {
+            throw new RuntimeException('The OpenRouter key does not have the required finite monthly allowance.');
+        }
+
+        return $remaining;
+    }
+
+    private function validateCatalog(): void
+    {
+        $catalogResponse = ($this->fetch)('https://openrouter.ai/api/v1/models', null);
+        $catalog = $this->list($catalogResponse['data'] ?? null, 'OpenRouter model catalog');
+        $zdrResponse = ($this->fetch)('https://openrouter.ai/api/v1/endpoints/zdr', null);
+        $zdrEndpoints = $this->list($zdrResponse['data'] ?? null, 'OpenRouter ZDR endpoints');
+
+        foreach ($this->models as $model) {
+            $catalogModel = $this->findObject($catalog, 'id', $model['id'], 'OpenRouter model');
+            $architecture = $this->object($catalogModel['architecture'] ?? null, 'OpenRouter model architecture');
+            $modelParameters = $this->strings($catalogModel['supported_parameters'] ?? null, 'model parameters');
+
+            if (! in_array('image', $this->strings($architecture['input_modalities'] ?? null, 'input modalities'), true)
+                || ! in_array('text', $this->strings($architecture['output_modalities'] ?? null, 'output modalities'), true)
+                || ! in_array($model['output_parameter'], $modelParameters, true)
+                || ! $this->supportsStructuredOutput($modelParameters)) {
+                throw new RuntimeException("OpenRouter model [{$model['id']}] no longer supports the pinned request.");
+            }
+
+            $endpointResponse = ($this->fetch)(
+                'https://openrouter.ai/api/v1/models/'.$model['id'].'/endpoints',
+                null,
+            );
+            $endpointData = $this->object($endpointResponse['data'] ?? null, 'OpenRouter endpoint data');
+            $endpoints = $this->list($endpointData['endpoints'] ?? null, 'OpenRouter endpoints');
+            $endpoint = $this->findObject($endpoints, 'tag', $model['endpoint'], 'OpenRouter endpoint');
+            $parameters = $this->strings($endpoint['supported_parameters'] ?? null, 'endpoint parameters');
+
+            if (($endpoint['model_id'] ?? null) !== $model['id']
+                || ($endpoint['status'] ?? null) !== 0
+                || ! in_array($model['output_parameter'], $parameters, true)
+                || ! $this->supportsStructuredOutput($parameters)) {
+                throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] is unavailable or incompatible.");
+            }
+
+            $this->validatePrices($endpoint, $model);
+
+            if ($model['zdr'] && ! $this->containsEndpoint($zdrEndpoints, $model['id'], $model['endpoint'])) {
+                throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] is no longer ZDR.");
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $endpoint
+     * @param  LiveModel  $model
+     */
+    private function validatePrices(array $endpoint, array $model): void
+    {
+        $pricing = $this->object($endpoint['pricing'] ?? null, 'OpenRouter endpoint pricing');
+
+        foreach (['prompt', 'completion'] as $unit) {
+            $actual = $this->decimal($pricing[$unit] ?? null, "endpoint {$unit} price")->multipliedBy('1000000');
+
+            if ($actual->isNegative() || $actual->isGreaterThan(BigDecimal::of((string) $model['max_price'][$unit]))) {
+                throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] exceeds its {$unit} price ceiling.");
+            }
+        }
+
+        if (isset($model['max_price']['image'])) {
+            $actual = $this->decimal($pricing['image'] ?? null, 'endpoint image price');
+
+            if ($actual->isNegative() || $actual->isGreaterThan(BigDecimal::of((string) $model['max_price']['image']))) {
+                throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] exceeds its image price ceiling.");
+            }
+        }
+    }
+
+    /** @param LiveModel $model
+     * @return array{model: string, endpoint: string, cost_usd: string, attempts: int}
+     */
+    private function validateRun(string $runDirectory, array $model): array
+    {
+        $scorecard = $this->jsonObject($runDirectory.'/scorecard.json');
+        StableScorecardValidator::assert($scorecard);
+        $trials = $this->list($scorecard['trials'] ?? null, 'scorecard trials');
+        $context = $this->object($scorecard['context'] ?? null, 'scorecard context');
+
+        if (($scorecard['benchmark'] ?? null) !== LiveGroupingModels::BENCHMARK
+            || ($context['screen'] ?? null) !== 'openrouter-live-grouping-canary-v1'
+            || ($context['fixture'] ?? null) !== LiveGroupingModels::FIXTURE_ID
+            || count($trials) !== 1) {
+            throw new RuntimeException('The live grouping scorecard has an unexpected identity.');
+        }
+
+        $trial = $this->object($trials[0], 'scorecard trial');
+        $results = $this->list($trial['results'] ?? null, 'trial results');
+
+        if (($trial['configuration'] ?? null) !== $model['id'].' @ '.$model['endpoint']
+            || count($results) !== count(GroupingMetric::cases()) + 2) {
+            throw new RuntimeException('The live grouping scorecard does not match the approved configuration.');
+        }
+
+        $primary = $this->object($results[0], 'primary result');
+        $integrity = $this->object($results[count($results) - 1], 'attempt-integrity result');
+        $integrityScore = $integrity['score'] ?? null;
+        $measurements = $this->list($primary['measurements'] ?? null, 'target measurements');
+
+        if (($primary['scorer'] ?? null) !== 'pest:test'
+            || ($primary['passed'] ?? null) !== true
+            || ($integrity['scorer'] ?? null) !== 'live-detector-attempt-integrity'
+            || ($integrity['passed'] ?? null) !== true
+            || (! is_int($integrityScore) && ! is_float($integrityScore))
+            || (float) $integrityScore !== 1.0
+            || $measurements === []) {
+            throw new RuntimeException('The live grouping trial or its attempt-integrity scorer failed.');
+        }
+
+        $cost = null;
+
+        foreach ($measurements as $index => $rawMeasurement) {
+            $measurement = $this->object($rawMeasurement, 'target measurement');
+            $requested = $this->object($measurement['requested_model'] ?? null, 'requested model');
+            $effective = $this->object($measurement['effective_model'] ?? null, 'effective model');
+
+            if (($measurement['component'] ?? null) !== 'target'
+                || $requested !== ['provider' => 'openrouter', 'model' => $model['id']]
+                || ($effective['provider'] ?? null) !== 'openrouter'
+                || ! is_string($effective['model'] ?? null)) {
+                throw new RuntimeException('A target measurement has an unexpected identity.');
+            }
+
+            if ($index === 0) {
+                $cost = $this->liveCost($measurement);
+            } elseif (($measurement['mode'] ?? null) !== 'simulated'
+                || ($this->object($measurement['pricing'] ?? null, 'simulated pricing')['completeness'] ?? null) !== 'unavailable') {
+                throw new RuntimeException('A grouped extraction measurement was not simulated and unpriced.');
+            }
+        }
+
+        if (! is_string($cost) || ! is_file($runDirectory.'/replay.private.json')) {
+            throw new RuntimeException('The validated live cost or private replay is missing.');
+        }
+
+        return [
+            'model' => $model['id'],
+            'endpoint' => $model['endpoint'],
+            'cost_usd' => $cost,
+            'attempts' => count($measurements),
+        ];
+    }
+
+    /** @param array<string, mixed> $measurement */
+    private function liveCost(array $measurement): string
+    {
+        $pricing = $this->object($measurement['pricing'] ?? null, 'live pricing');
+        $snapshot = $this->object($pricing['snapshot'] ?? null, 'live pricing snapshot');
+        $money = $this->object($snapshot['cost'] ?? null, 'live cost');
+        $amount = $money['amount'] ?? null;
+
+        if (($measurement['mode'] ?? null) !== 'live'
+            || ($pricing['completeness'] ?? null) !== 'complete'
+            || ($snapshot['source'] ?? null) !== 'provider_reported'
+            || ! is_string($amount)
+            || ($money['currency'] ?? null) !== 'USD'
+            || BigDecimal::of($amount)->isLessThanOrEqualTo(BigDecimal::zero())) {
+            throw new RuntimeException('The detector lacks positive provider-reported USD cost evidence.');
+        }
+
+        return $amount;
+    }
+
+    /** @param list<mixed> $endpoints */
+    private function containsEndpoint(array $endpoints, string $model, string $tag): bool
+    {
+        foreach ($endpoints as $endpoint) {
+            if (is_array($endpoint)
+                && ($endpoint['model_id'] ?? null) === $model
+                && ($endpoint['tag'] ?? null) === $tag) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param list<string> $parameters */
+    private function supportsStructuredOutput(array $parameters): bool
+    {
+        return in_array('response_format', $parameters, true)
+            && in_array('structured_outputs', $parameters, true);
+    }
+
+    /**
+     * @param  list<mixed>  $items
+     * @return array<string, mixed>
+     */
+    private function findObject(array $items, string $field, string $value, string $label): array
+    {
+        foreach ($items as $item) {
+            if (is_array($item) && ($item[$field] ?? null) === $value) {
+                return $this->object($item, $label);
+            }
+        }
+
+        throw new RuntimeException("The {$label} [{$value}] was not found.");
+    }
+
+    /** @return list<string> */
+    private function strings(mixed $value, string $label): array
+    {
+        $items = $this->list($value, $label);
+
+        foreach ($items as $item) {
+            if (! is_string($item)) {
+                throw new RuntimeException("The {$label} must contain strings.");
+            }
+        }
+
+        /** @var list<string> $items */
+        return $items;
+    }
+
+    /** @return array<string, mixed> */
+    private function object(mixed $value, string $label): array
+    {
+        if (! is_array($value) || array_is_list($value)) {
+            throw new RuntimeException("The {$label} must be an object.");
+        }
+
+        $object = [];
+
+        foreach ($value as $key => $item) {
+            if (! is_string($key)) {
+                throw new RuntimeException("The {$label} must use string keys.");
+            }
+
+            $object[$key] = $item;
+        }
+
+        return $object;
+    }
+
+    /** @return list<mixed> */
+    private function list(mixed $value, string $label): array
+    {
+        if (! is_array($value) || ! array_is_list($value)) {
+            throw new RuntimeException("The {$label} must be a list.");
+        }
+
+        return $value;
+    }
+
+    private function decimal(mixed $value, string $label): BigDecimal
+    {
+        if (! is_int($value) && ! is_float($value) && ! is_string($value)) {
+            throw new RuntimeException("The {$label} must be a finite decimal.");
+        }
+
+        try {
+            return BigDecimal::of(is_float($value) ? (string) $value : $value);
+        } catch (Throwable $exception) {
+            throw new RuntimeException("The {$label} must be a finite decimal.", previous: $exception);
+        }
+    }
+
+    /** @return list<string> */
+    private function runDirectories(): array
+    {
+        $paths = glob($this->runsDirectory().'/*', GLOB_ONLYDIR) ?: [];
+        $directories = array_map('basename', $paths);
+        sort($directories);
+
+        return $directories;
+    }
+
+    private function runsDirectory(): string
+    {
+        return $this->repositoryRoot.'/storage/app/ai-evals/runs';
+    }
+
+    /** @return array<string, mixed> */
+    private function jsonObject(string $path): array
+    {
+        $contents = file_get_contents($path);
+
+        if (! is_string($contents)) {
+            throw new RuntimeException("The evidence file [{$path}] is unreadable.");
+        }
+
+        return $this->object(json_decode($contents, true, flags: JSON_THROW_ON_ERROR), 'evidence file');
+    }
+
+    /** @return array<string, mixed> */
+    private function request(string $url, ?string $key): array
+    {
+        $request = (new Factory)
+            ->acceptJson()
+            ->withUserAgent('laravel-document-extraction-live-screen/1.0')
+            ->connectTimeout(5)
+            ->timeout(20);
+
+        if ($key !== null) {
+            $request->withToken($key);
+        }
+
+        try {
+            $decoded = $request->get($url)->throw()->json();
+        } catch (Throwable $exception) {
+            throw new RuntimeException('OpenRouter preflight request failed.', previous: $exception);
+        }
+
+        return $this->object($decoded, 'OpenRouter response');
+    }
+
+    private function removeDirectory(string $directory): void
+    {
+        if (! is_dir($directory)) {
+            return;
+        }
+
+        (new Filesystem)->deleteDirectory($directory);
+    }
+}

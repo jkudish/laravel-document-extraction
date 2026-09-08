@@ -120,3 +120,45 @@ This dry run proves wiring, deterministic scoring, custody, configuration restor
 cardinality, and replay invalidation. Because every AI response is simulated, it does not establish
 semantic grouping quality, transport compatibility, billable cost, or a winning model. The documented
 15-model screen remains gated by its explicit live opt-in and total spend/data-routing controls.
+
+## Live OpenRouter grouping canary
+
+`scripts/live-grouping-screen` is the only live entry point. With no arguments it makes no network
+requests and prints the exact 15 models, endpoint routes, one approved prompt-example fixture, call
+count, privacy settings, and $5 logical spend cap:
+
+```sh
+scripts/live-grouping-screen
+```
+
+The live mode is intentionally narrow. It requires the exact printed confirmation and an
+`OPENROUTER_API_KEY`; do not paste the key into the command line or logs. Before inference it verifies
+that the key has a finite monthly limit no larger than $50 and at least $5 remaining. It then fetches
+the current public catalog and rejects missing models, stale endpoints, unsupported image/structured
+output, endpoint price increases, unavailable routes, or missing ZDR where the selected route requires
+it. The five Alibaba Qwen routes do not advertise ZDR and instead pin `data_collection = deny`; every
+other selected route requires both.
+
+```sh
+scripts/live-grouping-screen --live --confirm=run-15-paid-detector-calls
+```
+
+Each model runs as one separately validated Pest benchmark trial before the next paid request. The
+public `Extraction::fromPath(...)->detectDocuments()->schema(...)->extract()` path sends the detector
+through OpenRouter with the exact model and endpoint, `allow_fallbacks = false`,
+`require_parameters = true`, a 512-token output limit, reasoning disabled where supported, and the
+recorded rate ceilings. The application extraction agent remains Laravel AI-faked, so each trial has
+exactly one paid detector request even when it detects several groups. No holdout fixture is selectable.
+
+After every trial, the command applies the benchmark plugin's stable scorecard validator and checks
+fixture identity, all nine deterministic grouping scores, requested/effective model evidence, one
+live detector measurement, simulated grouped extraction measurements, unique call ordinals, and one
+positive provider-reported USD cost with matching extraction totals. Unknown cost, duplicate calls,
+invalid scorecard data, route drift, or reaching the logical spend cap stops the screen before the next
+model. The command removes private replay after validation and retains only the ignored scorecard path.
+Scorecards contain bounded metrics and call evidence, not source documents, prompts, or raw provider
+responses.
+
+The normal test suite never sets the confirmation and never makes these requests. Its focused offline
+test fakes both OpenRouter preflight and inference while exercising the same command, public extraction
+path, scorecard validation, replay cleanup, and fail-closed cases.

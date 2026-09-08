@@ -117,6 +117,12 @@ strict local assignment validation, partial sibling outcomes, grouped text/OCR, 
 attempt/output/attachment limits. These tests prove orchestration and invariants, not model accuracy;
 paid quality evaluation is a separate explicitly authorized activity.
 
+The live grouping screen is not part of `composer verify`, `composer pr:check`, or the compatibility
+matrix. `scripts/live-grouping-screen` is network-free by default; its explicit live mode is the sole
+paid entry point and is documented in [`evaluation-setup.md`](evaluation-setup.md). The default suite
+uses a one-model offline command run to prove its preflight, request shape, scorecard validation, and
+private replay cleanup without provider credentials or external requests.
+
 The package requires Laravel 13.23 or newer. The complete native Illuminate Image API first exists
 in Laravel 13.20 and its plural `config/images.php` convention first exists in 13.21, so 13.23 has
 the required facade, manager, service provider, Intervention Image 4 Imagick driver, and
