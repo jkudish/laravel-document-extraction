@@ -18,7 +18,7 @@ use Throwable;
 /**
  * @phpstan-import-type LiveModel from LiveGroupingModels
  *
- * @phpstan-type LiveAuthorization array{schema_version: 1, confirmation: string, key_fingerprint: string, model_ids: list<string>, initial_remaining: string, recorded_spend: string, completed_models: list<string>, pending: array{model: string, reservation: string}|null}
+ * @phpstan-type LiveAuthorization array{schema_version: 2, confirmation: string, key_fingerprint: string, model_ids: list<string>, initial_remaining: string, recorded_spend: string, admission_spend: string, completed_models: list<string>, pending: array{model: string, reservation: string}|null}
  */
 final class LiveGroupingScreen
 {
@@ -92,17 +92,18 @@ final class LiveGroupingScreen
         $initialRemaining = BigDecimal::of($authorization['initial_remaining']);
         $summaries = [];
         $recordedSpend = BigDecimal::of($authorization['recorded_spend']);
+        $admissionSpend = BigDecimal::of($authorization['admission_spend']);
         $completed = count($authorization['completed_models']);
 
         foreach (array_slice($this->models, $completed) as $model) {
             $reservation = $this->validateCatalog($model);
             $remaining = $this->validateKey($key, requireFullCap: false);
             $spent = $initialRemaining->minus($remaining);
+            $budgetedSpend = $admissionSpend->isGreaterThan($spent) ? $admissionSpend : $spent;
 
             if ($spent->isNegative()
                 || $remaining->isLessThan($reservation)
-                || $spent->plus($reservation)->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
-                || $recordedSpend->plus($reservation)->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
+                || $budgetedSpend->plus($reservation)->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
                 throw new RuntimeException('The next live grouping trial cannot fit within the approved USD admission budget.');
             }
 
@@ -183,6 +184,9 @@ final class LiveGroupingScreen
 
             if ($providerCost->isPositive()) {
                 $recordedSpend = $recordedSpend->plus($providerCost);
+                $admissionSpend = $admissionSpend->plus($providerCost);
+            } else {
+                $admissionSpend = $admissionSpend->plus($reservation);
             }
 
             if ($observedSpend->isGreaterThan($recordedSpend)) {
@@ -191,10 +195,12 @@ final class LiveGroupingScreen
 
             $authorization['completed_models'][] = $model['id'];
             $authorization['recorded_spend'] = (string) $recordedSpend;
+            $authorization['admission_spend'] = (string) $admissionSpend;
             $authorization['pending'] = null;
             $this->writeAuthorization($authorization);
 
-            if ($recordedSpend->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
+            if ($recordedSpend->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
+                || $admissionSpend->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
                 throw new RuntimeException('The live grouping screen exceeded its approved USD spend cap.');
             }
 
@@ -218,7 +224,8 @@ final class LiveGroupingScreen
 
         if ($spent->isNegative()
             || $spent->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
-            || $recordedSpend->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
+            || $recordedSpend->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
+            || $admissionSpend->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
             throw new RuntimeException('The live grouping screen exceeded its approved USD spend cap.');
         }
 
@@ -703,12 +710,13 @@ final class LiveGroupingScreen
 
         if (! is_file($path)) {
             $authorization = [
-                'schema_version' => 1,
+                'schema_version' => 2,
                 'confirmation' => LiveGroupingModels::CONFIRMATION,
                 'key_fingerprint' => hash('sha256', $key),
                 'model_ids' => array_column($this->models, 'id'),
                 'initial_remaining' => (string) $currentRemaining,
                 'recorded_spend' => '0',
+                'admission_spend' => '0',
                 'completed_models' => [],
                 'pending' => null,
             ];
@@ -720,11 +728,29 @@ final class LiveGroupingScreen
         $authorization = $this->jsonObject($path);
         $modelIds = $this->strings($authorization['model_ids'] ?? null, 'authorization models');
         $completed = $this->strings($authorization['completed_models'] ?? null, 'completed authorization models');
-        $expected = array_column(array_slice($this->models, 0, count($completed)), 'id');
         $initial = $this->decimal($authorization['initial_remaining'] ?? null, 'authorization initial allowance');
         $recorded = $this->decimal($authorization['recorded_spend'] ?? null, 'authorization recorded spend');
 
-        if (($authorization['schema_version'] ?? null) !== 1
+        if (($authorization['schema_version'] ?? null) === 1) {
+            if (($authorization['confirmation'] ?? null) === LiveGroupingModels::CONFIRMATION
+                && is_string($authorization['key_fingerprint'] ?? null)
+                && hash_equals($authorization['key_fingerprint'], hash('sha256', $key))
+                && $modelIds === array_column($this->models, 'id')
+                && count($completed) === count($this->models)
+                && ($authorization['pending'] ?? null) === null
+                && $initial->isGreaterThanOrEqualTo(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
+                && $recorded->isGreaterThanOrEqualTo(BigDecimal::zero())
+                && $recorded->isLessThanOrEqualTo(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
+                throw new RuntimeException('The live grouping authorization has already been consumed.');
+            }
+
+            throw new RuntimeException('The live grouping authorization ledger is invalid or belongs to another key.');
+        }
+
+        $expected = array_column(array_slice($this->models, 0, count($completed)), 'id');
+        $admission = $this->decimal($authorization['admission_spend'] ?? null, 'authorization admission spend');
+
+        if (($authorization['schema_version'] ?? null) !== 2
             || ($authorization['confirmation'] ?? null) !== LiveGroupingModels::CONFIRMATION
             || ! is_string($authorization['key_fingerprint'] ?? null)
             || ! hash_equals($authorization['key_fingerprint'], hash('sha256', $key))
@@ -732,6 +758,8 @@ final class LiveGroupingScreen
             || $initial->isLessThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
             || $recorded->isNegative()
             || $recorded->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
+            || $admission->isNegative()
+            || $admission->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
             || $completed !== $expected) {
             throw new RuntimeException('The live grouping authorization ledger is invalid or belongs to another key.');
         }

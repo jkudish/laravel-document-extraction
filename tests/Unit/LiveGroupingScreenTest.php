@@ -22,6 +22,71 @@ final class InertLiveGroupingRunner implements CommandRunner
     }
 }
 
+final class UnavailableLiveCostRunner implements CommandRunner
+{
+    public int $calls = 0;
+
+    public function __construct(
+        private readonly string $root,
+        private readonly bool $technicalFailure = false,
+    ) {}
+
+    public function run(array $command, ?array $environment = null): CommandResult
+    {
+        $this->calls++;
+        $before = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+        $result = (new NativeCommandRunner($this->root))->run($command, $environment);
+        $after = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+        $created = array_values(array_diff($after, $before));
+        $scorecardPath = $created[0].'/scorecard.json';
+        $scorecard = json_decode((string) file_get_contents($scorecardPath), true, flags: JSON_THROW_ON_ERROR);
+
+        if (! is_array($scorecard)
+            || ! is_array($scorecard['trials'] ?? null)
+            || ! is_array($scorecard['trials'][0] ?? null)
+            || ! is_array($scorecard['trials'][0]['results'] ?? null)
+            || ! is_array($scorecard['trials'][0]['results'][0] ?? null)
+            || ! is_array($scorecard['trials'][0]['results'][0]['measurements'] ?? null)
+            || ! is_array($scorecard['trials'][0]['results'][0]['measurements'][0] ?? null)) {
+            throw new RuntimeException('The generated scorecard cannot be mutated for the unavailable-cost test.');
+        }
+
+        $primary = &$scorecard['trials'][0]['results'][0];
+        $measurement = &$primary['measurements'][0];
+        $measurement['effective_model'] = null;
+        $measurement['usage'] = [
+            'cached_input_tokens' => 0,
+            'input_tokens' => 0,
+            'output_tokens' => 0,
+            'reasoning_tokens' => 0,
+        ];
+        $measurement['pricing'] = [
+            'completeness' => 'unavailable',
+            'snapshot' => [
+                'completeness' => 'unavailable',
+                'cost' => null,
+                'missing_units' => [],
+                'provenance' => null,
+                'snapshot' => null,
+                'source' => 'unavailable',
+            ],
+        ];
+
+        if ($this->technicalFailure) {
+            $primary['score'] = 0;
+            $primary['passed'] = false;
+            $primary['measurements'] = [$measurement];
+            $scorecard['trials'][0]['results'] = [$primary];
+        }
+
+        file_put_contents($scorecardPath, json_encode($scorecard, JSON_THROW_ON_ERROR));
+
+        return $this->technicalFailure
+            ? new CommandResult(1, $result->stdout, $result->stderr)
+            : $result;
+    }
+}
+
 beforeEach(function (): void {
     if (is_file(liveGroupingAuthorizationPath())) {
         unlink(liveGroupingAuthorizationPath());
@@ -122,6 +187,71 @@ function liveGroupingApi(
         }
 
         throw new RuntimeException('Unexpected fake OpenRouter URL.');
+    };
+}
+
+/**
+ * @param  non-empty-list<array{id: string, canonical: string, endpoint: string, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}}>  $models
+ * @param  Closure(int): string  $remaining
+ * @return Closure(string, ?string): array<string, mixed>
+ */
+function liveGroupingApis(array $models, Closure $remaining): Closure
+{
+    $keyChecks = 0;
+
+    return static function (string $url, ?string $key) use ($models, $remaining, &$keyChecks): array {
+        if ($url === 'https://openrouter.ai/api/v1/key') {
+            $keyChecks++;
+
+            return ['data' => [
+                'limit' => 50,
+                'limit_remaining' => $remaining($keyChecks),
+                'limit_reset' => 'monthly',
+                'is_free_tier' => false,
+                'is_management_key' => false,
+                'is_provisioning_key' => false,
+            ]];
+        }
+
+        if ($url === 'https://openrouter.ai/api/v1/models') {
+            $data = [];
+
+            foreach ($models as $model) {
+                $response = liveGroupingApi($model)($url, $key);
+
+                if (! is_array($response['data'] ?? null) || ! is_array($response['data'][0] ?? null)) {
+                    throw new RuntimeException('The fake model catalog is malformed.');
+                }
+
+                $data[] = $response['data'][0];
+            }
+
+            return ['data' => $data];
+        }
+
+        if ($url === 'https://openrouter.ai/api/v1/endpoints/zdr') {
+            $data = [];
+
+            foreach ($models as $model) {
+                $response = liveGroupingApi($model)($url, $key);
+
+                if (! is_array($response['data'] ?? null)) {
+                    throw new RuntimeException('The fake ZDR catalog is malformed.');
+                }
+
+                $data = array_merge($data, $response['data']);
+            }
+
+            return ['data' => $data];
+        }
+
+        foreach ($models as $model) {
+            if ($url === 'https://openrouter.ai/api/v1/models/'.$model['id'].'/endpoints') {
+                return liveGroupingApi($model)($url, $key);
+            }
+        }
+
+        throw new RuntimeException("Unexpected live grouping API request [{$url}].");
     };
 }
 
@@ -400,53 +530,7 @@ it('uses immediate key allowance depletion when the observer cannot expose respo
     $root = dirname(__DIR__, 2);
     $model = LiveGroupingModels::all()[0];
     $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
-    $runner = new class($root) implements CommandRunner
-    {
-        public function __construct(private readonly string $root) {}
-
-        public function run(array $command, ?array $environment = null): CommandResult
-        {
-            $before = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
-            $result = (new NativeCommandRunner($this->root))->run($command, $environment);
-            $after = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
-            $created = array_values(array_diff($after, $before));
-            $scorecardPath = $created[0].'/scorecard.json';
-            $scorecard = json_decode((string) file_get_contents($scorecardPath), true, flags: JSON_THROW_ON_ERROR);
-
-            if (! is_array($scorecard)
-                || ! is_array($scorecard['trials'] ?? null)
-                || ! is_array($scorecard['trials'][0] ?? null)
-                || ! is_array($scorecard['trials'][0]['results'] ?? null)
-                || ! is_array($scorecard['trials'][0]['results'][0] ?? null)
-                || ! is_array($scorecard['trials'][0]['results'][0]['measurements'] ?? null)
-                || ! is_array($scorecard['trials'][0]['results'][0]['measurements'][0] ?? null)) {
-                throw new RuntimeException('The generated scorecard cannot be mutated for the allowance-cost test.');
-            }
-
-            $measurement = &$scorecard['trials'][0]['results'][0]['measurements'][0];
-            $measurement['effective_model'] = null;
-            $measurement['usage'] = [
-                'cached_input_tokens' => 0,
-                'input_tokens' => 0,
-                'output_tokens' => 0,
-                'reasoning_tokens' => 0,
-            ];
-            $measurement['pricing'] = [
-                'completeness' => 'unavailable',
-                'snapshot' => [
-                    'completeness' => 'unavailable',
-                    'cost' => null,
-                    'missing_units' => [],
-                    'provenance' => null,
-                    'snapshot' => null,
-                    'source' => 'unavailable',
-                ],
-            ];
-            file_put_contents($scorecardPath, json_encode($scorecard, JSON_THROW_ON_ERROR));
-
-            return $result;
-        }
-    };
+    $runner = new UnavailableLiveCostRunner($root);
     $screen = new LiveGroupingScreen(
         $root,
         $runner,
@@ -512,69 +596,17 @@ it('uses validated provider cost while key allowance reporting lags', function (
     }
 });
 
-it('does not attribute a delayed allowance change to a later calls reservation', function (): void {
+it("does not attribute a delayed allowance change to a later call's reservation", function (): void {
     $root = dirname(__DIR__, 2);
     [$first, $second] = array_slice(LiveGroupingModels::all(), 0, 2);
     $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
-    $keyChecks = 0;
-    $api = static function (string $url, ?string $key) use ($first, $second, &$keyChecks): array {
-        if ($url === 'https://openrouter.ai/api/v1/key') {
-            $keyChecks++;
-
-            return ['data' => [
-                'limit' => 50,
-                'limit_remaining' => $keyChecks >= 5 ? '49.8' : '50',
-                'limit_reset' => 'monthly',
-                'is_free_tier' => false,
-                'is_management_key' => false,
-                'is_provisioning_key' => false,
-            ]];
-        }
-
-        if ($url === 'https://openrouter.ai/api/v1/models') {
-            $data = [];
-
-            foreach ([$first, $second] as $model) {
-                $response = liveGroupingApi($model)($url, $key);
-
-                if (! is_array($response['data'] ?? null) || ! is_array($response['data'][0] ?? null)) {
-                    throw new RuntimeException('The fake model catalog is malformed.');
-                }
-
-                $data[] = $response['data'][0];
-            }
-
-            return ['data' => $data];
-        }
-
-        if ($url === 'https://openrouter.ai/api/v1/endpoints/zdr') {
-            $data = [];
-
-            foreach ([$first, $second] as $model) {
-                $response = liveGroupingApi($model)($url, $key);
-
-                if (! is_array($response['data'] ?? null)) {
-                    throw new RuntimeException('The fake ZDR catalog is malformed.');
-                }
-
-                $data = array_merge($data, $response['data']);
-            }
-
-            return ['data' => $data];
-        }
-
-        foreach ([$first, $second] as $model) {
-            if ($url === 'https://openrouter.ai/api/v1/models/'.$model['id'].'/endpoints') {
-                return liveGroupingApi($model)($url, $key);
-            }
-        }
-
-        throw new RuntimeException("Unexpected live grouping API request [{$url}].");
-    };
     $screen = new LiveGroupingScreen(
         $root,
         new NativeCommandRunner($root),
-        $api,
+        liveGroupingApis(
+            [$first, $second],
+            static fn (int $check): string => $check >= 5 ? '49.8' : '50',
+        ),
         [$first, $second],
         offlineInference: true,
         authorizationPath: liveGroupingAuthorizationPath(),
@@ -603,62 +635,155 @@ it('does not attribute a delayed allowance change to a later calls reservation',
     }
 });
 
+it('retains the full reservation when a successful call has no authoritative cost', function (): void {
+    $root = dirname(__DIR__, 2);
+    $models = [
+        LiveGroupingModels::find('anthropic/claude-sonnet-5'),
+        LiveGroupingModels::find('google/gemini-2.5-pro'),
+        LiveGroupingModels::find('anthropic/claude-haiku-4.5'),
+    ];
+    $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $runner = new UnavailableLiveCostRunner($root);
+    $screen = new LiveGroupingScreen(
+        $root,
+        $runner,
+        liveGroupingApis(
+            $models,
+            static fn (int $check): string => (string) BigDecimal::of('50')
+                ->minus((string) (intdiv($check - 1, 2) * 0.001)),
+        ),
+        $models,
+        offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
+    );
+
+    try {
+        expect(fn () => $screen->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+            ->toThrow(RuntimeException::class, 'cannot fit within the approved USD admission budget')
+            ->and($runner->calls)->toBe(2);
+
+        $authorization = json_decode(
+            (string) file_get_contents(liveGroupingAuthorizationPath()),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+
+        if (! is_array($authorization) || ! is_string($authorization['admission_spend'] ?? null)) {
+            throw new RuntimeException('The authorization ledger did not decode to an object.');
+        }
+
+        expect(BigDecimal::of($authorization['admission_spend'])->isEqualTo('4.5128075'))->toBeTrue()
+            ->and($authorization['completed_models'] ?? null)->toBe([$models[0]['id'], $models[1]['id']])
+            ->and(array_key_exists('pending', $authorization))->toBeTrue()
+            ->and($authorization['pending'])->toBeNull();
+    } finally {
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+
+        foreach (array_diff($after, $before) as $directory) {
+            foreach (glob($directory.'/*') ?: [] as $file) {
+                unlink($file);
+            }
+
+            rmdir($directory);
+        }
+    }
+});
+
+it('retains the full reservation for a technical failure with no observed charge', function (): void {
+    $root = dirname(__DIR__, 2);
+    $models = [
+        LiveGroupingModels::find('anthropic/claude-sonnet-5'),
+        LiveGroupingModels::find('google/gemini-2.5-pro'),
+        LiveGroupingModels::find('anthropic/claude-haiku-4.5'),
+    ];
+    $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $runner = new UnavailableLiveCostRunner($root, technicalFailure: true);
+    $screen = new LiveGroupingScreen(
+        $root,
+        $runner,
+        liveGroupingApis($models, static fn (int $check): string => '50'),
+        $models,
+        offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
+    );
+
+    try {
+        expect(fn () => $screen->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+            ->toThrow(RuntimeException::class, 'cannot fit within the approved USD admission budget')
+            ->and($runner->calls)->toBe(2);
+
+        $authorization = json_decode(
+            (string) file_get_contents(liveGroupingAuthorizationPath()),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+
+        if (! is_array($authorization) || ! is_string($authorization['admission_spend'] ?? null)) {
+            throw new RuntimeException('The authorization ledger did not decode to an object.');
+        }
+
+        expect($authorization['recorded_spend'] ?? null)->toBe('0')
+            ->and(BigDecimal::of($authorization['admission_spend'])->isEqualTo('4.5128075'))->toBeTrue();
+    } finally {
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+
+        foreach (array_diff($after, $before) as $directory) {
+            foreach (glob($directory.'/*') ?: [] as $file) {
+                unlink($file);
+            }
+
+            rmdir($directory);
+        }
+    }
+});
+
+it('preserves admission reservations across a resumed run', function (): void {
+    $root = dirname(__DIR__, 2);
+    $models = [
+        LiveGroupingModels::find('anthropic/claude-sonnet-5'),
+        LiveGroupingModels::find('google/gemini-2.5-pro'),
+        LiveGroupingModels::find('anthropic/claude-haiku-4.5'),
+    ];
+    $runner = new InertLiveGroupingRunner;
+    file_put_contents(liveGroupingAuthorizationPath(), json_encode([
+        'schema_version' => 2,
+        'confirmation' => LiveGroupingModels::CONFIRMATION,
+        'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
+        'model_ids' => array_column($models, 'id'),
+        'initial_remaining' => '50',
+        'recorded_spend' => '0.001',
+        'admission_spend' => '4.5128075',
+        'completed_models' => [$models[0]['id'], $models[1]['id']],
+        'pending' => null,
+    ], JSON_THROW_ON_ERROR));
+    $screen = new LiveGroupingScreen(
+        $root,
+        $runner,
+        liveGroupingApis($models, static fn (int $check): string => '49.999'),
+        $models,
+        offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
+    );
+
+    expect(fn () => $screen->execute([
+        '--live',
+        '--confirm='.LiveGroupingModels::CONFIRMATION,
+    ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+        ->toThrow(RuntimeException::class, 'cannot fit within the approved USD admission budget')
+        ->and($runner->calls)->toBe(0);
+});
+
 it('records one bounded technical failure and continues without inventing model evidence', function (): void {
     $root = dirname(__DIR__, 2);
     $model = LiveGroupingModels::all()[0];
     $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
-    $runner = new class($root) implements CommandRunner
-    {
-        public function __construct(private readonly string $root) {}
-
-        public function run(array $command, ?array $environment = null): CommandResult
-        {
-            $before = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
-            $result = (new NativeCommandRunner($this->root))->run($command, $environment);
-            $after = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
-            $created = array_values(array_diff($after, $before));
-            $scorecardPath = $created[0].'/scorecard.json';
-            $scorecard = json_decode((string) file_get_contents($scorecardPath), true, flags: JSON_THROW_ON_ERROR);
-
-            if (! is_array($scorecard)
-                || ! is_array($scorecard['trials'] ?? null)
-                || ! is_array($scorecard['trials'][0] ?? null)
-                || ! is_array($scorecard['trials'][0]['results'] ?? null)
-                || ! is_array($scorecard['trials'][0]['results'][0] ?? null)
-                || ! is_array($scorecard['trials'][0]['results'][0]['measurements'] ?? null)
-                || ! is_array($scorecard['trials'][0]['results'][0]['measurements'][0] ?? null)) {
-                throw new RuntimeException('The generated scorecard cannot be mutated for the technical-failure test.');
-            }
-
-            $primary = $scorecard['trials'][0]['results'][0];
-            $measurement = $primary['measurements'][0];
-            $measurement['effective_model'] = null;
-            $measurement['usage'] = [
-                'cached_input_tokens' => 0,
-                'input_tokens' => 0,
-                'output_tokens' => 0,
-                'reasoning_tokens' => 0,
-            ];
-            $measurement['pricing'] = [
-                'completeness' => 'unavailable',
-                'snapshot' => [
-                    'completeness' => 'unavailable',
-                    'cost' => null,
-                    'missing_units' => [],
-                    'provenance' => null,
-                    'snapshot' => null,
-                    'source' => 'unavailable',
-                ],
-            ];
-            $primary['score'] = 0;
-            $primary['passed'] = false;
-            $primary['measurements'] = [$measurement];
-            $scorecard['trials'][0]['results'] = [$primary];
-            file_put_contents($scorecardPath, json_encode($scorecard, JSON_THROW_ON_ERROR));
-
-            return new CommandResult(1, $result->stdout, $result->stderr);
-        }
-    };
+    $runner = new UnavailableLiveCostRunner($root, technicalFailure: true);
     $screen = new LiveGroupingScreen(
         $root,
         $runner,
@@ -695,12 +820,13 @@ it('resumes a clean completed prefix against the original allowance baseline', f
     [$first, $second] = array_slice(LiveGroupingModels::all(), 0, 2);
     $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
     $authorization = [
-        'schema_version' => 1,
+        'schema_version' => 2,
         'confirmation' => LiveGroupingModels::CONFIRMATION,
         'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
         'model_ids' => [$first['id'], $second['id']],
         'initial_remaining' => '50',
         'recorded_spend' => '0.012345',
+        'admission_spend' => '0.012345',
         'completed_models' => [$first['id']],
         'pending' => null,
     ];

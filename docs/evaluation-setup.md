@@ -157,7 +157,10 @@ and six possible per-image charges must fit under $5. Unbounded applicable charg
 evidence, or reservation overruns stop the run. Immediately after each request, the runner refreshes
 the key allowance and uses validated provider-reported cost when available, otherwise the observed
 allowance depletion. Delayed allowance changes are not attributed to a later call's reservation; the
-cumulative allowance change and reconciled provider costs are independently checked against $5.
+cumulative allowance change and a persistent admission total are independently checked against $5.
+The admission total uses validated provider cost when available and otherwise retains the call's full
+catalog-derived reservation, including for technical failures, so delayed charges cannot create room
+for another request.
 This is a software safeguard, not a provider-level $5 cap: it cannot undo an in-flight provider charge,
 and unrelated use of the same key is conservatively counted against this screen.
 The ignored, private authorization ledger survives command restarts, binds the run to the current key,

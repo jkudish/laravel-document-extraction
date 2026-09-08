@@ -88,9 +88,11 @@ not an end-to-end extraction benchmark.
 Seven routes produced the exact expected grouping. Four more returned bounded evidence but failed
 schema or grouping checks, and four failed before producing quality evidence. Provider-reported costs
 were available for eight trials and totalled **$0.035684066**. The key allowance fell by
-**$0.064145742** across the full canary; delayed allowance reporting prevents assigning the remaining
-difference truthfully to individual calls. The runner retained a more conservative reconciled total of
-**$0.069390286**, still far below the authorized $5 ceiling.
+**$0.064145742** at the immediate final check and settled at **$0.079192966** ten seconds later. This
+lag prevents assigning the difference truthfully to individual calls. The historical ledger's
+**$0.069390286** accounting total was therefore not an upper bound; the delivered runner now retains a
+full catalog-derived reservation whenever authoritative per-call cost is unavailable. The settled key
+allowance remained far below the authorized $5 ceiling.
 
 For the next development-fixture screen, retain only the seven exact routes: both Qwen VL models,
 Gemini 3.1 Flash Lite, Gemini 2.5 Flash, Luna, Haiku, and Llama Maverick. Drop the other eight from the
