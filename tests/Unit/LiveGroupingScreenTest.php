@@ -271,6 +271,7 @@ function liveGroupingApis(array $models, Closure $remaining, array $endpointOver
 it('freezes the canary history and the seven-model four-fixture development screen', function (): void {
     $models = LiveGroupingModels::all();
     $ids = array_column($models, 'id');
+    $luna = LiveGroupingModels::find('openai/gpt-5.6-luna');
 
     expect($models)->toHaveCount(15)
         ->and($ids)->not->toContain(
@@ -280,6 +281,8 @@ it('freezes the canary history and the seven-model four-fixture development scre
         )
         ->and(array_column(LiveGroupingModels::survivors(), 'id'))->toBe(LiveGroupingModels::SURVIVOR_IDS)
         ->and(LiveGroupingModels::configurations())->toHaveCount(7)
+        ->and($luna['endpoint'])->toBe('azure/eu')
+        ->and($luna['route']['data_region'])->toBe('global')
         ->and(LiveGroupingModels::fixtureIds())->toBe([
             'single-three-page-document',
             'three-single-page-documents',
