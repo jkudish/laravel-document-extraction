@@ -312,6 +312,7 @@ final class LiveGroupingScreen
             'tests/Evals/LiveGroupingBenchmarkTest.php',
             'tests/Support/LiveGroupingAttemptScorer.php',
             'tests/Support/LiveGroupingModels.php',
+            'tests/Support/OpenRouterGenerationMetadata.php',
         ]));
         $dependencies = [];
 

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
@@ -18,6 +17,7 @@ use Jkudish\DocumentExtraction\Tests\Support\GroupingMetricScorer;
 use Jkudish\DocumentExtraction\Tests\Support\GroupingScorerRecorder;
 use Jkudish\DocumentExtraction\Tests\Support\LiveGroupingAttemptScorer;
 use Jkudish\DocumentExtraction\Tests\Support\LiveGroupingModels;
+use Jkudish\DocumentExtraction\Tests\Support\OpenRouterGenerationMetadata;
 use Jkudish\DocumentExtraction\Tests\TestCase;
 use Jkudish\PestAiBenchmarks\LaravelAi\BenchmarkAgentMiddleware;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -256,6 +256,7 @@ benchmark(LiveGroupingModels::BENCHMARK, function (): array {
         'tests/Evals/LiveGroupingBenchmarkTest.php',
         'tests/Support/LiveGroupingAttemptScorer.php',
         'tests/Support/LiveGroupingModels.php',
+        'tests/Support/OpenRouterGenerationMetadata.php',
     ]);
 
 /** @return array{id: string, file: string, split: string, description: string, page_count: int, sha256: string, size: int, content: string, expected: array{groups: list<list<int>>, unassigned_pages: list<int>, ambiguous_pages: list<int>, unassigned_reasons: array<int, string>}, runtime: array<string, string>} */
@@ -318,19 +319,13 @@ function liveGroupingRouteEvidence(): array
         throw new RuntimeException('The live grouping response lacks a generation identity for route audit.');
     }
 
-    $routeResponse = Http::withToken($key)
-        ->acceptJson()
-        // OpenRouter can briefly return 404 while completed generation metadata becomes available.
-        ->retry(
-            [1000, 2000, 4000, 8000, 15000],
-            when: static fn (Throwable $exception): bool => $exception instanceof RequestException
-                && $exception->response->status() === 404,
-            throw: false,
-        )
-        ->get('https://openrouter.ai/api/v1/generation', ['id' => $generationId]);
+    // OpenRouter can briefly return 404 while completed generation metadata becomes available.
+    $routeResponse = OpenRouterGenerationMetadata::fetch(
+        $key,
+        $generationId,
+        withoutDelay: getenv('LDE_LIVE_GROUPING_OFFLINE') === '1',
+    );
     $route = $routeResponse->json('data');
-
-    $routeResponse->throw();
 
     if (! is_array($route) || array_is_list($route)) {
         throw new RuntimeException('The OpenRouter generation route evidence is invalid.');
