@@ -1,9 +1,9 @@
 # OpenRouter models for document grouping
 
 Retrieved **2026-09-07T03:47:07Z** from OpenRouter's public model, endpoint, and ZDR APIs.
-This is a 15-model experimental screen with one completed paid synthetic compatibility canary. It is
-not a runtime registry, production allowlist, or general accuracy result. The next authorized stage
-uses only the seven exact canary survivors across the four remaining development fixtures.
+This is a 15-model experimental screen with a completed paid synthetic compatibility canary and a
+completed seven-model development-fixture screen. It is not a runtime registry, production allowlist,
+or general accuracy result.
 
 ## What “compatible” means here
 
@@ -46,7 +46,7 @@ and must come from recorded usage/provider cost evidence rather than these catal
 | Gemini older stable | `google/gemini-3.1-flash-lite` | 1,048,576 / 65,536 | $0.25 / $1.50 | $0.00000025/image; eight strict endpoints; range $0.125/$0.75–$0.45/$2.70 |
 | Gemini older stable | `google/gemini-2.5-flash` | 1,048,576 / 65,535 | $0.30 / $2.50 | $0.00000030/image; seven strict endpoints; range $0.15/$1.25–$0.54/$4.50 |
 | Gemini older stable | `google/gemini-2.5-pro` | 1,048,576 / 65,536 | $1.25 / $10.00 | $0.00000125/image; above 200k: $2.50/$15; canary pins healthy ZDR `google-vertex/us` |
-| OpenAI requested | `openai/gpt-5.6-luna` | 1,050,000 / 128,000 | $0.20 / $1.20 | Replaces Sol; canary pins healthy ZDR `azure`; above 272k: $0.40/$1.80 |
+| OpenAI requested | `openai/gpt-5.6-luna` | 1,050,000 / 128,000 | $0.20 / $1.20 | Replaces Sol; pins healthy ZDR `azure/eu`; above 272k: $0.40/$1.80 |
 | Anthropic retained | `anthropic/claude-sonnet-5` | 1,000,000 / 128,000 | $2.00 / $10.00 | Six of nine endpoints strict; strict range $2/$10–$2.20/$11 |
 | Anthropic added | `anthropic/claude-haiku-4.5` | 200,000 / 64,000 | $1.00 / $5.00 | Version-pinned Haiku; five of eight endpoints strict; range $1/$5–$1.10/$5.50 |
 | Mistral diversity | `mistralai/mistral-small-2603` | 262,144 / 209,715 | $0.15 / $0.60 | Four strict endpoints; range $0.15/$0.60–$0.1875/$0.75; three ZDR entries |
@@ -80,7 +80,7 @@ not an end-to-end extraction benchmark.
 | `google/gemini-3.1-flash-lite @ google-vertex/global` | exact | `1/1/1/1/1/1/1/1/1` | 1.814s | $0.001782 |
 | `google/gemini-2.5-flash @ google-vertex/global` | exact | `1/1/1/1/1/1/1/1/1` | 1.667s | $0.0006975 |
 | `google/gemini-2.5-pro @ google-vertex/us` | technical failure | — | 0.130s | unavailable |
-| `openai/gpt-5.6-luna @ azure` | exact | `1/1/1/1/1/1/1/1/1` | 2.431s | $0.00383555 |
+| `openai/gpt-5.6-luna @ azure/eu` | exact | `1/1/1/1/1/1/1/1/1` | 2.431s | $0.00383555 |
 | `anthropic/claude-sonnet-5 @ amazon-bedrock/global` | structured result rejected | `0/1/0/0/1/0/0/1/1` | 7.655s | unavailable |
 | `anthropic/claude-haiku-4.5 @ amazon-bedrock/global` | exact | `1/1/1/1/1/1/1/1/1` | 5.984s | $0.009605 |
 | `mistralai/mistral-small-2603 @ mistral/zdr` | wrong grouping | `0/0/0/1/1/1/1/1/1` | 3.112s | $0.0022212 |
@@ -101,6 +101,43 @@ next paid slice unless a later compatibility investigation specifically targets 
 fixture is enough for this canary filter, but not enough to rank the seven survivors or select a
 production default.
 
+## Broad development-screen results
+
+On **2026-09-08**, the seven canary survivors each made one paid detector request against the four
+remaining development fixtures: 28 unique calls in total. Grouped extraction and OCR remained
+simulated. No holdout, fallback route, or consumed model/fixture pair was used twice.
+
+Twenty calls produced validated grouping scores. Seventeen passed all nine grouping checks. Three
+produced bounded quality evidence with a single-fixture failure, all on `blank-separator`: Gemini 3.1
+Flash Lite missed exact grouping, selected-page coverage, and unassigned-page handling; Gemini 2.5
+Flash and Llama Maverick each missed ambiguity handling. Eight calls produced paid detector and cost
+evidence but no quality score because the post-response route-evidence check failed: six completed
+before bounded generation-metadata polling was added, and Luna's first two exposed that OpenRouter's
+undocumented `data_region` reports `global` for the pinned `azure/eu` endpoint. These were harness
+evidence failures, not model-quality failures, and were not repeated.
+
+| Model @ pinned endpoint | All-nine passes / scored | Technical failures | Average detector latency across all four calls | Provider-reported cost |
+| --- | ---: | ---: | ---: | ---: |
+| `qwen/qwen3-vl-32b-instruct @ alibaba` | 0 / 0 | 4 | 3.508s | $0.003604640 |
+| `qwen/qwen2.5-vl-72b-instruct @ parasail/fp8` | 2 / 2 | 2 | 4.373s | $0.035155000 |
+| `google/gemini-3.1-flash-lite @ google-vertex/global` | 3 / 4 | 0 | 2.261s | $0.005017000 |
+| `google/gemini-2.5-flash @ google-vertex/global` | 3 / 4 | 0 | 1.706s | $0.001908600 |
+| `openai/gpt-5.6-luna @ azure/eu` | 2 / 2 | 2 | 3.345s | $0.011315700 |
+| `anthropic/claude-haiku-4.5 @ amazon-bedrock/global` | 4 / 4 | 0 | 2.601s | $0.026089000 |
+| `meta-llama/llama-4-maverick @ digitalocean` | 3 / 4 | 0 | 6.314s | $0.008083608 |
+| **Total** | **17 / 20** | **8** | — | **$0.091173548** |
+
+The runner reconciled all 28 provider-reported costs to a cumulative $0.091173548 admission total;
+the observed key-allowance change was $0.088660908. The difference reflects provider allowance-update
+timing and does not replace the per-call provider evidence. Both values remained far below the $5
+software cap.
+
+This evidence supports a development-finalist shortlist, not a production default. Haiku is the only
+route with four of four broad fixtures passing every grouping check. Luna passed both scored fixtures;
+Gemini 2.5 Flash and Llama each passed three of four, with only the blank-separator ambiguity check
+failing. Qwen2.5 VL passed both scored fixtures but has incomplete coverage and the highest observed
+cost. Qwen3 VL has no broad quality scores because all four calls predated the metadata-polling fix.
+
 ### Requested-name disposition
 
 - **GPT-5.6 Luna:** exact `openai/gpt-5.6-luna` is present and retained. The former Sol row is removed.
@@ -118,8 +155,8 @@ production default.
 
 ## Cost-controlled evaluation design
 
-The 15-call compatibility canary is complete. The 28-call broad development screen is separately
-authorized with the same $5 software cap; finalist repeats and holdout remain separately gated.
+The 15-call compatibility canary and 28-call broad development screen are complete. Finalist repeats
+and holdout remain separately gated.
 Use the installed native package path and published evaluation dependencies:
 
 - Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
@@ -143,21 +180,21 @@ Run the evaluation in gates:
    schema, endpoint options, and local validators. Cost: $0 provider spend.
 2. **Compatibility canary (complete):** one live detector trial per model against one development
    bundle: 15 calls total, with grouped extraction/OCR simulated. Seven exact routes survived.
-3. **Broad development screen (authorized):** one live grouping trial for each of the seven exact
+3. **Broad development screen (complete):** one live grouping trial for each of the seven exact
    survivors against each of the four remaining development bundles: 28 detector calls, no repeats.
-   Exercising the full extraction pipeline instead would add per-group extraction or OCR calls, so
-   those stages remain simulated. This screen can identify chronic schema/membership failure, obvious
-   grouping failure, or unacceptable observed cost/latency.
+   Grouped extraction and OCR remained simulated. Twenty calls produced grouping scores, including 17
+   that passed every grouping check; eight retained technical evidence without a quality score.
 4. **Development finalists:** choose 3–5 models from measured evidence, not metadata. Add repeats to
    reach at least three trials per finalist/development bundle. Prompt/schema changes remain confined
    to development data.
 5. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
    and scoring before at least three repeats on each held-out bundle. Never tune on holdout outcomes.
 
-The canary removed technical and clearly unusable candidates. The authorized broad screen compares
-Qwen3 VL, Qwen2.5 VL, Gemini 3.1 Flash Lite, Gemini 2.5 Flash, Luna, Haiku, and Llama Maverick across
-the other development bundles. Do not promote any candidate to finalist without that measured
-development evidence.
+The canary removed technical and clearly unusable candidates, and the broad screen now supplies the
+development evidence above. A reasonable finalist slice would retain Haiku, Luna, Gemini 2.5 Flash,
+and Qwen2.5 VL: this keeps the only four-of-four route, the two scored-exact but incomplete routes,
+and the fastest/least-expensive mostly exact route. Llama is the first reserve; Qwen3 VL needs fresh
+quality evidence before promotion. Any finalist repeats remain separately authorized.
 
 The executable screen is deliberately smaller than a manifest system: the test-owned model and
 fixture lists in `tests/Support/LiveGroupingModels.php`, one Pest benchmark, and
@@ -165,8 +202,10 @@ fixture lists in `tests/Support/LiveGroupingModels.php`, one Pest benchmark, and
 proposal without network access. Live mode preflights the current catalog and key allowance, then
 runs and validates one model/fixture trial at a time; it never silently changes the documented matrix.
 Each trial verifies the synthetic PDF identity before egress and audits OpenRouter's generation
-metadata after inference for the expected model, provider, data region, standard service tier, and
-absence of a model router. OpenRouter's provider-attempt chain is also checked when exposed.
+metadata after inference for the expected model, provider, observed data-region value, standard
+service tier, and absence of a model router. OpenRouter does not document `data_region` as endpoint
+geography: Luna therefore keeps its exact `azure/eu` request route while separately pinning the
+observed value `global`. OpenRouter's provider-attempt chain is also checked when exposed.
 
 Before execution, calculate a scenario estimate from the frozen call count, output cap, and current
 rates, then enforce a separate total-spend control. OpenRouter `provider.max_price` is only a

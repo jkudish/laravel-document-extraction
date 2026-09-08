@@ -152,11 +152,14 @@ through OpenRouter with the exact model and endpoint, `allow_fallbacks = false`,
 `require_parameters = true`, a 512-token output limit, reasoning disabled where supported, and the
 recorded rate ceilings. The application extraction agent remains Laravel AI-faked, so each trial has
 exactly one paid detector request even when it detects several groups. No holdout fixture is selectable.
-After the completion, one non-inference OpenRouter generation-metadata lookup must confirm the model,
-provider, data region, standard service tier, and no model router. When OpenRouter exposes its nullable
+After the completion, a bounded non-inference OpenRouter generation-metadata poll must confirm the
+model, provider, observed data-region value, standard service tier, and no model router. A newly
+completed generation can briefly return 404, so the poll retries only 404 with fixed 1s, 2s, 4s, 8s,
+and 15s delays; any other error or a sixth 404 fails. When OpenRouter exposes its nullable
 provider-response chain, it must contain exactly one successful response. The trial stops if that
 independent route evidence is absent or inconsistent; fallback prevention also remains pinned in the
-request and benchmark contract.
+request and benchmark contract. OpenRouter does not document `data_region` as endpoint geography, so
+Luna's exact request remains `azure/eu` while its separately observed value is pinned to `global`.
 
 The runner enforces a $5 software admission budget. Before each sequential request, reconciled spend
 plus a conservative reservation derived from the selected endpoint's full context capacity, the
@@ -200,3 +203,10 @@ responses.
 The normal test suite never sets the confirmation and never makes these requests. Its focused offline
 test fakes both OpenRouter preflight and inference while exercising the same command, fixture
 selection, public extraction path, scorecard validation, replay cleanup, and fail-closed cases.
+
+The authorized run completed on **2026-09-08**. It consumed all 28 unique model/fixture pairs,
+produced 20 validated grouping scorecards and eight technical-evidence scorecards, and reconciled
+$0.091173548 of provider-reported spend under the $5 software cap. The private ledger is fully
+consumed, so this command cannot repeat the run. Results and their limits are summarized in
+[`grouping-models.md`](grouping-models.md); any finalist repeats or holdout run require a new explicit
+authorization.
