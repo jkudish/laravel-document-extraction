@@ -1,11 +1,12 @@
 {
   "retrieved_at_utc": "2026-09-07T03:47:07Z",
-  "purpose": "Expanded catalog screen for a future cost-capped synthetic document-grouping evaluation",
-  "evidence_status": "catalog-compatible only; no live Laravel SDK model requests or paid calls executed",
+  "purpose": "Catalog and measured compatibility evidence for a cost-capped synthetic document-grouping evaluation",
+  "evidence_status": "15-route compatibility canary complete; seven exact survivors approved for a 28-call broad development screen",
   "actual_costs": {
-    "status": "not measured",
-    "value_usd": null,
-    "reason": "Actual cost requires an authorized completed live response with recorded provider cost or compatible usage evidence; catalog rates are estimates, not actual costs."
+    "status": "partially measured",
+    "provider_reported_total_usd": "0.035684066",
+    "settled_key_allowance_change_usd": "0.079192966",
+    "scope": "15-call compatibility canary only; provider-reported cost was available for eight trials, while delayed allowance changes cannot be assigned to individual calls"
   },
   "pricing_units": {
     "raw_token_fields": "USD per token",
@@ -197,14 +198,14 @@
   ],
   "evaluation_design": {
     "ranking_basis": "experimental lineage, architecture, provider, price-tier, and endpoint coverage; not presumed quality",
-    "recommendation": "Run an equal 15-model canary, remove only technical or clearly unusable failures, then screen survivors across the remaining development bundles.",
-    "coverage_anchors_if_cap_requires_narrowing": ["qwen/qwen3.8-flash", "google/gemini-2.5-flash", "openai/gpt-5.6-luna"],
+    "recommendation": "Screen the seven exact canary survivors once across each of the four remaining development bundles before selecting finalists.",
+    "broad_screen_models": ["qwen/qwen3-vl-32b-instruct", "qwen/qwen2.5-vl-72b-instruct", "google/gemini-3.1-flash-lite", "google/gemini-2.5-flash", "openai/gpt-5.6-luna", "anthropic/claude-haiku-4.5", "meta-llama/llama-4-maverick"],
     "harness": ["pestphp/pest-plugin-evals", "jkudish/pest-plugin-ai-benchmarks", "jkudish/laravel-ai-pricing"],
     "dependency_status": "pest-plugin-ai-benchmarks v0.1.0, pest-plugin-evals ^5.0.2, and laravel-ai-pricing v0.1.0 installed from public releases; no VCS or path repository required",
     "stages": [
       {"name": "offline protocol gate", "paid_calls": 0},
-      {"name": "compatibility canary", "models": 15, "development_bundles": 1, "repeats": 1, "paid_detector_calls": 15, "extraction_mode": "simulated"},
-      {"name": "broad development screen", "models": "survivors from measured canary evidence", "remaining_development_bundles": 4, "repeats": 1, "budget_note": "Detector calls only; grouped extraction and OCR remain simulated."},
+      {"name": "compatibility canary", "status": "complete", "models": 15, "development_bundles": 1, "repeats": 1, "paid_detector_calls": 15, "extraction_mode": "simulated"},
+      {"name": "broad development screen", "status": "authorized", "models": 7, "remaining_development_bundles": 4, "repeats": 1, "paid_detector_calls": 28, "software_cap_usd": 5, "budget_note": "Detector calls only; grouped extraction and OCR remain simulated."},
       {"name": "development finalists", "models": "3-5 chosen from measured evidence", "minimum_total_repeats_per_bundle": 3},
       {"name": "frozen holdout", "minimum_repeats_per_finalist_bundle": 3, "tuning_allowed": false}
     ],

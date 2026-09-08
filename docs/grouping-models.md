@@ -2,7 +2,8 @@
 
 Retrieved **2026-09-07T03:47:07Z** from OpenRouter's public model, endpoint, and ZDR APIs.
 This is a 15-model experimental screen with one completed paid synthetic compatibility canary. It is
-not a runtime registry, production allowlist, or general accuracy result.
+not a runtime registry, production allowlist, or general accuracy result. The next authorized stage
+uses only the seven exact canary survivors across the four remaining development fixtures.
 
 ## What “compatible” means here
 
@@ -117,8 +118,8 @@ production default.
 
 ## Cost-controlled evaluation design
 
-The 15-call compatibility canary is approved after the live-screen setup and total-spend control are
-verified. The remaining development screen, finalist repeats, and holdout remain separately gated.
+The 15-call compatibility canary is complete. The 28-call broad development screen is separately
+authorized with the same $5 software cap; finalist repeats and holdout remain separately gated.
 Use the installed native package path and published evaluation dependencies:
 
 - Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
@@ -142,28 +143,27 @@ Run the evaluation in gates:
    schema, endpoint options, and local validators. Cost: $0 provider spend.
 2. **Compatibility canary (complete):** one live detector trial per model against one development
    bundle: 15 calls total, with grouped extraction/OCR simulated. Seven exact routes survived.
-3. **Broad development screen:** one live grouping trial per surviving model against each remaining
-   development bundle. Exercising the full extraction pipeline instead would add per-group extraction
-   or OCR calls, so the detector screen keeps those stages simulated. This screen can identify
-   chronic schema/membership failure, obvious grouping failure, or unacceptable observed cost/latency.
+3. **Broad development screen (authorized):** one live grouping trial for each of the seven exact
+   survivors against each of the four remaining development bundles: 28 detector calls, no repeats.
+   Exercising the full extraction pipeline instead would add per-group extraction or OCR calls, so
+   those stages remain simulated. This screen can identify chronic schema/membership failure, obvious
+   grouping failure, or unacceptable observed cost/latency.
 4. **Development finalists:** choose 3–5 models from measured evidence, not metadata. Add repeats to
    reach at least three trials per finalist/development bundle. Prompt/schema changes remain confined
    to development data.
 5. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
    and scoring before at least three repeats on each held-out bundle. Never tune on holdout outcomes.
 
-The recommendation is to run the equal 15-model canary before removing technical or clearly unusable
-candidates, then screen survivors across the other development bundles. If a later approved cap
-requires a narrower screen, three **coverage anchors**, not presumed winners, are
-`qwen/qwen3.8-flash` (current low listed rate), `google/gemini-2.5-flash` (older stable Gemini with
-seven strict endpoints), and `openai/gpt-5.6-luna` (the requested cross-family replacement for Sol).
-Do not promote an anchor or any other candidate to finalist without measured development evidence.
+The canary removed technical and clearly unusable candidates. The authorized broad screen compares
+Qwen3 VL, Qwen2.5 VL, Gemini 3.1 Flash Lite, Gemini 2.5 Flash, Luna, Haiku, and Llama Maverick across
+the other development bundles. Do not promote any candidate to finalist without that measured
+development evidence.
 
-The executable canary is deliberately smaller than a manifest system: the test-owned list in
-`tests/Support/LiveGroupingModels.php`, one Pest benchmark, and `scripts/live-grouping-screen`. Run the
-command without arguments to inspect the exact current proposal without network access. Live mode
-preflights the current catalog and key allowance, then runs and validates one model trial at a time;
-it never silently changes this documented candidate list.
+The executable screen is deliberately smaller than a manifest system: the test-owned model and
+fixture lists in `tests/Support/LiveGroupingModels.php`, one Pest benchmark, and
+`scripts/live-grouping-screen`. Run the command without arguments to inspect the exact current
+proposal without network access. Live mode preflights the current catalog and key allowance, then
+runs and validates one model/fixture trial at a time; it never silently changes the documented matrix.
 
 Before execution, calculate a scenario estimate from the frozen call count, output cap, and current
 rates, then enforce a separate total-spend control. OpenRouter `provider.max_price` is only a

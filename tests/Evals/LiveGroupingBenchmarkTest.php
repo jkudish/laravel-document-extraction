@@ -61,7 +61,10 @@ beforeEach(function (): void {
         TextProvider $provider,
         string $model,
     ): StructuredTextResponse {
-        expect($prompt)->not->toContain(LiveGroupingModels::FIXTURE_ID)
+        $fixture = liveGroupingFixture();
+
+        expect($prompt)->not->toContain($fixture['id'])
+            ->not->toContain($fixture['split'])
             ->not->toContain('expected')
             ->and($attachments)->not->toBeEmpty();
 
@@ -99,7 +102,8 @@ beforeEach(function (): void {
                 ->and(is_array($jsonSchema) ? ($jsonSchema['strict'] ?? null) : null)->toBeFalse()
                 ->and(substr_count($messages, '"type":"image_url"'))->toBe($fixture['page_count'])
                 ->and($messages)
-                ->not->toContain(LiveGroupingModels::FIXTURE_ID)
+                ->not->toContain($fixture['id'])
+                ->not->toContain($fixture['split'])
                 ->not->toContain('expected');
 
             $groups = array_map(
@@ -155,8 +159,7 @@ benchmark(LiveGroupingModels::BENCHMARK, function (): array {
     $configuration = $pending->configuration();
 
     expect($fixture['split'])->toBe('prompt-example')
-        ->and($fixture['id'])->toBe(LiveGroupingModels::FIXTURE_ID)
-        ->and($fixture['file'])->toBe(LiveGroupingModels::FIXTURE_FILE)
+        ->and(LiveGroupingModels::fixtureIds())->toContain($fixture['id'])
         ->and($configuration['provider'])->toBe('openrouter')
         ->and($configuration['detection']['provider'])->toBe('openrouter');
 
@@ -175,9 +178,9 @@ benchmark(LiveGroupingModels::BENCHMARK, function (): array {
 ))
     ->context([
         ...GroupingBenchmarkCorpus::scorecardContext(),
-        'screen' => 'openrouter-live-grouping-canary-v1',
-        'fixture' => LiveGroupingModels::FIXTURE_ID,
-        'paid_detector_calls' => count(LiveGroupingModels::all()),
+        'screen' => LiveGroupingModels::SCREEN,
+        'fixture' => (($fixtureId = getenv('LDE_LIVE_GROUPING_FIXTURE')) !== false && $fixtureId !== '') ? $fixtureId : null,
+        'paid_detector_calls' => count(LiveGroupingModels::survivors()) * count(LiveGroupingModels::fixtureIds()),
         'max_spend_usd' => LiveGroupingModels::MAX_SPEND_USD,
     ])
     ->evaluate(function (mixed $output): void {
@@ -209,8 +212,14 @@ benchmark(LiveGroupingModels::BENCHMARK, function (): array {
 /** @return array{id: string, file: string, split: string, description: string, page_count: int, sha256: string, size: int, content: string, expected: array{groups: list<list<int>>, unassigned_pages: list<int>, ambiguous_pages: list<int>, unassigned_reasons: array<int, string>}, runtime: array<string, string>} */
 function liveGroupingFixture(): array
 {
+    $fixtureId = getenv('LDE_LIVE_GROUPING_FIXTURE');
+
+    if (! is_string($fixtureId) || ! in_array($fixtureId, LiveGroupingModels::fixtureIds(), true)) {
+        throw new RuntimeException('The approved live grouping fixture was not selected.');
+    }
+
     foreach (GroupingBenchmarkCorpus::fixtures() as [$fixture]) {
-        if ($fixture['id'] === LiveGroupingModels::FIXTURE_ID) {
+        if ($fixture['id'] === $fixtureId && $fixture['split'] === 'prompt-example') {
             return $fixture;
         }
     }
