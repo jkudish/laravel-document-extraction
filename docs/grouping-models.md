@@ -1,8 +1,8 @@
 # OpenRouter models for document grouping
 
 Retrieved **2026-09-07T03:47:07Z** from OpenRouter's public model, endpoint, and ZDR APIs.
-This is a 15-model experimental screen for a future paid synthetic-corpus evaluation. It is not a
-runtime registry, quality ranking, model activation, spend approval, or accuracy result.
+This is a 15-model experimental screen with one completed paid synthetic compatibility canary. It is
+not a runtime registry, production allowlist, or general accuracy result.
 
 ## What “compatible” means here
 
@@ -13,12 +13,12 @@ strict group-assignment schema. Every retained model currently has:
 2. model-level `response_format` and `structured_outputs`; and
 3. at least one endpoint advertising both parameters.
 
-This is **catalog compatibility only**. No paid request was made, so none is yet demonstrated through
-Laravel AI v0.11.2 → OpenRouter → the named endpoint. OpenRouter says strict-output support is
-endpoint-specific and can change; provider enforcement ranges from native strict mode to translation
-or a strong hint. The package's local schema and page-membership validation remains authoritative.
-`response_format` without `structured_outputs` is not enough: `json_object` only means valid JSON,
-whereas this flow needs `response_format.type = json_schema`.
+Catalog compatibility does not establish request compatibility. The canary below exercises each
+pinned route once through Laravel AI v0.11.2 → OpenRouter → the named endpoint. OpenRouter says
+strict-output support is endpoint-specific and can change; provider enforcement ranges from native
+strict mode to translation or a strong hint. The package's local schema and page-membership validation
+remains authoritative. `response_format` without `structured_outputs` is not enough: `json_object`
+only means valid JSON, whereas this flow needs `response_format.type = json_schema`.
 
 Laravel AI v0.11.2 does provide the required native wire shapes: one `image_url` part per image,
 `json_schema` for a structured agent, and merged `HasProviderOptions`. This permits
@@ -55,6 +55,48 @@ These groups rank **experimental coverage**, not presumed quality. Newer, larger
 does not imply better page grouping. The Qwen set deliberately spans general models, explicit VL
 models, and generations; the Gemini set uses version-pinned stable IDs; Mistral and Llama broaden
 model and hosting families.
+
+## Compatibility canary results
+
+On **2026-09-08**, the approved command made exactly one paid detector request for each of the 15
+routes against development fixture `bundle-03.pdf`. Grouped extraction remained simulated. No holdout
+was used, no request was repeated, and no fallback route was allowed.
+
+Each score position below is binary, where `1` means the check passed. The order is **exact groups /
+merge-safe / split-safe / coverage / ambiguity / unassigned / schema-safe / membership-safe /
+provider-safe**. A technical failure produced no quality scores. Latency is the detector measurement,
+not an end-to-end extraction benchmark.
+
+| Model @ pinned endpoint | Outcome | Nine grouping scores | Latency | Provider-reported cost |
+| --- | --- | --- | ---: | ---: |
+| `qwen/qwen3.8-flash @ alibaba` | structured result rejected | `0/1/0/0/1/0/0/1/1` | 4.305s | unavailable |
+| `qwen/qwen3.7-plus @ alibaba` | structured result rejected | `0/1/0/0/1/0/0/1/1` | 5.205s | unavailable |
+| `qwen/qwen3.6-flash @ alibaba` | technical failure | — | 0.782s | unavailable |
+| `qwen/qwen3.5-flash-02-23 @ alibaba` | technical failure | — | 0.468s | unavailable |
+| `qwen/qwen3-vl-32b-instruct @ alibaba` | exact | `1/1/1/1/1/1/1/1/1` | 5.281s | $0.001346072 |
+| `qwen/qwen2.5-vl-72b-instruct @ parasail/fp8` | exact | `1/1/1/1/1/1/1/1/1` | 6.234s | $0.0131734 |
+| `google/gemini-3.8-flash @ google-vertex/global` | technical failure | — | 0.128s | unavailable |
+| `google/gemini-3.1-flash-lite @ google-vertex/global` | exact | `1/1/1/1/1/1/1/1/1` | 1.814s | $0.001782 |
+| `google/gemini-2.5-flash @ google-vertex/global` | exact | `1/1/1/1/1/1/1/1/1` | 1.667s | $0.0006975 |
+| `google/gemini-2.5-pro @ google-vertex/us` | technical failure | — | 0.130s | unavailable |
+| `openai/gpt-5.6-luna @ azure` | exact | `1/1/1/1/1/1/1/1/1` | 2.431s | $0.00383555 |
+| `anthropic/claude-sonnet-5 @ amazon-bedrock/global` | structured result rejected | `0/1/0/0/1/0/0/1/1` | 7.655s | unavailable |
+| `anthropic/claude-haiku-4.5 @ amazon-bedrock/global` | exact | `1/1/1/1/1/1/1/1/1` | 5.984s | $0.009605 |
+| `mistralai/mistral-small-2603 @ mistral/zdr` | wrong grouping | `0/0/0/1/1/1/1/1/1` | 3.112s | $0.0022212 |
+| `meta-llama/llama-4-maverick @ digitalocean` | exact | `1/1/1/1/1/1/1/1/1` | 3.928s | $0.003023344 |
+
+Seven routes produced the exact expected grouping. Four more returned bounded evidence but failed
+schema or grouping checks, and four failed before producing quality evidence. Provider-reported costs
+were available for eight trials and totalled **$0.035684066**. The key allowance fell by
+**$0.064145742** across the full canary; delayed allowance reporting prevents assigning the remaining
+difference truthfully to individual calls. The runner retained a more conservative reconciled total of
+**$0.069390286**, still far below the authorized $5 ceiling.
+
+For the next development-fixture screen, retain only the seven exact routes: both Qwen VL models,
+Gemini 3.1 Flash Lite, Gemini 2.5 Flash, Luna, Haiku, and Llama Maverick. Drop the other eight from the
+next paid slice unless a later compatibility investigation specifically targets their failure. One
+fixture is enough for this canary filter, but not enough to rank the seven survivors or select a
+production default.
 
 ### Requested-name disposition
 
@@ -96,9 +138,8 @@ Run the evaluation in gates:
 
 1. **Offline protocol gate:** prove every configuration produces the same frozen images, prompt,
    schema, endpoint options, and local validators. Cost: $0 provider spend.
-2. **Compatibility canary:** one live detector trial per model against one development bundle:
-   15 calls total, with grouped extraction/OCR simulated. This can identify request incompatibility,
-   schema/membership failure, and clearly unusable grouping before any wider screen.
+2. **Compatibility canary (complete):** one live detector trial per model against one development
+   bundle: 15 calls total, with grouped extraction/OCR simulated. Seven exact routes survived.
 3. **Broad development screen:** one live grouping trial per surviving model against each remaining
    development bundle. Exercising the full extraction pipeline instead would add per-group extraction
    or OCR calls, so the detector screen keeps those stages simulated. This screen can identify
