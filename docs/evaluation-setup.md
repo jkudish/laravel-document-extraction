@@ -155,10 +155,11 @@ plus a conservative reservation derived from the selected endpoint's full contex
 highest advertised base or override input/cache/image-token rate, 512 output and reasoning tokens,
 and six possible per-image charges must fit under $5. Unbounded applicable charges, incomplete cost
 evidence, or reservation overruns stop the run. Immediately after each request, the runner refreshes
-the key allowance and requires a positive depletion no larger than that reservation. The cumulative
-allowance change—not catalog arithmetic—is the spend used for the $5 admission check. This is a
-software safeguard, not a provider-level $5 cap: it cannot undo an in-flight provider charge, and
-unrelated use of the same key is conservatively counted against this screen.
+the key allowance and reconciles the trial against the greater of its validated provider-reported cost
+and observed allowance depletion. This accommodates short allowance-reporting lag without treating it
+as zero; both reconciled spend and cumulative allowance change are independently checked against $5.
+This is a software safeguard, not a provider-level $5 cap: it cannot undo an in-flight provider charge,
+and unrelated use of the same key is conservatively counted against this screen.
 The ignored, private authorization ledger survives command restarts, binds the run to the current key,
 and records a reservation before dispatch. A completed prefix can resume, but an unresolved in-flight
 call or a fully consumed 15-call authorization cannot be run again. The selected route and reservation
@@ -174,8 +175,8 @@ production result's integrity scorer still requires one positive provider-report
 matching extraction totals. When the outer benchmark observer cannot expose response pricing after a
 locally rejected structured result, the command records the immediate key-allowance change instead of
 inventing a per-call quote. A one-attempt technical failure is retained as compatibility evidence and
-may have zero allowance change; it does not acquire quality scores or effective-model evidence that the
-failed response did not supply. Negative or over-reservation depletion, duplicate calls, invalid
+may have no observed charge; it does not acquire quality scores or effective-model evidence that the
+failed response did not supply. Negative or over-reservation spend, duplicate calls, invalid
 scorecard data, route drift, or reaching the logical spend cap stops the screen before the next model.
 The command removes private replay after validation and retains only the ignored scorecard path.
 Scorecards contain bounded metrics and call evidence, not source documents, prompts, or raw provider

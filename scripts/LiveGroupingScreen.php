@@ -168,16 +168,24 @@ final class LiveGroupingScreen
 
             $afterRemaining = $this->validateKey($key, requireFullCap: false);
             $allowanceCost = $remaining->minus($afterRemaining);
+            $providerCost = $summary['provider_cost_usd'] === null
+                ? BigDecimal::zero()
+                : BigDecimal::of($summary['provider_cost_usd']);
+            $trialCost = $providerCost->isGreaterThan($allowanceCost) ? $providerCost : $allowanceCost;
 
-            if ((! $summary['technical_failure'] && $allowanceCost->isLessThanOrEqualTo(BigDecimal::zero()))
+            if ((! $summary['technical_failure'] && $trialCost->isLessThanOrEqualTo(BigDecimal::zero()))
                 || $allowanceCost->isNegative()
-                || $allowanceCost->isGreaterThan($reservation)
-                || ($summary['provider_cost_usd'] !== null
-                    && BigDecimal::of($summary['provider_cost_usd'])->isGreaterThan($reservation))) {
+                || $trialCost->isGreaterThan($reservation)) {
                 throw new RuntimeException('The live grouping trial exceeded its catalog-derived cost reservation.');
             }
 
-            $recordedSpend = $initialRemaining->minus($afterRemaining);
+            $observedSpend = $initialRemaining->minus($afterRemaining);
+            $recordedSpend = $recordedSpend->plus($trialCost);
+
+            if ($observedSpend->isGreaterThan($recordedSpend)) {
+                $recordedSpend = $observedSpend;
+            }
+
             $authorization['completed_models'][] = $model['id'];
             $authorization['recorded_spend'] = (string) $recordedSpend;
             $authorization['pending'] = null;
@@ -190,8 +198,12 @@ final class LiveGroupingScreen
             $summaries[] = [
                 'model' => $summary['model'],
                 'endpoint' => $summary['endpoint'],
-                'cost_usd' => (string) $allowanceCost,
-                'cost_source' => 'key_allowance_change',
+                'cost_usd' => (string) $trialCost,
+                'cost_source' => match (true) {
+                    $trialCost->isZero() => 'no_observed_charge',
+                    $providerCost->isGreaterThan($allowanceCost) => 'provider_reported',
+                    default => 'key_allowance_change',
+                },
                 'status' => $summary['technical_failure'] ? 'technical_failure' : 'measured',
                 'attempts' => $summary['attempts'],
                 'scorecard' => $runDirectory.'/scorecard.json',
@@ -202,15 +214,17 @@ final class LiveGroupingScreen
         $spent = $initialRemaining->minus($finalRemaining);
 
         if ($spent->isNegative()
-            || $spent->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
+            || $spent->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
+            || $recordedSpend->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
             throw new RuntimeException('The live grouping screen exceeded its approved USD spend cap.');
         }
 
         return [
             'live' => true,
             'output' => sprintf(
-                'Validated %d paid detector calls; key allowance change was $%s.',
+                'Validated %d paid detector calls; reconciled spend was $%s (key allowance change $%s).',
                 count($authorization['completed_models']),
+                (string) $recordedSpend,
                 (string) $spent,
             ),
             'runs' => $summaries,

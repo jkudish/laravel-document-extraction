@@ -49,16 +49,19 @@ function liveGroupingApi(
     array $keyOverrides = [],
     array $endpointOverrides = [],
     bool $omitZdr = false,
+    bool $lagAllowance = false,
 ): Closure {
     $keyChecks = 0;
 
-    return static function (string $url, ?string $key) use ($model, $keyOverrides, $endpointOverrides, $omitZdr, &$keyChecks): array {
+    return static function (string $url, ?string $key) use ($model, $keyOverrides, $endpointOverrides, $omitZdr, $lagAllowance, &$keyChecks): array {
         if ($url === 'https://openrouter.ai/api/v1/key') {
             expect($key)->toBe('synthetic-openrouter-canary');
             $keyChecks++;
             $remaining = $keyOverrides['limit_remaining'] ?? 50;
 
-            if ($keyChecks >= 3 && (is_int($remaining) || is_float($remaining) || is_string($remaining))) {
+            if (! $lagAllowance
+                && $keyChecks >= 3
+                && (is_int($remaining) || is_float($remaining) || is_string($remaining))) {
                 $remaining = (string) BigDecimal::of(is_float($remaining) ? (string) $remaining : $remaining)
                     ->minus('0.012345');
             }
@@ -461,6 +464,41 @@ it('uses immediate key allowance depletion when the observer cannot expose respo
 
         expect($result['runs'][0]['cost_usd'])->toBe('0.012345')
             ->and($result['runs'][0]['cost_source'])->toBe('key_allowance_change');
+    } finally {
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+
+        foreach (array_diff($after, $before) as $directory) {
+            foreach (glob($directory.'/*') ?: [] as $file) {
+                unlink($file);
+            }
+
+            rmdir($directory);
+        }
+    }
+});
+
+it('uses validated provider cost while key allowance reporting lags', function (): void {
+    $root = dirname(__DIR__, 2);
+    $model = LiveGroupingModels::all()[0];
+    $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $screen = new LiveGroupingScreen(
+        $root,
+        new NativeCommandRunner($root),
+        liveGroupingApi($model, lagAllowance: true),
+        [$model],
+        offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
+    );
+
+    try {
+        $result = $screen->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']);
+
+        expect($result['runs'][0]['cost_usd'])->toBe('0.012345')
+            ->and($result['runs'][0]['cost_source'])->toBe('provider_reported')
+            ->and($result['output'])->toContain('reconciled spend was $0.012345');
     } finally {
         $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
 
