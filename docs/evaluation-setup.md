@@ -207,8 +207,10 @@ selection, public extraction path, scorecard validation, replay cleanup, and fai
 The broad-screen run completed on **2026-09-08**. It consumed all 28 unique model/fixture pairs,
 produced 20 validated grouping scorecards and eight technical-evidence scorecards, and reconciled
 $0.091173548 of provider-reported spend under its $5 software cap. Its ignored v2 ledger remains fully
-consumed and separate from this stage. The current prompt canary has fresh authorization for exactly
-four finalists × `blank-separator` and `mixed-document-lengths`, uses an ignored v3 ledger, and changes
-only the detector instructions. Results and their limits are summarized in
-[`grouping-models.md`](grouping-models.md); any additional repeats or holdout run require new explicit
-authorization.
+consumed and separate from this stage. The prompt canary had fresh authorization for exactly
+four finalists × `blank-separator` and `mixed-document-lengths`, used an ignored v3 ledger, and changed
+only the detector instructions. It completed all eight calls with seven all-nine quality scorecards,
+one bounded technical failure, $0.037815190 of provider-reported spend, and a $0.140727190 conservative
+admission total. The v3 ledger is fully consumed and cannot repeat the matrix. Results and their limits
+are summarized in [`grouping-models.md`](grouping-models.md); any additional repeats or holdout run
+require new explicit authorization.

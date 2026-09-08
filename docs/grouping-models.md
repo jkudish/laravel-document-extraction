@@ -149,12 +149,35 @@ otherwise omit it so it is reported as unassigned. Ambiguity is reserved for doc
 with genuinely uncertain membership or boundaries. The text contains no fixture name, page number, or
 expected grouping.
 
-The authorized development-only canary holds schema, rendering, endpoint routes, reasoning, 512-token
-output limit, timeout, privacy, fallback, scorer, and source fixtures constant. It runs Haiku, Luna,
+The completed development-only canary held schema, rendering, endpoint routes, reasoning, 512-token
+output limit, timeout, privacy, fallback, scorer, and source fixtures constant. It ran Haiku, Luna,
 Gemini 2.5 Flash, and Qwen2.5 VL once each against `blank-separator` and the previously clean
 `mixed-document-lengths` control: eight paid detector calls under a fresh $1 software cap. The prompt
-fingerprint differs from the prior screen, so these results must remain a separate contract rather than
-being pooled as repeats. Grouped extraction and OCR remain simulated; no holdout is used.
+fingerprint differs from the prior screen, so these results remain a separate contract rather than
+being pooled as repeats. Grouped extraction and OCR were simulated; no holdout was used.
+
+All four `blank-separator` calls passed all nine grouping checks. Gemini 2.5 Flash therefore changed
+from failing ambiguity on this fixture under the prior instructions to an exact result under the
+clarified instructions; Haiku, Luna, and Qwen2.5 VL remained exact. All three scored control calls were
+also exact. Qwen2.5 VL's control call ended as a bounded technical failure before effective-model,
+usage, cost, or grouping evidence was available, so it is excluded from both quality and regression
+claims.
+
+| Model @ pinned endpoint | All-nine passes / scored | Technical failures | Average detector latency across two calls | Provider-reported cost |
+| --- | ---: | ---: | ---: | ---: |
+| `qwen/qwen2.5-vl-72b-instruct @ parasail/fp8` | 1 / 1 | 1 | 3.168s | $0.011010000 |
+| `google/gemini-2.5-flash @ google-vertex/global` | 2 / 2 | 0 | 1.734s | $0.001288500 |
+| `openai/gpt-5.6-luna @ azure/eu` | 2 / 2 | 0 | 2.229s | $0.007763690 |
+| `anthropic/claude-haiku-4.5 @ amazon-bedrock/global` | 2 / 2 | 0 | 3.021s | $0.017753000 |
+| **Total** | **7 / 7** | **1** | — | **$0.037815190** |
+
+The key-allowance change matched the seven provider-reported costs at $0.037815190. The admission
+ledger retained Qwen2.5 VL's $0.102912 conservative reservation for the technical failure, producing a
+$0.140727190 admission total under the $1 cap. One sample per model/fixture is enough to support
+retaining the generic clarification for further development evaluation, but not to establish a
+production default or eliminate stochastic variance. The four-model shortlist remains intact pending
+repeats; Qwen's missing control result and higher observed cost keep it behind the three fully scored
+routes rather than turning its technical failure into a quality loss.
 
 ### Requested-name disposition
 
@@ -173,8 +196,8 @@ being pooled as repeats. Grouped extraction and OCR remain simulated; no holdout
 
 ## Cost-controlled evaluation design
 
-The 15-call compatibility canary and 28-call broad development screen are complete. The eight-call
-prompt clarification canary is separately authorized; further repeats and holdout remain gated.
+The 15-call compatibility canary, 28-call broad development screen, and eight-call prompt clarification
+canary are complete. Further repeats and holdout remain gated.
 Use the installed native package path and published evaluation dependencies:
 
 - Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
@@ -202,19 +225,19 @@ Run the evaluation in gates:
    survivors against each of the four remaining development bundles: 28 detector calls, no repeats.
    Grouped extraction and OCR remained simulated. Twenty calls produced grouping scores, including 17
    that passed every grouping check; eight retained technical evidence without a quality score.
-4. **Prompt clarification canary (authorized):** run four finalists once on `blank-separator` and one
+4. **Prompt clarification canary (complete):** four finalists ran once on `blank-separator` and one
    previously clean development control after the generic blank-page instruction change: eight calls,
-   no holdout, and no pooling with prior-prompt trials.
+   seven exact scorecards, one technical failure, no holdout, and no pooling with prior-prompt trials.
 5. **Development finalists:** use the canary outcome to decide whether to keep the prompt, then add
    separately authorized repeats to reach at least three trials per finalist/development bundle.
 6. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
    and scoring before at least three repeats on each held-out bundle. Never tune on holdout outcomes.
 
-The canary removed technical and clearly unusable candidates, and the broad screen supplies the
-development evidence above. The prompt canary retains Haiku, Luna, Gemini 2.5 Flash, and Qwen2.5 VL:
-this keeps the only four-of-four route, the two scored-exact but incomplete routes, and the
-fastest/least-expensive mostly exact route. Llama is the first reserve; Qwen3 VL needs fresh quality
-evidence before promotion. Any calls beyond the authorized eight remain separately gated.
+The compatibility canary removed technical and clearly unusable candidates, and the broad screen
+supplies the development evidence above. The prompt canary supports retaining Haiku, Luna, Gemini 2.5
+Flash, and Qwen2.5 VL while ranking the three fully scored routes ahead of Qwen's incomplete control
+coverage. Llama is the first reserve; Qwen3 VL needs fresh quality evidence before promotion. Any
+additional calls remain separately gated.
 
 The executable screen is deliberately smaller than a manifest system: the test-owned model and
 fixture lists in `tests/Support/LiveGroupingModels.php`, one Pest benchmark, and
