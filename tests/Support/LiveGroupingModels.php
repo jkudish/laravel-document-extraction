@@ -39,7 +39,7 @@ final class LiveGroupingModels
             self::model('google/gemini-3.1-flash-lite', 'google-vertex/global', true, true, 0.25, 1.5, 0.000_000_25, canonical: 'google/gemini-3.1-flash-lite-20260507'),
             self::model('google/gemini-2.5-flash', 'google-vertex/global', true, true, 0.3, 2.5, 0.000_000_3),
             self::model('google/gemini-2.5-pro', 'google-vertex/us', true, true, 2.5, 15.0, 0.000_001_25),
-            self::model('openai/gpt-5.6-luna', 'azure/us', true, true, 0.44, 1.98, completionTokenParameter: true, canonical: 'openai/gpt-5.6-luna-20260709'),
+            self::model('openai/gpt-5.6-luna', 'azure', true, true, 0.44, 1.98, completionTokenParameter: true, canonical: 'openai/gpt-5.6-luna-20260709'),
             self::model('anthropic/claude-sonnet-5', 'amazon-bedrock/global', true, true, 2.0, 10.0, canonical: 'anthropic/claude-sonnet-5-20260630'),
             self::model('anthropic/claude-haiku-4.5', 'amazon-bedrock/global', true, true, 1.0, 5.0, canonical: 'anthropic/claude-4.5-haiku-20251001'),
             self::model('mistralai/mistral-small-2603', 'mistral/zdr', true, true, 0.15, 0.6),
