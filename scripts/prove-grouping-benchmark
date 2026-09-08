@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+runs="$root/storage/app/ai-evals/runs"
+proof="$(mktemp -d "${TMPDIR:-/tmp}/lde-grouping-proof.XXXXXX")"
+mkdir -p "$proof/home" "$proof/tmp" "$runs"
+
+before="$proof/before"
+after="$proof/after"
+created="$proof/created"
+find "$runs" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort > "$before"
+
+cleanup() {
+    if [[ "${LDE_KEEP_GROUPING_RUN:-0}" != "1" && -f "$created" ]]; then
+        while IFS= read -r run; do
+            [[ -n "$run" ]] && rm -rf "$runs/$run"
+        done < "$created"
+    fi
+
+    rm -rf "$proof"
+}
+trap cleanup EXIT
+
+clean_env=(
+    env -i
+    HOME="$proof/home"
+    TMPDIR="$proof/tmp"
+    PATH=/usr/local/bin:/usr/bin:/bin
+    PAO_DISABLE=1
+)
+
+"${clean_env[@]}" "$root/vendor/bin/pest" \
+    "$root/tests/Evals/GroupingBenchmarkTest.php" --no-tia > "$proof/normal.log"
+
+find "$runs" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort > "$after"
+comm -13 "$before" "$after" > "$created"
+[[ ! -s "$created" ]] || { echo 'Normal test mode unexpectedly created a benchmark run.' >&2; exit 1; }
+
+"${clean_env[@]}" LDE_GROUPING_RUNTIME_SALT=stable \
+    "$root/vendor/bin/pest" "$root/tests/Evals/GroupingBenchmarkTest.php" \
+    --no-tia --evals > "$proof/evals.log"
+
+find "$runs" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort > "$after"
+comm -13 "$before" "$after" > "$created"
+[[ "$(wc -l < "$created")" -eq 1 ]] || { echo 'The offline evaluation did not create exactly one run.' >&2; exit 1; }
+run_id="$(cat "$created")"
+"${clean_env[@]}" LDE_GROUPING_RUNTIME_SALT=stable \
+    php "$root/scripts/validate-grouping-scorecard" "$runs/$run_id"
+
+tampered="$proof/tampered-run"
+cp -a "$runs/$run_id" "$tampered"
+"${clean_env[@]}" php -r '
+$path = $argv[1]."/replay.private.json";
+$replay = json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+$replay["trials"][0]["output"]["calls"][0]["requested_identity"]["model"] = "tampered";
+file_put_contents($path, json_encode($replay, JSON_THROW_ON_ERROR));
+' "$tampered"
+
+set +e
+"${clean_env[@]}" LDE_GROUPING_RUNTIME_SALT=stable \
+    php "$root/scripts/validate-grouping-scorecard" "$tampered" > "$proof/tampered.log" 2>&1
+tampered_status=$?
+set -e
+
+[[ "$tampered_status" -ne 0 ]] || { echo 'Tampered call evidence unexpectedly passed scorecard validation.' >&2; exit 1; }
+grep -q 'identity or usage does not match' "$proof/tampered.log" \
+    || { echo 'Tampered scorecard validation failed for an unexpected reason.' >&2; exit 1; }
+
+set +e
+"${clean_env[@]}" LDE_GROUPING_RUNTIME_SALT=changed \
+    "$root/vendor/bin/pest" "$root/tests/Evals/GroupingBenchmarkTest.php" \
+    --no-tia --evals --benchmark-replay="$run_id" > "$proof/replay.log" 2>&1
+replay_status=$?
+set -e
+
+[[ "$replay_status" -ne 0 ]] || { echo 'Changed runtime evidence unexpectedly replayed a prior run.' >&2; exit 1; }
+grep -q 'does not contain the requested completed trial' "$proof/replay.log" \
+    || { echo 'Replay failed for an unexpected reason.' >&2; exit 1; }
+
+echo 'Offline grouping benchmark proof passed; changed runtime evidence invalidated replay.'
+if [[ "${LDE_KEEP_GROUPING_RUN:-0}" == "1" ]]; then
+    echo "Retained run: $runs/$run_id"
+fi
