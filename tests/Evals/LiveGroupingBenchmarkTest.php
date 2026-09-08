@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
@@ -27,6 +28,8 @@ use Laravel\Ai\Responses\StructuredTextResponse;
 uses(TestCase::class);
 
 beforeEach(function (): void {
+    $generationLookups = 0;
+
     config()->set([
         'ai.providers.openrouter.key' => getenv('OPENROUTER_API_KEY') ?: null,
         'ai-pricing.offline' => true,
@@ -80,8 +83,14 @@ beforeEach(function (): void {
     })->preventStrayPrompts();
 
     if (getenv('LDE_LIVE_GROUPING_OFFLINE') === '1') {
-        Http::fake(function (Request $request) {
+        Http::fake(function (Request $request) use (&$generationLookups) {
             if (str_starts_with($request->url(), 'https://openrouter.ai/api/v1/generation')) {
+                $generationLookups++;
+
+                if ($generationLookups === 1) {
+                    return Http::response(status: 404);
+                }
+
                 $model = getenv('LDE_LIVE_GROUPING_MODEL');
 
                 if (! is_string($model)) {
@@ -166,7 +175,20 @@ afterEach(function (): void {
         ->and(config('extraction.detection.options'))->toBe(['openai' => ['temperature' => 0.1]]);
 
     if (getenv('LDE_LIVE_GROUPING_CONFIRM') === LiveGroupingModels::CONFIRMATION) {
-        Http::assertSentCount(2);
+        $completions = Http::recorded(
+            static fn (Request $request): bool => $request->url() === 'https://openrouter.ai/api/v1/chat/completions',
+        );
+        $generationLookups = Http::recorded(
+            static fn (Request $request): bool => str_starts_with($request->url(), 'https://openrouter.ai/api/v1/generation'),
+        );
+
+        expect($completions)->toHaveCount(1)
+            ->and($generationLookups->count())->toBeGreaterThanOrEqual(1)
+            ->and(Http::recorded())->toHaveCount(1 + $generationLookups->count());
+
+        if (getenv('LDE_LIVE_GROUPING_OFFLINE') === '1') {
+            expect($generationLookups)->toHaveCount(2);
+        }
     } else {
         Http::assertNothingSent();
     }
@@ -296,11 +318,19 @@ function liveGroupingRouteEvidence(): array
         throw new RuntimeException('The live grouping response lacks a generation identity for route audit.');
     }
 
-    $route = Http::withToken($key)
+    $routeResponse = Http::withToken($key)
         ->acceptJson()
-        ->get('https://openrouter.ai/api/v1/generation', ['id' => $generationId])
-        ->throw()
-        ->json('data');
+        // OpenRouter can briefly return 404 while completed generation metadata becomes available.
+        ->retry(
+            [1000, 2000, 4000, 8000, 15000],
+            when: static fn (Throwable $exception): bool => $exception instanceof RequestException
+                && $exception->response->status() === 404,
+            throw: false,
+        )
+        ->get('https://openrouter.ai/api/v1/generation', ['id' => $generationId]);
+    $route = $routeResponse->json('data');
+
+    $routeResponse->throw();
 
     if (! is_array($route) || array_is_list($route)) {
         throw new RuntimeException('The OpenRouter generation route evidence is invalid.');
