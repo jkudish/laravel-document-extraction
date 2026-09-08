@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Jkudish\DocumentExtraction\AI\InlineSchemaAgent;
@@ -80,6 +81,31 @@ beforeEach(function (): void {
 
     if (getenv('LDE_LIVE_GROUPING_OFFLINE') === '1') {
         Http::fake(function (Request $request) {
+            if (str_starts_with($request->url(), 'https://openrouter.ai/api/v1/generation')) {
+                $model = getenv('LDE_LIVE_GROUPING_MODEL');
+
+                if (! is_string($model)) {
+                    throw new RuntimeException('The offline route audit lacks an approved model.');
+                }
+
+                $configured = LiveGroupingModels::find($model);
+
+                return Http::response(['data' => [
+                    'id' => 'offline-live-screen',
+                    'model' => $configured['canonical'],
+                    'provider_name' => $configured['route']['provider_name'],
+                    'data_region' => $configured['route']['data_region'],
+                    'service_tier' => $configured['route']['service_tier'],
+                    'router' => null,
+                    'provider_responses' => [[
+                        'status' => 200,
+                        'provider_name' => $configured['route']['provider_name'],
+                        'model_permaslug' => $configured['canonical'],
+                        'routed_service_tier' => $configured['route']['service_tier'],
+                    ]],
+                ]]);
+            }
+
             $body = $request->data();
             $fixture = liveGroupingFixture();
             $model = $body['model'] ?? null;
@@ -128,7 +154,10 @@ beforeEach(function (): void {
         });
     } else {
         Http::record();
-        Http::allowStrayRequests(['https://openrouter.ai/api/v1/chat/completions']);
+        Http::allowStrayRequests([
+            'https://openrouter.ai/api/v1/chat/completions',
+            'https://openrouter.ai/api/v1/generation*',
+        ]);
     }
 });
 
@@ -142,7 +171,7 @@ afterEach(function (): void {
         ->and(config('extraction.detection.options'))->toBe(['openai' => ['temperature' => 0.1]]);
 
     if (getenv('LDE_LIVE_GROUPING_CONFIRM') === LiveGroupingModels::CONFIRMATION) {
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
     } else {
         Http::assertNothingSent();
     }
@@ -152,7 +181,7 @@ benchmark(LiveGroupingModels::BENCHMARK, function (): array {
     expect(getenv('LDE_LIVE_GROUPING_CONFIRM'))->toBe(LiveGroupingModels::CONFIRMATION);
 
     $fixture = liveGroupingFixture();
-    $path = GroupingBenchmarkCorpus::fixturePath($fixture['file']);
+    $path = GroupingBenchmarkCorpus::verifiedFixturePath($fixture);
     $pending = Extraction::fromPath($path)
         ->detectDocuments()
         ->schema(fn (JsonSchema $schema): array => ['value' => $schema->string()->required()]);
@@ -172,7 +201,10 @@ benchmark(LiveGroupingModels::BENCHMARK, function (): array {
             static fn (CallRecord $call): bool => $call->evidenceOrigin === EvidenceOrigin::Live,
         ))->toHaveCount(1);
 
-    return GroupingBenchmarkCorpus::output($result, $fixture);
+    return [
+        ...GroupingBenchmarkCorpus::output($result, $fixture),
+        'openrouter_route' => liveGroupingRouteEvidence(),
+    ];
 })->configurations(LiveGroupingModels::configurations(
     (($onlyModel = getenv('LDE_LIVE_GROUPING_MODEL')) !== false && $onlyModel !== '') ? $onlyModel : null,
 ))
@@ -220,9 +252,91 @@ function liveGroupingFixture(): array
 
     foreach (GroupingBenchmarkCorpus::fixtures() as [$fixture]) {
         if ($fixture['id'] === $fixtureId && $fixture['split'] === 'prompt-example') {
+            $expectedHash = getenv('LDE_LIVE_GROUPING_FIXTURE_SHA256');
+            $expectedSize = getenv('LDE_LIVE_GROUPING_FIXTURE_SIZE');
+
+            if (! is_string($expectedHash)
+                || ! hash_equals($fixture['sha256'], $expectedHash)
+                || ! is_string($expectedSize)
+                || ! ctype_digit($expectedSize)
+                || (int) $expectedSize !== $fixture['size']) {
+                throw new RuntimeException('The selected grouping fixture does not match the parent authorization.');
+            }
+
+            GroupingBenchmarkCorpus::verifiedFixturePath($fixture);
+
             return $fixture;
         }
     }
 
     throw new RuntimeException('The approved live grouping fixture was not found.');
+}
+
+/** @return array{model: string, provider_name: string, data_region: string, service_tier: ?string, provider_attempts: int} */
+function liveGroupingRouteEvidence(): array
+{
+    $model = getenv('LDE_LIVE_GROUPING_MODEL');
+    $key = getenv('OPENROUTER_API_KEY');
+
+    if (! is_string($model) || ! is_string($key) || $key === '') {
+        throw new RuntimeException('The live grouping route audit lacks its approved identity.');
+    }
+
+    $configured = LiveGroupingModels::find($model);
+    $recorded = Http::recorded(
+        static fn (Request $request): bool => $request->url() === 'https://openrouter.ai/api/v1/chat/completions',
+    );
+
+    if ($recorded->count() !== 1) {
+        throw new RuntimeException('The live grouping route audit requires exactly one completion response.');
+    }
+
+    $completion = $recorded->first();
+    $completionResponse = is_array($completion) && ($completion[1] ?? null) instanceof Response
+        ? $completion[1]
+        : null;
+    $generationId = $completionResponse?->json('id');
+
+    if (! is_string($generationId) || $generationId === '') {
+        throw new RuntimeException('The live grouping response lacks a generation identity for route audit.');
+    }
+
+    $route = Http::withToken($key)
+        ->acceptJson()
+        ->get('https://openrouter.ai/api/v1/generation', ['id' => $generationId])
+        ->throw()
+        ->json('data');
+
+    if (! is_array($route) || array_is_list($route)) {
+        throw new RuntimeException('The OpenRouter generation route evidence is invalid.');
+    }
+
+    $attempts = $route['provider_responses'] ?? null;
+    $attempt = is_array($attempts) && array_is_list($attempts) && count($attempts) === 1
+        ? $attempts[0]
+        : null;
+    $serviceTier = $route['service_tier'] ?? null;
+
+    if (($route['id'] ?? null) !== $generationId
+        || ! in_array($route['model'] ?? null, [$configured['id'], $configured['canonical']], true)
+        || ($route['provider_name'] ?? null) !== $configured['route']['provider_name']
+        || ($route['data_region'] ?? null) !== $configured['route']['data_region']
+        || (! is_string($serviceTier) && $serviceTier !== null)
+        || $serviceTier !== $configured['route']['service_tier']
+        || ($route['router'] ?? null) !== null
+        || ! is_array($attempt)
+        || ($attempt['status'] ?? null) !== 200
+        || ($attempt['provider_name'] ?? null) !== $configured['route']['provider_name']
+        || ! in_array($attempt['model_permaslug'] ?? null, [$configured['id'], $configured['canonical']], true)
+        || ($attempt['routed_service_tier'] ?? null) !== $configured['route']['service_tier']) {
+        throw new RuntimeException('The OpenRouter generation did not use the approved route without fallback.');
+    }
+
+    return [
+        'model' => $route['model'],
+        'provider_name' => $route['provider_name'],
+        'data_region' => $route['data_region'],
+        'service_tier' => $serviceTier,
+        'provider_attempts' => 1,
+    ];
 }

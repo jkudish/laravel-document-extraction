@@ -7,6 +7,7 @@ use Jkudish\DocumentExtraction\Dev\LiveGroupingScreen;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\CommandResult;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\CommandRunner;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\NativeCommandRunner;
+use Jkudish\DocumentExtraction\Tests\Support\GroupingBenchmarkCorpus;
 use Jkudish\DocumentExtraction\Tests\Support\LiveGroupingAttemptScorer;
 use Jkudish\DocumentExtraction\Tests\Support\LiveGroupingModels;
 
@@ -77,6 +78,16 @@ final class UnavailableLiveCostRunner implements CommandRunner
             $primary['passed'] = false;
             $primary['measurements'] = [$measurement];
             $scorecard['trials'][0]['results'] = [$primary];
+        } else {
+            foreach ($scorecard['trials'][0]['results'] as &$scoreResult) {
+                if (is_array($scoreResult)
+                    && is_array($scoreResult['measurements'] ?? null)
+                    && is_array($scoreResult['measurements'][0] ?? null)) {
+                    $scoreResult['measurements'][0] = $measurement;
+                }
+            }
+
+            unset($scoreResult);
         }
 
         file_put_contents($scorecardPath, json_encode($scorecard, JSON_THROW_ON_ERROR));
@@ -104,7 +115,7 @@ function liveGroupingAuthorizationPath(): string
     return sys_get_temp_dir().'/lde-live-grouping-screen-test-'.getmypid().'.json';
 }
 
-/** @param array{id: string, canonical: string, endpoint: string, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}} $model
+/** @param array{id: string, canonical: string, endpoint: string, route: array{provider_name: string, data_region: string, service_tier: ?string}, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}} $model
  * @param  array<string, mixed>  $keyOverrides
  * @param  array<string, mixed>  $endpointOverrides
  * @return Closure(string, ?string): array<string, mixed>
@@ -178,6 +189,7 @@ function liveGroupingApi(
             return ['data' => ['endpoints' => [[
                 'model_id' => $model['id'],
                 'tag' => $model['endpoint'],
+                'provider_name' => $model['route']['provider_name'],
                 'status' => 0,
                 'context_length' => 1_000_000,
                 'supported_parameters' => ['response_format', 'structured_outputs', $model['output_parameter']],
@@ -191,7 +203,7 @@ function liveGroupingApi(
 }
 
 /**
- * @param  non-empty-list<array{id: string, canonical: string, endpoint: string, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}}>  $models
+ * @param  non-empty-list<array{id: string, canonical: string, endpoint: string, route: array{provider_name: string, data_region: string, service_tier: ?string}, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}}>  $models
  * @param  Closure(int): string  $remaining
  * @param  array<string, mixed>  $endpointOverrides
  * @return Closure(string, ?string): array<string, mixed>
@@ -315,6 +327,18 @@ it('rejects duplicate and holdout fixtures before any request', function (array 
         'single-three-page-document',
     ]],
     'holdout fixture' => [['same-issuer-invoices']],
+]);
+
+it('rejects a grouping fixture file that does not match its approved identity', function (array $changes): void {
+    /** @var array{file?: string, sha256?: string, size?: int} $changes */
+    $fixture = GroupingBenchmarkCorpus::manifest()['fixtures'][0];
+
+    expect(fn () => GroupingBenchmarkCorpus::verifiedFixturePath([...$fixture, ...$changes]))
+        ->toThrow(RuntimeException::class, 'does not match its approved manifest identity');
+})->with([
+    'hash changed' => [['sha256' => str_repeat('0', 64)]],
+    'size changed' => [['size' => 1]],
+    'path escaped' => [['file' => '../manifest.json']],
 ]);
 
 it('rejects a canary model that did not survive before any request', function (): void {
@@ -443,12 +467,17 @@ it('rejects stale route capabilities and prices before the inference runner', fu
     'missing context length' => [['context_length' => null]],
     'excessive prompt rate' => [['pricing' => ['prompt' => '1', 'completion' => '0.00000047']]],
     'excessive override prompt rate' => [['pricing' => [
-        'prompt' => '0.00000015',
-        'completion' => '0.00000047',
+        'prompt' => '0.000000104',
+        'completion' => '0.000000416',
         'overrides' => [['min_prompt_tokens' => 1, 'prompt' => '1']],
     ]]],
-    'unexpected image rate' => [['pricing' => ['prompt' => '0.00000015', 'completion' => '0.00000047', 'image' => '1']]],
-    'unexpected request rate' => [['pricing' => ['prompt' => '0.00000015', 'completion' => '0.00000047', 'request' => '1']]],
+    'unexpected image rate' => [['pricing' => ['prompt' => '0.000000104', 'completion' => '0.000000416', 'image' => '1']]],
+    'unexpected request rate' => [['pricing' => ['prompt' => '0.000000104', 'completion' => '0.000000416', 'request' => '1']]],
+    'unknown pricing unit' => [['pricing' => [
+        'prompt' => '0.000000104',
+        'completion' => '0.000000416',
+        'future_input_cache' => '0.000001',
+    ]]],
 ]);
 
 it('refuses a call whose catalog-derived reservation cannot fit the software budget', function (): void {
@@ -813,17 +842,6 @@ it('preserves admission reservations across a resumed run', function (): void {
         LiveGroupingModels::fixtureIds(),
     );
     $runner = new InertLiveGroupingRunner;
-    file_put_contents(liveGroupingAuthorizationPath(), json_encode([
-        'schema_version' => 3,
-        'confirmation' => LiveGroupingModels::CONFIRMATION,
-        'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
-        'trial_ids' => $trialIds,
-        'initial_remaining' => '50',
-        'recorded_spend' => '0.001',
-        'admission_spend' => '4.500425984',
-        'completed_trials' => array_slice($trialIds, 0, 2),
-        'pending' => null,
-    ], JSON_THROW_ON_ERROR));
     $screen = new LiveGroupingScreen(
         $root,
         $runner,
@@ -836,6 +854,18 @@ it('preserves admission reservations across a resumed run', function (): void {
         offlineInference: true,
         authorizationPath: liveGroupingAuthorizationPath(),
     );
+    file_put_contents(liveGroupingAuthorizationPath(), json_encode([
+        'schema_version' => 3,
+        'confirmation' => LiveGroupingModels::CONFIRMATION,
+        'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
+        'contract_fingerprint' => $screen->contractFingerprint(),
+        'trial_ids' => $trialIds,
+        'initial_remaining' => '50',
+        'recorded_spend' => '0.001',
+        'admission_spend' => '4.500425984',
+        'completed_trials' => array_slice($trialIds, 0, 2),
+        'pending' => null,
+    ], JSON_THROW_ON_ERROR));
 
     expect(fn () => $screen->execute([
         '--live',
@@ -886,10 +916,20 @@ it('resumes a clean completed prefix against the original allowance baseline', f
     $root = dirname(__DIR__, 2);
     [$first, $second] = array_slice(LiveGroupingModels::survivors(), 0, 2);
     $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $screen = new LiveGroupingScreen(
+        $root,
+        new NativeCommandRunner($root),
+        liveGroupingApi($second, keyOverrides: ['limit_remaining' => 49.99]),
+        [$first, $second],
+        offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
+        fixtureIds: [LiveGroupingModels::fixtureIds()[0]],
+    );
     $authorization = [
         'schema_version' => 3,
         'confirmation' => LiveGroupingModels::CONFIRMATION,
         'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
+        'contract_fingerprint' => $screen->contractFingerprint(),
         'trial_ids' => [
             $first['id'].'|'.LiveGroupingModels::fixtureIds()[0],
             $second['id'].'|'.LiveGroupingModels::fixtureIds()[0],
@@ -903,15 +943,6 @@ it('resumes a clean completed prefix against the original allowance baseline', f
     file_put_contents(
         liveGroupingAuthorizationPath(),
         json_encode($authorization, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR),
-    );
-    $screen = new LiveGroupingScreen(
-        $root,
-        new NativeCommandRunner($root),
-        liveGroupingApi($second, keyOverrides: ['limit_remaining' => 49.99]),
-        [$first, $second],
-        offlineInference: true,
-        authorizationPath: liveGroupingAuthorizationPath(),
-        fixtureIds: [LiveGroupingModels::fixtureIds()[0]],
     );
 
     try {
@@ -943,19 +974,6 @@ it('rejects duplicate or reordered completed trial identities when resuming', fu
     $fixture = LiveGroupingModels::fixtureIds()[0];
     $trialIds = [$first['id'].'|'.$fixture, $second['id'].'|'.$fixture];
     $runner = new InertLiveGroupingRunner;
-
-    file_put_contents(liveGroupingAuthorizationPath(), json_encode([
-        'schema_version' => 3,
-        'confirmation' => LiveGroupingModels::CONFIRMATION,
-        'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
-        'trial_ids' => $trialIds,
-        'initial_remaining' => '50',
-        'recorded_spend' => '0.001',
-        'admission_spend' => '0.001',
-        'completed_trials' => $completed,
-        'pending' => null,
-    ], JSON_THROW_ON_ERROR));
-
     $screen = new LiveGroupingScreen(
         dirname(__DIR__, 2),
         $runner,
@@ -965,6 +983,19 @@ it('rejects duplicate or reordered completed trial identities when resuming', fu
         authorizationPath: liveGroupingAuthorizationPath(),
         fixtureIds: [$fixture],
     );
+
+    file_put_contents(liveGroupingAuthorizationPath(), json_encode([
+        'schema_version' => 3,
+        'confirmation' => LiveGroupingModels::CONFIRMATION,
+        'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
+        'contract_fingerprint' => $screen->contractFingerprint(),
+        'trial_ids' => $trialIds,
+        'initial_remaining' => '50',
+        'recorded_spend' => '0.001',
+        'admission_spend' => '0.001',
+        'completed_trials' => $completed,
+        'pending' => null,
+    ], JSON_THROW_ON_ERROR));
 
     expect(fn () => $screen->execute([
         '--live',
@@ -981,6 +1012,41 @@ it('rejects duplicate or reordered completed trial identities when resuming', fu
         LiveGroupingModels::survivors()[0]['id'].'|'.LiveGroupingModels::fixtureIds()[0],
     ],
 ]);
+
+it('rejects a resumed ledger whose bound screen contract changed', function (): void {
+    $model = LiveGroupingModels::survivors()[0];
+    $fixture = LiveGroupingModels::fixtureIds()[0];
+    $runner = new InertLiveGroupingRunner;
+    $screen = new LiveGroupingScreen(
+        dirname(__DIR__, 2),
+        $runner,
+        liveGroupingApi($model, keyOverrides: ['limit_remaining' => '49.999']),
+        [$model],
+        offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
+        fixtureIds: [$fixture],
+    );
+
+    file_put_contents(liveGroupingAuthorizationPath(), json_encode([
+        'schema_version' => 3,
+        'confirmation' => LiveGroupingModels::CONFIRMATION,
+        'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
+        'contract_fingerprint' => 'sha256:'.str_repeat('0', 64),
+        'trial_ids' => [$model['id'].'|'.$fixture],
+        'initial_remaining' => '50',
+        'recorded_spend' => '0.001',
+        'admission_spend' => '0.001',
+        'completed_trials' => [],
+        'pending' => null,
+    ], JSON_THROW_ON_ERROR));
+
+    expect(fn () => $screen->execute([
+        '--live',
+        '--confirm='.LiveGroupingModels::CONFIRMATION,
+    ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+        ->toThrow(RuntimeException::class, 'ledger is invalid')
+        ->and($runner->calls)->toBe(0);
+});
 
 it('removes private replay when a completed child trial is rejected', function (): void {
     $root = dirname(__DIR__, 2);
@@ -1107,6 +1173,93 @@ it('rejects an unexpected scorer set and removes its private replay', function (
     }
 });
 
+it('rejects detached scorer measurements and mismatched private replay output', function (string $mutation): void {
+    $root = dirname(__DIR__, 2);
+    $model = LiveGroupingModels::survivors()[0];
+    $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $runner = new class($root, $mutation) implements CommandRunner
+    {
+        public function __construct(
+            private readonly string $root,
+            private readonly string $mutation,
+        ) {}
+
+        public function run(array $command, ?array $environment = null): CommandResult
+        {
+            $before = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+            $result = (new NativeCommandRunner($this->root))->run($command, $environment);
+            $after = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+            $created = array_values(array_diff($after, $before));
+
+            if ($this->mutation === 'measurement') {
+                $path = $created[0].'/scorecard.json';
+                $scorecard = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+
+                if (! is_array($scorecard)
+                    || ! is_array($scorecard['trials'] ?? null)
+                    || ! is_array($scorecard['trials'][0] ?? null)
+                    || ! is_array($scorecard['trials'][0]['results'] ?? null)
+                    || ! is_array($scorecard['trials'][0]['results'][1] ?? null)
+                    || ! is_array($scorecard['trials'][0]['results'][1]['measurements'] ?? null)
+                    || ! is_array($scorecard['trials'][0]['results'][1]['measurements'][0] ?? null)) {
+                    throw new RuntimeException('The scorecard cannot be mutated for detached-evidence proof.');
+                }
+
+                $scorecard['trials'][0]['results'][1]['measurements'][0]['mode'] = 'simulated';
+                file_put_contents($path, json_encode($scorecard, JSON_THROW_ON_ERROR));
+            } else {
+                $path = $created[0].'/replay.private.json';
+                $replay = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+
+                if (! is_array($replay)
+                    || ! is_array($replay['trials'] ?? null)
+                    || ! is_array($replay['trials'][0] ?? null)
+                    || ! is_array($replay['trials'][0]['output'] ?? null)) {
+                    throw new RuntimeException('The replay cannot be mutated for detached-evidence proof.');
+                }
+
+                $replay['trials'][0]['output']['fixture_id'] = 'same-issuer-invoices';
+                file_put_contents($path, json_encode($replay, JSON_THROW_ON_ERROR));
+            }
+
+            return $result;
+        }
+    };
+    $screen = new LiveGroupingScreen(
+        $root,
+        $runner,
+        liveGroupingApi($model),
+        [$model],
+        offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
+        fixtureIds: [LiveGroupingModels::fixtureIds()[0]],
+    );
+
+    try {
+        expect(fn () => $screen->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+            ->toThrow(RuntimeException::class);
+
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+        $created = array_values(array_diff($after, $before));
+
+        expect($created)->toHaveCount(1)
+            ->and(is_file($created[0].'/replay.private.json'))->toBeFalse();
+    } finally {
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+
+        foreach (array_diff($after, $before) as $directory) {
+            foreach (glob($directory.'/*') ?: [] as $file) {
+                unlink($file);
+            }
+
+            rmdir($directory);
+        }
+    }
+})->with(['measurement', 'replay']);
+
 it('rejects malformed live price evidence without throwing', function (mixed $amount): void {
     $output = json_encode([
         'calls' => [
@@ -1135,6 +1288,13 @@ it('rejects malformed live price evidence without throwing', function (mixed $am
             'complete' => false,
             'mode' => 'mixed',
         ],
+        'openrouter_route' => [
+            'model' => 'qwen/qwen3.8-flash-20260826',
+            'provider_name' => 'Alibaba',
+            'data_region' => 'global',
+            'service_tier' => null,
+            'provider_attempts' => 1,
+        ],
     ], JSON_THROW_ON_ERROR);
 
     expect((new LiveGroupingAttemptScorer)->score('', $output)->score)->toBe(0.0);
@@ -1144,7 +1304,7 @@ it('rejects malformed live price evidence without throwing', function (mixed $am
     'wrong type' => [[]],
 ]);
 
-it('validates effective identity for a priced detector with no extractable groups', function (string $effective, float $expected): void {
+it('validates effective identity and route for a priced detector with no extractable groups', function (string $effective, int $providerAttempts, float $expected): void {
     $output = json_encode([
         'calls' => [[
             'reference' => 'invocation:1',
@@ -1161,11 +1321,19 @@ it('validates effective identity for a priced detector with no extractable group
             'complete' => true,
             'mode' => 'live',
         ],
+        'openrouter_route' => [
+            'model' => 'qwen/qwen3.8-flash-20260826',
+            'provider_name' => 'Alibaba',
+            'data_region' => 'global',
+            'service_tier' => null,
+            'provider_attempts' => $providerAttempts,
+        ],
     ], JSON_THROW_ON_ERROR);
 
     expect((new LiveGroupingAttemptScorer)->score('', $output)->score)->toBe($expected);
 })->with([
-    'requested alias' => ['qwen/qwen3.8-flash', 1.0],
-    'pinned canonical model' => ['qwen/qwen3.8-flash-20260826', 1.0],
-    'unexpected model' => ['other/model', 0.0],
+    'requested alias' => ['qwen/qwen3.8-flash', 1, 1.0],
+    'pinned canonical model' => ['qwen/qwen3.8-flash-20260826', 1, 1.0],
+    'unexpected model' => ['other/model', 1, 0.0],
+    'fallback attempt' => ['qwen/qwen3.8-flash', 2, 0.0],
 ]);

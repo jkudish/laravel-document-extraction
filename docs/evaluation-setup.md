@@ -137,7 +137,9 @@ that the key has a finite monthly limit no larger than $50 and at least $5 remai
 the current public catalog and rejects missing models, stale endpoints, unsupported image/structured
 output, endpoint price increases, unavailable routes, or missing ZDR where the selected route requires
 it. Qwen3 VL does not advertise ZDR and instead pins `data_collection = deny`; every other selected
-route requires both.
+route requires both. Before any request carrying page content, the parent and isolated child both
+verify that the selected regular, non-symlink PDF remains inside the synthetic fixture directory and
+matches its approved size and SHA-256.
 
 ```sh
 scripts/live-grouping-screen --live --confirm=run-28-paid-detector-calls
@@ -150,12 +152,15 @@ through OpenRouter with the exact model and endpoint, `allow_fallbacks = false`,
 `require_parameters = true`, a 512-token output limit, reasoning disabled where supported, and the
 recorded rate ceilings. The application extraction agent remains Laravel AI-faked, so each trial has
 exactly one paid detector request even when it detects several groups. No holdout fixture is selectable.
+After the completion, one non-inference OpenRouter generation-metadata lookup must confirm the model,
+provider, data region, service tier, and exactly one successful provider response. The trial stops if
+that independent route evidence is absent or inconsistent.
 
 The runner enforces a $5 software admission budget. Before each sequential request, reconciled spend
 plus a conservative reservation derived from the selected endpoint's full context capacity, the
 highest advertised base or override input/cache/image-token rate, 512 output and reasoning tokens,
 and the selected fixture's page count must fit under $5. Unbounded applicable charges, incomplete cost
-evidence, or reservation overruns stop the run. Immediately after each request, the runner refreshes
+evidence, unknown pricing units, or reservation overruns stop the run. Immediately after each request, the runner refreshes
 the key allowance and uses validated provider-reported cost when available, otherwise the observed
 allowance depletion. Delayed allowance changes are not attributed to a later call's reservation; the
 cumulative allowance change and a persistent admission total are independently checked against $5.
@@ -165,7 +170,8 @@ for another request.
 This is a software safeguard, not a provider-level $5 cap: it cannot undo an in-flight provider charge,
 and unrelated use of the same key is conservatively counted against this screen.
 The ignored, private authorization ledger survives command restarts, binds the run to the current key,
-the exact ordered model/fixture matrix, and records a reservation before dispatch. A completed prefix
+the exact ordered model/fixture matrix, $5 cap, fixture identities, route options, and hashed execution
+dependencies, and records a reservation before dispatch. A completed prefix
 can resume, but an unresolved in-flight call or a fully consumed 28-call authorization cannot be run
 again. The selected route and reservation are refreshed from the catalog immediately before every
 request.
@@ -176,6 +182,8 @@ instead of aborting the screen; their numeric scoresâ€”not their `passed` flagâ€
 After every trial, the command applies the benchmark plugin's stable scorecard validator and checks
 fixture identity, all nine deterministic grouping scores, requested/effective model evidence, one
 live detector measurement, simulated grouped extraction measurements, and unique call ordinals. The
+runner also requires every scorer to reference the same target measurements and validates the private
+replay's trial fingerprint, fixture identity, source hash, page count, and audited route before cleanup. The
 production result's integrity scorer still requires one positive provider-reported USD cost with
 matching extraction totals. When the outer benchmark observer cannot expose response pricing after a
 locally rejected structured result, the command records the immediate key-allowance change instead of

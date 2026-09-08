@@ -142,6 +142,29 @@ final class GroupingBenchmarkCorpus
         return dirname(__DIR__).'/Fixtures/Grouping/'.$file;
     }
 
+    /** @param array{file: string, sha256: string, size: int} $fixture */
+    public static function verifiedFixturePath(array $fixture): string
+    {
+        $root = realpath(dirname(__DIR__).'/Fixtures/Grouping');
+        $path = self::fixturePath($fixture['file']);
+        $resolved = realpath($path);
+
+        clearstatcache(true, $path);
+
+        if ($root === false
+            || $fixture['file'] !== basename($fixture['file'])
+            || is_link($path)
+            || $resolved === false
+            || ! str_starts_with($resolved, $root.DIRECTORY_SEPARATOR)
+            || ! is_file($resolved)
+            || filesize($resolved) !== $fixture['size']
+            || ! hash_equals($fixture['sha256'], self::fileHash($resolved))) {
+            throw new RuntimeException('The grouping fixture file does not match its approved manifest identity.');
+        }
+
+        return $resolved;
+    }
+
     /** @return array<string, string> */
     public static function runtimeEvidence(?string $salt = null): array
     {

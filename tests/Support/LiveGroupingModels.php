@@ -7,7 +7,7 @@ namespace Jkudish\DocumentExtraction\Tests\Support;
 use Jkudish\PestAiBenchmarks\Configuration;
 
 /**
- * @phpstan-type LiveModel array{id: string, canonical: string, endpoint: string, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}}
+ * @phpstan-type LiveModel array{id: string, canonical: string, endpoint: string, route: array{provider_name: string, data_region: string, service_tier: ?string}, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}}
  */
 final class LiveGroupingModels
 {
@@ -176,6 +176,24 @@ final class LiveGroupingModels
             'id' => $id,
             'canonical' => $canonical ?? $id,
             'endpoint' => $endpoint,
+            'route' => [
+                'provider_name' => match (strtok($endpoint, '/')) {
+                    'alibaba' => 'Alibaba',
+                    'parasail' => 'Parasail',
+                    'google-vertex' => 'Google',
+                    'azure' => 'Azure',
+                    'amazon-bedrock' => 'Amazon Bedrock',
+                    'mistral' => 'Mistral',
+                    'digitalocean' => 'DigitalOcean',
+                    default => throw new \LogicException("The OpenRouter endpoint [{$endpoint}] has no route identity."),
+                },
+                'data_region' => match (true) {
+                    str_contains($endpoint, '/us') => 'us',
+                    str_contains($endpoint, '/eu') => 'europe',
+                    default => 'global',
+                },
+                'service_tier' => str_contains($endpoint, 'priority') ? 'priority' : null,
+            ],
             'zdr' => $zdr,
             'reasoning' => $reasoning,
             'output_parameter' => $completionTokenParameter ? 'max_completion_tokens' : 'max_tokens',
