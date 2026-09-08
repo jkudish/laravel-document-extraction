@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Jkudish\DocumentExtraction\AI;
 
+use Jkudish\DocumentExtraction\Results\EvidenceOrigin;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
 
@@ -27,7 +29,13 @@ final readonly class NativeAiExecutor
         ?string $model,
         ?int $timeout,
     ): NativeAiResult {
-        $scope = new AiCallScope($agent, $session, $stage, $pages);
+        $scope = new AiCallScope(
+            $agent,
+            $session,
+            $stage,
+            $pages,
+            Ai::hasFakeGatewayFor($agent::class) ? EvidenceOrigin::Simulated : EvidenceOrigin::Live,
+        );
 
         /** @var NativeAiResult $result */
         $result = $this->bridge->scopes()->run(

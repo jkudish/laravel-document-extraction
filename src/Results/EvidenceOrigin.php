@@ -9,4 +9,5 @@ enum EvidenceOrigin: string
     case Live = 'live';
     case Recorded = 'recorded';
     case Simulated = 'simulated';
+    case Mixed = 'mixed';
 }

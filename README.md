@@ -4,8 +4,8 @@ Laravel-native document text and schema extraction with provenance and AI cost t
 
 > [!IMPORTANT]
 > Bounded direct-text, PDF, and image preparation, native OCR, and schema-model execution are
-> implemented with per-attempt Laravel AI Pricing evidence. Document detection, benchmark integration,
-> and production hardening remain later package stages; unavailable usage or pricing stays explicitly
+> implemented with per-attempt Laravel AI Pricing evidence. Opt-in page grouping is implemented;
+> benchmark integration and production hardening remain later package stages. Unavailable usage or pricing stays explicitly
 > unpriced rather than being reported as zero-cost.
 
 ## Foundation
@@ -114,6 +114,23 @@ OCR runs once per prepared visual page and preserves original page provenance. A
 call produces an explicit incomplete `PageResult` while successful page text remains available.
 Structured extraction sends prepared visual PDF/image pages directly to a native Laravel AI agent;
 it does not require an OCR-then-schema pass. Text-like inputs provide their bounded normalized text.
+
+With `detectDocuments()`, paginated input first goes to a native structured detector using the
+independently configurable `extraction.detection` route and provider options. The package validates
+the returned original-page assignments locally, then processes disjoint unambiguous groups
+sequentially with the same supplied schema or application agent. Missing, ambiguous, duplicate,
+overlapping, and out-of-selection assignments remain explicit incomplete evidence; they never cause
+a fallback whole-source extraction. A structurally valid grouping is not a claim that the model's
+semantic classification is factually correct.
+
+Detection, grouped extraction, and grouped OCR share one invocation deadline, AI-attempt budget,
+retained-output budget, attachment limit, call sequence, and cost summary. Operational failure in
+one usable group retains successful siblings; global resource and configuration failures stop with
+accumulated partial evidence. Detection requires paginated input and enough attachment capacity for
+the complete selected-page context—there is no silent cropping, windowing, or parser-specific split.
+When an invocation combines live and simulated native agents, each call retains its own evidence
+mode and pricing eligibility while the result and cost summary serialize their aggregate mode as
+`mixed`; converting that result to recorded evidence preserves live quotes and simulated call labels.
 
 Inline schemas use Laravel's native `JsonSchema` types:
 

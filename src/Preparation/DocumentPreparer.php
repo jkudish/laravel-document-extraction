@@ -114,7 +114,7 @@ final readonly class DocumentPreparer
             $visualPath = null;
             $visualBytes = null;
 
-            if ($invocation->operation === TerminalOperation::Extract || ($needsOcr && ! $invocation->withoutAi)) {
+            if ($invocation->detectDocuments || $invocation->operation === TerminalOperation::Extract || ($needsOcr && ! $invocation->withoutAi)) {
                 $pageDimensions = $dimensions[$page] ?? $dimensions[(string) $page] ?? null;
 
                 if (! is_array($pageDimensions)) {

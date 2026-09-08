@@ -6,6 +6,7 @@ namespace Jkudish\DocumentExtraction\AI;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Jkudish\DocumentExtraction\Exceptions\ConfigurationException;
+use Jkudish\DocumentExtraction\Results\EvidenceOrigin;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -44,6 +45,7 @@ final class AiCallScope
         public readonly AiExecutionSession $session,
         public readonly string $stage,
         public readonly array $pages,
+        public readonly EvidenceOrigin $evidenceOrigin,
     ) {}
 
     public function observePrompt(string $invocationId, string $provider, string $model): bool

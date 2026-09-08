@@ -25,11 +25,13 @@
         "spatie/pdf-to-text": "^1.55"
     },
     "require-dev": {
+        "jkudish/pest-plugin-ai-benchmarks": "^0.1.0",
         "larastan/larastan": "^3.11",
         "laravel/pao": "^1.1",
         "laravel/pint": "^1.30",
         "orchestra/testbench": "^11.2",
         "pestphp/pest": "^5.1",
+        "pestphp/pest-plugin-evals": "^5.0.2",
         "pestphp/pest-plugin-laravel": "^5.0",
         "pestphp/pest-plugin-phpstan": "^5.2",
         "phpstan/phpstan": "^2.2"

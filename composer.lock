@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "bd8e2c15656aae7b56845b9b1ccfa7ce",
+    "content-hash": "539cd95796fc755690fd55aa92962a2b",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -7300,6 +7300,98 @@
             "time": "2025-03-19T14:43:43+00:00"
         },
         {
+            "name": "jkudish/pest-plugin-ai-benchmarks",
+            "version": "v0.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/jkudish/pest-plugin-ai-benchmarks.git",
+                "reference": "5b4d663bc4a6dce7174f0e4ed177d2acb753d220"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/jkudish/pest-plugin-ai-benchmarks/zipball/5b4d663bc4a6dce7174f0e4ed177d2acb753d220",
+                "reference": "5b4d663bc4a6dce7174f0e4ed177d2acb753d220",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/contracts": "^13.0",
+                "jkudish/laravel-ai-pricing": "^0.1.0",
+                "pestphp/pest": "^5.0.3",
+                "pestphp/pest-plugin-evals": "^5.0.2",
+                "php": "^8.4",
+                "spatie/laravel-package-tools": "^1.16"
+            },
+            "require-dev": {
+                "larastan/larastan": "^3.0",
+                "laravel/ai": "^0.11.2",
+                "laravel/pint": "^1.14",
+                "nunomaduro/collision": "^8.8||^9.0",
+                "orchestra/testbench": "^11.0",
+                "pestphp/pest-plugin-arch": "^5.0",
+                "phpstan/extension-installer": "^1.4",
+                "phpstan/phpstan-deprecation-rules": "^2.0",
+                "phpstan/phpstan-phpunit": "^2.0"
+            },
+            "suggest": {
+                "laravel/ai": "Required to capture live Laravel AI model, token, and latency observations."
+            },
+            "type": "library",
+            "extra": {
+                "pest": {
+                    "plugins": [
+                        "Jkudish\\PestAiBenchmarks\\Plugin"
+                    ]
+                },
+                "laravel": {
+                    "providers": [
+                        "Jkudish\\PestAiBenchmarks\\PestAiBenchmarksServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "files": [
+                    "src/Autoload.php"
+                ],
+                "psr-4": {
+                    "Jkudish\\PestAiBenchmarks\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joey Kudish",
+                    "email": "joey@jkudish.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "A Pest plugin for comparative AI benchmarks, durable evidence, replay, and baselines.",
+            "homepage": "https://github.com/jkudish/pest-plugin-ai-benchmarks",
+            "keywords": [
+                "ai",
+                "benchmarks",
+                "evals",
+                "laravel",
+                "laravel-ai",
+                "llm",
+                "pest",
+                "regression-testing"
+            ],
+            "support": {
+                "issues": "https://github.com/jkudish/pest-plugin-ai-benchmarks/issues",
+                "source": "https://github.com/jkudish/pest-plugin-ai-benchmarks"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/sponsors/jkudish",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-09-07T23:04:35+00:00"
+        },
+        {
             "name": "larastan/larastan",
             "version": "v3.11.0",
             "source": {
@@ -8722,6 +8814,97 @@
                 }
             ],
             "time": "2026-07-21T07:48:55+00:00"
+        },
+        {
+            "name": "pestphp/pest-plugin-evals",
+            "version": "v5.0.3",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/pestphp/pest-plugin-evals.git",
+                "reference": "6e2f2c652def5d342edbdddc08b2cde4c64c7118"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/pestphp/pest-plugin-evals/zipball/6e2f2c652def5d342edbdddc08b2cde4c64c7118",
+                "reference": "6e2f2c652def5d342edbdddc08b2cde4c64c7118",
+                "shasum": ""
+            },
+            "require": {
+                "pestphp/pest": "^5.0.3",
+                "pestphp/pest-plugin": "^5.0.0",
+                "php": "^8.4"
+            },
+            "conflict": {
+                "laravel/ai": "<0.10.2 || >=0.12.0",
+                "pestphp/pest": "<5.0.0"
+            },
+            "require-dev": {
+                "laravel/ai": "^0.10.2 || ^0.11.0",
+                "laravel/framework": "^13.23.0",
+                "orchestra/testbench": "^11.1.0",
+                "pestphp/pest-dev-tools": "^5.0.0"
+            },
+            "type": "library",
+            "extra": {
+                "pest": {
+                    "plugins": [
+                        "Pest\\Evals\\Plugin"
+                    ]
+                }
+            },
+            "autoload": {
+                "files": [
+                    "src/Autoload.php"
+                ],
+                "psr-4": {
+                    "Pest\\Evals\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Pushpak Chhajed",
+                    "email": "pushpak1300@gmail.com"
+                },
+                {
+                    "name": "Nuno Maduro",
+                    "email": "enunomaduro@gmail.com"
+                }
+            ],
+            "description": "A PestPHP plugin for evaluating LLM agents with LLM-as-judge, semantic similarity, and deterministic scorers",
+            "keywords": [
+                "ai",
+                "eval",
+                "framework",
+                "llm",
+                "pest",
+                "php",
+                "plugin",
+                "test",
+                "testing",
+                "unit"
+            ],
+            "support": {
+                "source": "https://github.com/pestphp/pest-plugin-evals/tree/v5.0.3"
+            },
+            "funding": [
+                {
+                    "url": "https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=66BYDWAT92N6L",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/nunomaduro",
+                    "type": "github"
+                },
+                {
+                    "url": "https://www.patreon.com/nunomaduro",
+                    "type": "patreon"
+                }
+            ],
+            "time": "2026-09-03T13:37:38+00:00"
         },
         {
             "name": "pestphp/pest-plugin-laravel",

@@ -1,0 +1,99 @@
+%PDF-1.4
+% synthetic fixture
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 3 /Kids [4 0 R 6 0 R 8 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 240 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(CEDAR TELECOM) Tj
+0 -28 Td
+/F1 14 Tf
+(INVOICE CT-8821) Tj
+0 -28 Td
+(Bill to: Harbor Books) Tj
+0 -28 Td
+(Invoice date: 2026-08-01) Tj
+0 -28 Td
+(Internet service: $89.00) Tj
+0 -28 Td
+(Total due: $89.00) Tj
+0 -28 Td
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 222 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(WESTFIELD COMMUNITY CENTRE) Tj
+0 -28 Td
+/F1 14 Tf
+(MEMBERSHIP CONFIRMATION) Tj
+0 -28 Td
+(Member: Taylor Morgan) Tj
+0 -28 Td
+(Membership: Autumn 2026) Tj
+0 -28 Td
+(Issued: 2026-08-04) Tj
+0 -28 Td
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 193 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(PACIFIC PARKING) Tj
+0 -28 Td
+/F1 14 Tf
+(PAYMENT RECEIPT PP-4407) Tj
+0 -28 Td
+(Location: Pier 6) Tj
+0 -28 Td
+(Paid: $18.00) Tj
+0 -28 Td
+(Date: 2026-08-09) Tj
+0 -28 Td
+ET
+endstream
+endobj
+xref
+0 10
+0000000000 65535 f
+0000000029 00000 n
+0000000078 00000 n
+0000000147 00000 n
+0000000217 00000 n
+0000000343 00000 n
+0000000633 00000 n
+0000000759 00000 n
+0000001031 00000 n
+0000001157 00000 n
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+1400
+%%EOF

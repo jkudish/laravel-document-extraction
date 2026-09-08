@@ -1,0 +1,142 @@
+%PDF-1.4
+% synthetic fixture
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 4 /Kids [4 0 R 6 0 R 8 0 R 10 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 263 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(NORTHWIND OFFICE SUPPLY) Tj
+0 -28 Td
+/F1 14 Tf
+(INVOICE NO-10481) Tj
+0 -28 Td
+(Bill to: Alpine Design) Tj
+0 -28 Td
+(Invoice date: 2026-08-03) Tj
+0 -28 Td
+(Page 1 of 2) Tj
+0 -28 Td
+() Tj
+0 -28 Td
+(Desk chairs \(4\): $720.00) Tj
+0 -28 Td
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 270 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(NORTHWIND OFFICE SUPPLY) Tj
+0 -28 Td
+/F1 14 Tf
+(INVOICE NO-10481) Tj
+0 -28 Td
+(Bill to: Alpine Design) Tj
+0 -28 Td
+(Page 2 of 2) Tj
+0 -28 Td
+() Tj
+0 -28 Td
+(Subtotal: $720.00) Tj
+0 -28 Td
+(Tax: $86.40) Tj
+0 -28 Td
+(Total: $806.40) Tj
+0 -28 Td
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 267 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(NORTHWIND OFFICE SUPPLY) Tj
+0 -28 Td
+/F1 14 Tf
+(INVOICE NO-10482) Tj
+0 -28 Td
+(Bill to: Alpine Design) Tj
+0 -28 Td
+(Invoice date: 2026-08-17) Tj
+0 -28 Td
+(Page 1 of 2) Tj
+0 -28 Td
+() Tj
+0 -28 Td
+(Filing cabinets \(2\): $510.00) Tj
+0 -28 Td
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 270 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(NORTHWIND OFFICE SUPPLY) Tj
+0 -28 Td
+/F1 14 Tf
+(INVOICE NO-10482) Tj
+0 -28 Td
+(Bill to: Alpine Design) Tj
+0 -28 Td
+(Page 2 of 2) Tj
+0 -28 Td
+() Tj
+0 -28 Td
+(Subtotal: $510.00) Tj
+0 -28 Td
+(Tax: $61.20) Tj
+0 -28 Td
+(Total: $571.20) Tj
+0 -28 Td
+ET
+endstream
+endobj
+xref
+0 12
+0000000000 65535 f
+0000000029 00000 n
+0000000078 00000 n
+0000000154 00000 n
+0000000224 00000 n
+0000000350 00000 n
+0000000663 00000 n
+0000000789 00000 n
+0000001109 00000 n
+0000001235 00000 n
+0000001552 00000 n
+0000001680 00000 n
+trailer
+<< /Size 12 /Root 1 0 R >>
+startxref
+2001
+%%EOF
