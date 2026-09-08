@@ -306,8 +306,23 @@ function liveGroupingRouteEvidence(): array
         throw new RuntimeException('The OpenRouter generation route evidence is invalid.');
     }
 
-    $attempts = $route['provider_responses'] ?? null;
-    $attempt = is_array($attempts) && array_is_list($attempts) && count($attempts) === 1 ? $attempts[0] : null;
+    if (! array_key_exists('provider_responses', $route)) {
+        throw new RuntimeException('The OpenRouter generation omitted provider-response evidence.');
+    }
+
+    $attempts = $route['provider_responses'];
+
+    if ($attempts === null) {
+        $attempt = null;
+    } elseif (! is_array($attempts)
+        || ! array_is_list($attempts)
+        || count($attempts) !== 1
+        || ! is_array($attempts[0])) {
+        throw new RuntimeException('The OpenRouter generation reported an invalid provider-response chain.');
+    } else {
+        $attempt = $attempts[0];
+    }
+
     $serviceTier = $route['service_tier'] ?? null;
     $allowedServiceTiers = $configured['route']['service_tier'] === null
         ? [null, 'default']
@@ -320,7 +335,6 @@ function liveGroupingRouteEvidence(): array
         || (! is_string($serviceTier) && $serviceTier !== null)
         || ! in_array($serviceTier, $allowedServiceTiers, true)
         || ($route['router'] ?? null) !== null
-        || ($attempts !== null && ! is_array($attempt))
         || (is_array($attempt) && (
             ($attempt['status'] ?? null) !== 200
             || ($attempt['provider_name'] ?? null) !== $configured['route']['provider_name']
