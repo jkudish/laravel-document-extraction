@@ -95,14 +95,9 @@ beforeEach(function (): void {
                     'model' => $configured['canonical'],
                     'provider_name' => $configured['route']['provider_name'],
                     'data_region' => $configured['route']['data_region'],
-                    'service_tier' => $configured['route']['service_tier'],
+                    'service_tier' => $configured['route']['service_tier'] ?? 'default',
                     'router' => null,
-                    'provider_responses' => [[
-                        'status' => 200,
-                        'provider_name' => $configured['route']['provider_name'],
-                        'model_permaslug' => $configured['canonical'],
-                        'routed_service_tier' => $configured['route']['service_tier'],
-                    ]],
+                    'provider_responses' => null,
                 ]]);
             }
 
@@ -272,7 +267,7 @@ function liveGroupingFixture(): array
     throw new RuntimeException('The approved live grouping fixture was not found.');
 }
 
-/** @return array{model: string, provider_name: string, data_region: string, service_tier: ?string, provider_attempts: int} */
+/** @return array{model: string, provider_name: string, data_region: string, service_tier: ?string, provider_attempts: ?int, fallbacks_disabled: true} */
 function liveGroupingRouteEvidence(): array
 {
     $model = getenv('LDE_LIVE_GROUPING_MODEL');
@@ -312,23 +307,26 @@ function liveGroupingRouteEvidence(): array
     }
 
     $attempts = $route['provider_responses'] ?? null;
-    $attempt = is_array($attempts) && array_is_list($attempts) && count($attempts) === 1
-        ? $attempts[0]
-        : null;
+    $attempt = is_array($attempts) && array_is_list($attempts) && count($attempts) === 1 ? $attempts[0] : null;
     $serviceTier = $route['service_tier'] ?? null;
+    $allowedServiceTiers = $configured['route']['service_tier'] === null
+        ? [null, 'default']
+        : [$configured['route']['service_tier']];
 
     if (($route['id'] ?? null) !== $generationId
         || ! in_array($route['model'] ?? null, [$configured['id'], $configured['canonical']], true)
         || ($route['provider_name'] ?? null) !== $configured['route']['provider_name']
         || ($route['data_region'] ?? null) !== $configured['route']['data_region']
         || (! is_string($serviceTier) && $serviceTier !== null)
-        || $serviceTier !== $configured['route']['service_tier']
+        || ! in_array($serviceTier, $allowedServiceTiers, true)
         || ($route['router'] ?? null) !== null
-        || ! is_array($attempt)
-        || ($attempt['status'] ?? null) !== 200
-        || ($attempt['provider_name'] ?? null) !== $configured['route']['provider_name']
-        || ! in_array($attempt['model_permaslug'] ?? null, [$configured['id'], $configured['canonical']], true)
-        || ($attempt['routed_service_tier'] ?? null) !== $configured['route']['service_tier']) {
+        || ($attempts !== null && ! is_array($attempt))
+        || (is_array($attempt) && (
+            ($attempt['status'] ?? null) !== 200
+            || ($attempt['provider_name'] ?? null) !== $configured['route']['provider_name']
+            || ! in_array($attempt['model_permaslug'] ?? null, [$configured['id'], $configured['canonical']], true)
+            || ! in_array($attempt['routed_service_tier'] ?? null, $allowedServiceTiers, true)
+        ))) {
         throw new RuntimeException('The OpenRouter generation did not use the approved route without fallback.');
     }
 
@@ -337,6 +335,7 @@ function liveGroupingRouteEvidence(): array
         'provider_name' => $route['provider_name'],
         'data_region' => $route['data_region'],
         'service_tier' => $serviceTier,
-        'provider_attempts' => 1,
+        'provider_attempts' => is_array($attempt) ? 1 : null,
+        'fallbacks_disabled' => true,
     ];
 }

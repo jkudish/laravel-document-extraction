@@ -763,14 +763,19 @@ final class LiveGroupingScreen
             json_encode($output, JSON_THROW_ON_ERROR),
         );
 
+        $allowedServiceTiers = $model['route']['service_tier'] === null
+            ? [null, 'default']
+            : [$model['route']['service_tier']];
+
         if (($output['fixture_id'] ?? null) !== $fixtureId
             || ($output['source_sha256'] ?? null) !== $fixture['sha256']
             || ($output['page_count'] ?? null) !== $fixture['page_count']
             || ! in_array($route['model'] ?? null, [$model['id'], $model['canonical']], true)
             || ($route['provider_name'] ?? null) !== $model['route']['provider_name']
             || ($route['data_region'] ?? null) !== $model['route']['data_region']
-            || ($route['service_tier'] ?? null) !== $model['route']['service_tier']
-            || ($route['provider_attempts'] ?? null) !== 1
+            || ! in_array($route['service_tier'] ?? null, $allowedServiceTiers, true)
+            || ! in_array($route['provider_attempts'] ?? null, [null, 1], true)
+            || ($route['fallbacks_disabled'] ?? null) !== true
             || $replayedIntegrity->score !== 1.0
             || ($integrity['scorer'] ?? null) !== $replayedIntegrity->scorer) {
             throw new RuntimeException('The private live replay does not match the approved scored output.');

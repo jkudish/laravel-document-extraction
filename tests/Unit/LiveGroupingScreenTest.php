@@ -1312,6 +1312,7 @@ it('rejects malformed live price evidence without throwing', function (mixed $am
             'data_region' => 'global',
             'service_tier' => null,
             'provider_attempts' => 1,
+            'fallbacks_disabled' => true,
         ],
     ], JSON_THROW_ON_ERROR);
 
@@ -1345,6 +1346,7 @@ it('validates effective identity and route for a priced detector with no extract
             'data_region' => 'global',
             'service_tier' => null,
             'provider_attempts' => $providerAttempts,
+            'fallbacks_disabled' => true,
         ],
     ], JSON_THROW_ON_ERROR);
 

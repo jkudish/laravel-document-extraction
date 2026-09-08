@@ -153,8 +153,10 @@ through OpenRouter with the exact model and endpoint, `allow_fallbacks = false`,
 recorded rate ceilings. The application extraction agent remains Laravel AI-faked, so each trial has
 exactly one paid detector request even when it detects several groups. No holdout fixture is selectable.
 After the completion, one non-inference OpenRouter generation-metadata lookup must confirm the model,
-provider, data region, service tier, and exactly one successful provider response. The trial stops if
-that independent route evidence is absent or inconsistent.
+provider, data region, standard service tier, and no model router. When OpenRouter exposes its nullable
+provider-response chain, it must contain exactly one successful response. The trial stops if that
+independent route evidence is absent or inconsistent; fallback prevention also remains pinned in the
+request and benchmark contract.
 
 The runner enforces a $5 software admission budget. Before each sequential request, reconciled spend
 plus a conservative reservation derived from the selected endpoint's full context capacity, the

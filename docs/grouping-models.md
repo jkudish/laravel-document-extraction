@@ -165,8 +165,8 @@ fixture lists in `tests/Support/LiveGroupingModels.php`, one Pest benchmark, and
 proposal without network access. Live mode preflights the current catalog and key allowance, then
 runs and validates one model/fixture trial at a time; it never silently changes the documented matrix.
 Each trial verifies the synthetic PDF identity before egress and audits OpenRouter's generation
-metadata after inference for the expected model, provider, data region, service tier, and single
-provider attempt.
+metadata after inference for the expected model, provider, data region, standard service tier, and
+absence of a model router. OpenRouter's provider-attempt chain is also checked when exposed.
 
 Before execution, calculate a scenario estimate from the frozen call count, output cap, and current
 rates, then enforce a separate total-spend control. OpenRouter `provider.max_price` is only a

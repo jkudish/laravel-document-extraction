@@ -110,6 +110,9 @@ final class LiveGroupingAttemptScorer implements Scorer
             $requestedConfiguration = is_string($requestedModel)
                 ? LiveGroupingModels::find($requestedModel)
                 : null;
+            $allowedServiceTiers = is_array($requestedConfiguration) && $requestedConfiguration['route']['service_tier'] === null
+                ? [null, 'default']
+                : [$requestedConfiguration['route']['service_tier'] ?? null];
             $valid = $valid
                 && count($calls) >= 1
                 && count($liveCosts) === 1
@@ -126,8 +129,9 @@ final class LiveGroupingAttemptScorer implements Scorer
                 ], true)
                 && ($route['provider_name'] ?? null) === $requestedConfiguration['route']['provider_name']
                 && ($route['data_region'] ?? null) === $requestedConfiguration['route']['data_region']
-                && ($route['service_tier'] ?? null) === $requestedConfiguration['route']['service_tier']
-                && ($route['provider_attempts'] ?? null) === 1;
+                && in_array($route['service_tier'] ?? null, $allowedServiceTiers, true)
+                && in_array($route['provider_attempts'] ?? null, [null, 1], true)
+                && ($route['fallbacks_disabled'] ?? null) === true;
         } catch (Throwable) {
             $valid = false;
         }
