@@ -18,9 +18,10 @@ try {
 
     foreach ($result['runs'] as $run) {
         fwrite(STDOUT, sprintf(
-            "%s @ %s: $%s; scorecard %s\n",
+            "%s @ %s: %s, $%s allowance change; scorecard %s\n",
             $run['model'],
             $run['endpoint'],
+            $run['status'],
             $run['cost_usd'],
             $run['scorecard'],
         ));

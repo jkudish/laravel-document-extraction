@@ -173,7 +173,9 @@ live detector measurement, simulated grouped extraction measurements, and unique
 production result's integrity scorer still requires one positive provider-reported USD cost with
 matching extraction totals. When the outer benchmark observer cannot expose response pricing after a
 locally rejected structured result, the command records the immediate key-allowance change instead of
-inventing a per-call quote. Zero, negative, or over-reservation depletion, duplicate calls, invalid
+inventing a per-call quote. A one-attempt technical failure is retained as compatibility evidence and
+may have zero allowance change; it does not acquire quality scores or effective-model evidence that the
+failed response did not supply. Negative or over-reservation depletion, duplicate calls, invalid
 scorecard data, route drift, or reaching the logical spend cap stops the screen before the next model.
 The command removes private replay after validation and retains only the ignored scorecard path.
 Scorecards contain bounded metrics and call evidence, not source documents, prompts, or raw provider

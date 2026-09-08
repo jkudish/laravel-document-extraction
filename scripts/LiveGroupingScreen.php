@@ -61,7 +61,7 @@ final class LiveGroupingScreen
     /**
      * @param  list<string>  $arguments
      * @param  array<string, string>  $environment
-     * @return array{live: bool, output: string, runs: list<array{model: string, endpoint: string, cost_usd: string, cost_source: string, attempts: int, scorecard: string}>}
+     * @return array{live: bool, output: string, runs: list<array{model: string, endpoint: string, cost_usd: string, cost_source: string, status: string, attempts: int, scorecard: string}>}
      */
     public function execute(array $arguments, array $environment): array
     {
@@ -157,11 +157,11 @@ final class LiveGroupingScreen
             $runDirectory = $this->ownedRunDirectory($created[0]);
 
             try {
-                if ($result->exitCode !== 0) {
+                $summary = $this->validateRun($runDirectory, $model);
+
+                if ($result->exitCode !== 0 && ! $summary['technical_failure']) {
                     throw new RuntimeException('The live grouping trial failed before producing one complete scorecard.');
                 }
-
-                $summary = $this->validateRun($runDirectory, $model);
             } finally {
                 $this->removePrivateReplay($runDirectory);
             }
@@ -169,7 +169,8 @@ final class LiveGroupingScreen
             $afterRemaining = $this->validateKey($key, requireFullCap: false);
             $allowanceCost = $remaining->minus($afterRemaining);
 
-            if ($allowanceCost->isLessThanOrEqualTo(BigDecimal::zero())
+            if ((! $summary['technical_failure'] && $allowanceCost->isLessThanOrEqualTo(BigDecimal::zero()))
+                || $allowanceCost->isNegative()
                 || $allowanceCost->isGreaterThan($reservation)
                 || ($summary['provider_cost_usd'] !== null
                     && BigDecimal::of($summary['provider_cost_usd'])->isGreaterThan($reservation))) {
@@ -191,6 +192,7 @@ final class LiveGroupingScreen
                 'endpoint' => $summary['endpoint'],
                 'cost_usd' => (string) $allowanceCost,
                 'cost_source' => 'key_allowance_change',
+                'status' => $summary['technical_failure'] ? 'technical_failure' : 'measured',
                 'attempts' => $summary['attempts'],
                 'scorecard' => $runDirectory.'/scorecard.json',
             ];
@@ -417,7 +419,7 @@ final class LiveGroupingScreen
     }
 
     /** @param LiveModel $model
-     * @return array{model: string, endpoint: string, provider_cost_usd: ?string, attempts: int}
+     * @return array{model: string, endpoint: string, provider_cost_usd: ?string, technical_failure: bool, attempts: int}
      */
     private function validateRun(string $runDirectory, array $model): array
     {
@@ -435,6 +437,33 @@ final class LiveGroupingScreen
 
         $trial = $this->object($trials[0], 'scorecard trial');
         $results = $this->list($trial['results'] ?? null, 'trial results');
+        $primary = $this->object($results[0] ?? null, 'primary result');
+
+        if (($trial['configuration'] ?? null) !== $model['id'].' @ '.$model['endpoint']) {
+            throw new RuntimeException('The live grouping scorecard does not match the approved configuration.');
+        }
+
+        if (($primary['scorer'] ?? null) === 'pest:test'
+            && ($primary['passed'] ?? null) === false
+            && ($primary['score'] ?? null) === 0
+            && count($results) === 1) {
+            $measurements = $this->list($primary['measurements'] ?? null, 'target measurements');
+
+            if (count($measurements) !== 1) {
+                throw new RuntimeException('The failed live grouping trial has unexpected attempt evidence.');
+            }
+
+            $this->validateMeasurement($measurements[0], $model, 'live', allowUnavailable: true);
+
+            return [
+                'model' => $model['id'],
+                'endpoint' => $model['endpoint'],
+                'provider_cost_usd' => null,
+                'technical_failure' => true,
+                'attempts' => 1,
+            ];
+        }
+
         $expectedScorers = [
             'pest:test',
             ...array_map(static fn (GroupingMetric $metric): string => $metric->value, GroupingMetric::cases()),
@@ -445,12 +474,10 @@ final class LiveGroupingScreen
             $results,
         );
 
-        if (($trial['configuration'] ?? null) !== $model['id'].' @ '.$model['endpoint']
-            || $scorers !== $expectedScorers) {
+        if ($scorers !== $expectedScorers) {
             throw new RuntimeException('The live grouping scorecard does not match the approved configuration.');
         }
 
-        $primary = $this->object($results[0], 'primary result');
         $integrity = $this->object($results[count($results) - 1], 'attempt-integrity result');
         $integrityScore = $integrity['score'] ?? null;
         $measurements = $this->list($primary['measurements'] ?? null, 'target measurements');
@@ -468,21 +495,12 @@ final class LiveGroupingScreen
         $providerCost = null;
 
         foreach ($measurements as $index => $rawMeasurement) {
-            $measurement = $this->object($rawMeasurement, 'target measurement');
-            $requested = $this->object($measurement['requested_model'] ?? null, 'requested model');
-            $effective = $measurement['effective_model'] ?? null;
-
-            if (($measurement['component'] ?? null) !== 'target'
-                || $requested !== ['provider' => 'openrouter', 'model' => $model['id']]
-                || ($index > 0 && $effective === null)
-                || ($effective !== null && (
-                    ! is_array($effective)
-                    || array_is_list($effective)
-                    || ($effective['provider'] ?? null) !== 'openrouter'
-                    || ! in_array($effective['model'] ?? null, [$model['id'], $model['canonical']], true)
-                ))) {
-                throw new RuntimeException('A target measurement has an unexpected identity.');
-            }
+            $measurement = $this->validateMeasurement(
+                $rawMeasurement,
+                $model,
+                $index === 0 ? 'live' : 'simulated',
+                allowUnavailable: $index === 0,
+            );
 
             if ($index === 0) {
                 $providerCost = $this->liveCost($measurement);
@@ -500,8 +518,38 @@ final class LiveGroupingScreen
             'model' => $model['id'],
             'endpoint' => $model['endpoint'],
             'provider_cost_usd' => $providerCost,
+            'technical_failure' => false,
             'attempts' => count($measurements),
         ];
+    }
+
+    /** @param LiveModel $model
+     * @return array<string, mixed>
+     */
+    private function validateMeasurement(
+        mixed $rawMeasurement,
+        array $model,
+        string $expectedMode,
+        bool $allowUnavailable,
+    ): array {
+        $measurement = $this->object($rawMeasurement, 'target measurement');
+        $requested = $this->object($measurement['requested_model'] ?? null, 'requested model');
+        $effective = $measurement['effective_model'] ?? null;
+
+        if (($measurement['component'] ?? null) !== 'target'
+            || ($measurement['mode'] ?? null) !== $expectedMode
+            || $requested !== ['provider' => 'openrouter', 'model' => $model['id']]
+            || (! $allowUnavailable && $effective === null)
+            || ($effective !== null && (
+                ! is_array($effective)
+                || array_is_list($effective)
+                || ($effective['provider'] ?? null) !== 'openrouter'
+                || ! in_array($effective['model'] ?? null, [$model['id'], $model['canonical']], true)
+            ))) {
+            throw new RuntimeException('A target measurement has an unexpected identity.');
+        }
+
+        return $measurement;
     }
 
     /** @param array<string, mixed> $measurement */

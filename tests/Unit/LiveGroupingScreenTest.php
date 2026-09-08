@@ -474,6 +474,93 @@ it('uses immediate key allowance depletion when the observer cannot expose respo
     }
 });
 
+it('records one bounded technical failure and continues without inventing model evidence', function (): void {
+    $root = dirname(__DIR__, 2);
+    $model = LiveGroupingModels::all()[0];
+    $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $runner = new class($root) implements CommandRunner
+    {
+        public function __construct(private readonly string $root) {}
+
+        public function run(array $command, ?array $environment = null): CommandResult
+        {
+            $before = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+            $result = (new NativeCommandRunner($this->root))->run($command, $environment);
+            $after = glob($this->root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+            $created = array_values(array_diff($after, $before));
+            $scorecardPath = $created[0].'/scorecard.json';
+            $scorecard = json_decode((string) file_get_contents($scorecardPath), true, flags: JSON_THROW_ON_ERROR);
+
+            if (! is_array($scorecard)
+                || ! is_array($scorecard['trials'] ?? null)
+                || ! is_array($scorecard['trials'][0] ?? null)
+                || ! is_array($scorecard['trials'][0]['results'] ?? null)
+                || ! is_array($scorecard['trials'][0]['results'][0] ?? null)
+                || ! is_array($scorecard['trials'][0]['results'][0]['measurements'] ?? null)
+                || ! is_array($scorecard['trials'][0]['results'][0]['measurements'][0] ?? null)) {
+                throw new RuntimeException('The generated scorecard cannot be mutated for the technical-failure test.');
+            }
+
+            $primary = $scorecard['trials'][0]['results'][0];
+            $measurement = $primary['measurements'][0];
+            $measurement['effective_model'] = null;
+            $measurement['usage'] = [
+                'cached_input_tokens' => 0,
+                'input_tokens' => 0,
+                'output_tokens' => 0,
+                'reasoning_tokens' => 0,
+            ];
+            $measurement['pricing'] = [
+                'completeness' => 'unavailable',
+                'snapshot' => [
+                    'completeness' => 'unavailable',
+                    'cost' => null,
+                    'missing_units' => [],
+                    'provenance' => null,
+                    'snapshot' => null,
+                    'source' => 'unavailable',
+                ],
+            ];
+            $primary['score'] = 0;
+            $primary['passed'] = false;
+            $primary['measurements'] = [$measurement];
+            $scorecard['trials'][0]['results'] = [$primary];
+            file_put_contents($scorecardPath, json_encode($scorecard, JSON_THROW_ON_ERROR));
+
+            return new CommandResult(1, $result->stdout, $result->stderr);
+        }
+    };
+    $screen = new LiveGroupingScreen(
+        $root,
+        $runner,
+        liveGroupingApi($model),
+        [$model],
+        offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
+    );
+
+    try {
+        $result = $screen->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']);
+
+        expect($result['runs'][0]['status'])->toBe('technical_failure')
+            ->and($result['runs'][0]['cost_usd'])->toBe('0.012345')
+            ->and($result['runs'][0]['attempts'])->toBe(1);
+    } finally {
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+
+        foreach (array_diff($after, $before) as $directory) {
+            foreach (glob($directory.'/*') ?: [] as $file) {
+                unlink($file);
+            }
+
+            rmdir($directory);
+        }
+    }
+});
+
 it('resumes a clean completed prefix against the original allowance baseline', function (): void {
     $root = dirname(__DIR__, 2);
     [$first, $second] = array_slice(LiveGroupingModels::all(), 0, 2);
