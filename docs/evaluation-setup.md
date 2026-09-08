@@ -119,4 +119,72 @@ future real corpus.
 This dry run proves wiring, deterministic scoring, custody, configuration restoration, evidence
 cardinality, and replay invalidation. Because every AI response is simulated, it does not establish
 semantic grouping quality, transport compatibility, billable cost, or a winning model. The documented
-18-model screen remains separately gated on an approved total spend cap and data/routing policy.
+15-model screen remains gated by its explicit live opt-in and total spend/data-routing controls.
+
+## Live OpenRouter grouping canary
+
+`scripts/live-grouping-screen` is the only live entry point. With no arguments it makes no network
+requests and prints the exact 15 models, endpoint routes, one approved prompt-example fixture, call
+count, privacy settings, and $5 logical spend cap:
+
+```sh
+scripts/live-grouping-screen
+```
+
+The live mode is intentionally narrow. It requires the exact printed confirmation and an
+`OPENROUTER_API_KEY`; do not paste the key into the command line or logs. Before inference it verifies
+that the key has a finite monthly limit no larger than $50 and at least $5 remaining. It then fetches
+the current public catalog and rejects missing models, stale endpoints, unsupported image/structured
+output, endpoint price increases, unavailable routes, or missing ZDR where the selected route requires
+it. The five Alibaba Qwen routes do not advertise ZDR and instead pin `data_collection = deny`; every
+other selected route requires both.
+
+```sh
+scripts/live-grouping-screen --live --confirm=run-15-paid-detector-calls
+```
+
+Each model runs as one separately validated Pest benchmark trial before the next paid request. The
+public `Extraction::fromPath(...)->detectDocuments()->schema(...)->extract()` path sends the detector
+through OpenRouter with the exact model and endpoint, `allow_fallbacks = false`,
+`require_parameters = true`, a 512-token output limit, reasoning disabled where supported, and the
+recorded rate ceilings. The application extraction agent remains Laravel AI-faked, so each trial has
+exactly one paid detector request even when it detects several groups. No holdout fixture is selectable.
+
+The runner enforces a $5 software admission budget. Before each sequential request, reconciled spend
+plus a conservative reservation derived from the selected endpoint's full context capacity, the
+highest advertised base or override input/cache/image-token rate, 512 output and reasoning tokens,
+and six possible per-image charges must fit under $5. Unbounded applicable charges, incomplete cost
+evidence, or reservation overruns stop the run. Immediately after each request, the runner refreshes
+the key allowance and uses validated provider-reported cost when available, otherwise the observed
+allowance depletion. Delayed allowance changes are not attributed to a later call's reservation; the
+cumulative allowance change and a persistent admission total are independently checked against $5.
+The admission total uses validated provider cost when available and otherwise retains the call's full
+catalog-derived reservation, including for technical failures, so delayed charges cannot create room
+for another request.
+This is a software safeguard, not a provider-level $5 cap: it cannot undo an in-flight provider charge,
+and unrelated use of the same key is conservatively counted against this screen.
+The ignored, private authorization ledger survives command restarts, binds the run to the current key,
+and records a reservation before dispatch. A completed prefix can resume, but an unresolved in-flight
+call or a fully consumed 15-call authorization cannot be run again. The selected route and reservation
+are refreshed from the catalog immediately before every request.
+
+The nine quality scorers deliberately use a zero threshold so weak models remain recorded evidence
+instead of aborting the screen; their numeric scores—not their `passed` flag—are the quality result.
+
+After every trial, the command applies the benchmark plugin's stable scorecard validator and checks
+fixture identity, all nine deterministic grouping scores, requested/effective model evidence, one
+live detector measurement, simulated grouped extraction measurements, and unique call ordinals. The
+production result's integrity scorer still requires one positive provider-reported USD cost with
+matching extraction totals. When the outer benchmark observer cannot expose response pricing after a
+locally rejected structured result, the command records the immediate key-allowance change instead of
+inventing a per-call quote. A one-attempt technical failure is retained as compatibility evidence and
+may have no observed charge; it does not acquire quality scores or effective-model evidence that the
+failed response did not supply. Negative or over-reservation spend, duplicate calls, invalid
+scorecard data, route drift, or reaching the logical spend cap stops the screen before the next model.
+The command removes private replay after validation and retains only the ignored scorecard path.
+Scorecards contain bounded metrics and call evidence, not source documents, prompts, or raw provider
+responses.
+
+The normal test suite never sets the confirmation and never makes these requests. Its focused offline
+test fakes both OpenRouter preflight and inference while exercising the same command, public extraction
+path, scorecard validation, replay cleanup, and fail-closed cases.

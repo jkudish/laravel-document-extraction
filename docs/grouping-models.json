@@ -193,50 +193,18 @@
       "reasoning": null,
       "pricing": {"raw_usd": {"prompt": "0.0000002", "completion": "0.000000696"}, "usd_per_million_tokens": {"prompt": "0.2", "completion": "0.696"}, "absent": ["image", "request", "internal_reasoning", "input_cache_read", "input_cache_write", "input_cache_write_1h"], "overrides": []},
       "endpoints": {"url": "https://openrouter.ai/api/v1/models/meta-llama/llama-4-maverick/endpoints", "listed": 5, "strict_capable": 5, "strict_tags": ["digitalocean", "deepinfra/base", "novita/fp8", "parasail/fp8", "google-vertex/us-east5"], "excluded_tags": [], "zdr_strict_tags": ["digitalocean", "deepinfra/base", "novita/fp8", "parasail/fp8", "google-vertex/us-east5"], "strict_rate_range_usd_per_million": {"prompt": ["0.2", "0.35"], "completion": ["0.696", "1.15"]}}
-    },
-    {
-      "id": "bytedance-seed/seed-2.0-mini",
-      "canonical_slug": "bytedance-seed/seed-2.0-mini-20260224",
-      "coverage_group": "bytedance-diversity",
-      "modalities": {"input": ["text", "image", "video"], "output": ["text"]},
-      "context_tokens": 262144,
-      "max_completion_tokens": 131072,
-      "reasoning": {"mandatory": false, "supported_efforts": ["high", "medium", "low", "minimal"], "default_effort": "medium"},
-      "pricing": {"raw_usd": {"prompt": "0.0000001", "completion": "0.0000004"}, "usd_per_million_tokens": {"prompt": "0.1", "completion": "0.4"}, "absent": ["image", "request", "internal_reasoning", "input_cache_read", "input_cache_write", "input_cache_write_1h"], "overrides": [{"condition": {"min_prompt_tokens": 128000, "comparison": "strictly greater than"}, "raw_usd": {"prompt": "0.0000002", "completion": "0.0000008"}, "usd_per_million_tokens": {"prompt": "0.2", "completion": "0.8"}}]},
-      "endpoints": {"url": "https://openrouter.ai/api/v1/models/bytedance-seed/seed-2.0-mini/endpoints", "listed": 1, "strict_capable": 1, "strict_tags": ["seed/fp8"], "excluded_tags": [], "zdr_strict_tags": ["seed/fp8"], "strict_rate_range_usd_per_million": {"prompt": ["0.1", "0.1"], "completion": ["0.4", "0.4"]}}
-    },
-    {
-      "id": "moonshotai/kimi-k2.5",
-      "canonical_slug": "moonshotai/kimi-k2.5-0127",
-      "coverage_group": "moonshot-diversity",
-      "modalities": {"input": ["text", "image"], "output": ["text"]},
-      "context_tokens": 262144,
-      "max_completion_tokens": 235929,
-      "reasoning": {"mandatory": false, "default_enabled": true},
-      "pricing": {"raw_usd": {"prompt": "0.00000045", "completion": "0.00000225", "input_cache_read": "0.00000007"}, "usd_per_million_tokens": {"prompt": "0.45", "completion": "2.25", "input_cache_read": "0.07"}, "absent": ["image", "request", "internal_reasoning", "input_cache_write", "input_cache_write_1h"], "overrides": []},
-      "endpoints": {"url": "https://openrouter.ai/api/v1/models/moonshotai/kimi-k2.5/endpoints", "listed": 8, "strict_capable": 5, "strict_tags": ["siliconflow/int4", "atlas-cloud/int4", "venice", "novita", "phala"], "excluded_tags": ["deepinfra/fp4", "digitalocean", "amazon-bedrock/us-east-2"], "zdr_strict_tags": ["siliconflow/int4", "venice", "novita", "phala"], "strict_rate_range_usd_per_million": {"prompt": ["0.45", "0.6"], "completion": ["2.25", "3.325"]}}
-    },
-    {
-      "id": "google/gemma-3-12b-it",
-      "canonical_slug": "google/gemma-3-12b-it",
-      "coverage_group": "small-model-diversity",
-      "modalities": {"input": ["text", "image"], "output": ["text"]},
-      "context_tokens": 131072,
-      "max_completion_tokens": 16384,
-      "reasoning": null,
-      "pricing": {"raw_usd": {"prompt": "0.00000005", "completion": "0.00000015"}, "usd_per_million_tokens": {"prompt": "0.05", "completion": "0.15"}, "absent": ["image", "request", "internal_reasoning", "input_cache_read", "input_cache_write", "input_cache_write_1h"], "overrides": []},
-      "endpoints": {"url": "https://openrouter.ai/api/v1/models/google/gemma-3-12b-it/endpoints", "listed": 1, "strict_capable": 1, "strict_tags": ["deepinfra/bf16"], "excluded_tags": [], "zdr_strict_tags": ["deepinfra/bf16"], "strict_rate_range_usd_per_million": {"prompt": ["0.05", "0.05"], "completion": ["0.15", "0.15"]}}
     }
   ],
   "evaluation_design": {
     "ranking_basis": "experimental lineage, architecture, provider, price-tier, and endpoint coverage; not presumed quality",
-    "recommendation": "Screen all 18 once; if an eventual approved cap cannot support that, use the three coverage anchors without treating them as presumed winners.",
+    "recommendation": "Run an equal 15-model canary, remove only technical or clearly unusable failures, then screen survivors across the remaining development bundles.",
     "coverage_anchors_if_cap_requires_narrowing": ["qwen/qwen3.8-flash", "google/gemini-2.5-flash", "openai/gpt-5.6-luna"],
     "harness": ["pestphp/pest-plugin-evals", "jkudish/pest-plugin-ai-benchmarks", "jkudish/laravel-ai-pricing"],
     "dependency_status": "pest-plugin-ai-benchmarks v0.1.0, pest-plugin-evals ^5.0.2, and laravel-ai-pricing v0.1.0 installed from public releases; no VCS or path repository required",
     "stages": [
       {"name": "offline protocol gate", "paid_calls": 0},
-      {"name": "broad development screen", "models": 18, "repeats": 1, "grouping_trials_formula": "18 * development_bundle_count", "budget_note": "Trials are not a provider-call cap; include every stage and attempt, including per-group extraction or OCR when exercising the full pipeline."},
+      {"name": "compatibility canary", "models": 15, "development_bundles": 1, "repeats": 1, "paid_detector_calls": 15, "extraction_mode": "simulated"},
+      {"name": "broad development screen", "models": "survivors from measured canary evidence", "remaining_development_bundles": 4, "repeats": 1, "budget_note": "Detector calls only; grouped extraction and OCR remain simulated."},
       {"name": "development finalists", "models": "3-5 chosen from measured evidence", "minimum_total_repeats_per_bundle": 3},
       {"name": "frozen holdout", "minimum_repeats_per_finalist_bundle": 3, "tuning_allowed": false}
     ],
