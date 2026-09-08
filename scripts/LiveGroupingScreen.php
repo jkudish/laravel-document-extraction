@@ -171,16 +171,19 @@ final class LiveGroupingScreen
             $providerCost = $summary['provider_cost_usd'] === null
                 ? BigDecimal::zero()
                 : BigDecimal::of($summary['provider_cost_usd']);
-            $trialCost = $providerCost->isGreaterThan($allowanceCost) ? $providerCost : $allowanceCost;
+            $trialCost = $providerCost->isPositive() ? $providerCost : $allowanceCost;
+            $observedSpend = $initialRemaining->minus($afterRemaining);
 
             if ((! $summary['technical_failure'] && $trialCost->isLessThanOrEqualTo(BigDecimal::zero()))
                 || $allowanceCost->isNegative()
-                || $trialCost->isGreaterThan($reservation)) {
+                || $providerCost->isGreaterThan($reservation)
+                || $observedSpend->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
                 throw new RuntimeException('The live grouping trial exceeded its catalog-derived cost reservation.');
             }
 
-            $observedSpend = $initialRemaining->minus($afterRemaining);
-            $recordedSpend = $recordedSpend->plus($trialCost);
+            if ($providerCost->isPositive()) {
+                $recordedSpend = $recordedSpend->plus($providerCost);
+            }
 
             if ($observedSpend->isGreaterThan($recordedSpend)) {
                 $recordedSpend = $observedSpend;
@@ -201,7 +204,7 @@ final class LiveGroupingScreen
                 'cost_usd' => (string) $trialCost,
                 'cost_source' => match (true) {
                     $trialCost->isZero() => 'no_observed_charge',
-                    $providerCost->isGreaterThan($allowanceCost) => 'provider_reported',
+                    $providerCost->isPositive() => 'provider_reported',
                     default => 'key_allowance_change',
                 },
                 'status' => $summary['technical_failure'] ? 'technical_failure' : 'measured',

@@ -155,9 +155,9 @@ plus a conservative reservation derived from the selected endpoint's full contex
 highest advertised base or override input/cache/image-token rate, 512 output and reasoning tokens,
 and six possible per-image charges must fit under $5. Unbounded applicable charges, incomplete cost
 evidence, or reservation overruns stop the run. Immediately after each request, the runner refreshes
-the key allowance and reconciles the trial against the greater of its validated provider-reported cost
-and observed allowance depletion. This accommodates short allowance-reporting lag without treating it
-as zero; both reconciled spend and cumulative allowance change are independently checked against $5.
+the key allowance and uses validated provider-reported cost when available, otherwise the observed
+allowance depletion. Delayed allowance changes are not attributed to a later call's reservation; the
+cumulative allowance change and reconciled provider costs are independently checked against $5.
 This is a software safeguard, not a provider-level $5 cap: it cannot undo an in-flight provider charge,
 and unrelated use of the same key is conservatively counted against this screen.
 The ignored, private authorization ledger survives command restarts, binds the run to the current key,

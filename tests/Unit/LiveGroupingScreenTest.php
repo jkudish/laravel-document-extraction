@@ -372,7 +372,7 @@ it('runs one approved detector trial offline and removes private replay after fu
             ->and($result['output'])->toContain('Validated 1 paid detector calls')
             ->and($run['model'])->toBe($model['id'])
             ->and($run['cost_usd'])->toBe('0.012345')
-            ->and($run['cost_source'])->toBe('key_allowance_change')
+            ->and($run['cost_source'])->toBe('provider_reported')
             ->and($run['attempts'])->toBe(4)
             ->and(is_file($run['scorecard']))->toBeTrue()
             ->and(is_file(dirname($run['scorecard']).'/replay.private.json'))->toBeFalse()
@@ -499,6 +499,97 @@ it('uses validated provider cost while key allowance reporting lags', function (
         expect($result['runs'][0]['cost_usd'])->toBe('0.012345')
             ->and($result['runs'][0]['cost_source'])->toBe('provider_reported')
             ->and($result['output'])->toContain('reconciled spend was $0.012345');
+    } finally {
+        $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+
+        foreach (array_diff($after, $before) as $directory) {
+            foreach (glob($directory.'/*') ?: [] as $file) {
+                unlink($file);
+            }
+
+            rmdir($directory);
+        }
+    }
+});
+
+it('does not attribute a delayed allowance change to a later calls reservation', function (): void {
+    $root = dirname(__DIR__, 2);
+    [$first, $second] = array_slice(LiveGroupingModels::all(), 0, 2);
+    $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $keyChecks = 0;
+    $api = static function (string $url, ?string $key) use ($first, $second, &$keyChecks): array {
+        if ($url === 'https://openrouter.ai/api/v1/key') {
+            $keyChecks++;
+
+            return ['data' => [
+                'limit' => 50,
+                'limit_remaining' => $keyChecks >= 5 ? '49.8' : '50',
+                'limit_reset' => 'monthly',
+                'is_free_tier' => false,
+                'is_management_key' => false,
+                'is_provisioning_key' => false,
+            ]];
+        }
+
+        if ($url === 'https://openrouter.ai/api/v1/models') {
+            $data = [];
+
+            foreach ([$first, $second] as $model) {
+                $response = liveGroupingApi($model)($url, $key);
+
+                if (! is_array($response['data'] ?? null) || ! is_array($response['data'][0] ?? null)) {
+                    throw new RuntimeException('The fake model catalog is malformed.');
+                }
+
+                $data[] = $response['data'][0];
+            }
+
+            return ['data' => $data];
+        }
+
+        if ($url === 'https://openrouter.ai/api/v1/endpoints/zdr') {
+            $data = [];
+
+            foreach ([$first, $second] as $model) {
+                $response = liveGroupingApi($model)($url, $key);
+
+                if (! is_array($response['data'] ?? null)) {
+                    throw new RuntimeException('The fake ZDR catalog is malformed.');
+                }
+
+                $data = array_merge($data, $response['data']);
+            }
+
+            return ['data' => $data];
+        }
+
+        foreach ([$first, $second] as $model) {
+            if ($url === 'https://openrouter.ai/api/v1/models/'.$model['id'].'/endpoints') {
+                return liveGroupingApi($model)($url, $key);
+            }
+        }
+
+        throw new RuntimeException("Unexpected live grouping API request [{$url}].");
+    };
+    $screen = new LiveGroupingScreen(
+        $root,
+        new NativeCommandRunner($root),
+        $api,
+        [$first, $second],
+        offlineInference: true,
+        authorizationPath: liveGroupingAuthorizationPath(),
+    );
+
+    try {
+        $result = $screen->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']);
+
+        expect($result['runs'])->toHaveCount(2)
+            ->and($result['runs'][1]['cost_usd'])->toBe('0.012345')
+            ->and($result['runs'][1]['cost_source'])->toBe('provider_reported')
+            ->and($result['output'])->toContain('key allowance change $0.2');
     } finally {
         $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
 
