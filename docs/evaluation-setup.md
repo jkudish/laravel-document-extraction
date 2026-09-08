@@ -119,4 +119,4 @@ future real corpus.
 This dry run proves wiring, deterministic scoring, custody, configuration restoration, evidence
 cardinality, and replay invalidation. Because every AI response is simulated, it does not establish
 semantic grouping quality, transport compatibility, billable cost, or a winning model. The documented
-18-model screen remains separately gated on an approved total spend cap and data/routing policy.
+15-model screen remains gated by its explicit live opt-in and total spend/data-routing controls.

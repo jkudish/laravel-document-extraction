@@ -1,7 +1,7 @@
 # OpenRouter models for document grouping
 
 Retrieved **2026-09-07T03:47:07Z** from OpenRouter's public model, endpoint, and ZDR APIs.
-This is an 18-model experimental screen for a future paid synthetic-corpus evaluation. It is not a
+This is a 15-model experimental screen for a future paid synthetic-corpus evaluation. It is not a
 runtime registry, quality ranking, model activation, spend approval, or accuracy result.
 
 ## What “compatible” means here
@@ -50,14 +50,11 @@ and must come from recorded usage/provider cost evidence rather than these catal
 | Anthropic added | `anthropic/claude-haiku-4.5` | 200,000 / 64,000 | $1.00 / $5.00 | Version-pinned Haiku; five of eight endpoints strict; range $1/$5–$1.10/$5.50 |
 | Mistral diversity | `mistralai/mistral-small-2603` | 262,144 / 209,715 | $0.15 / $0.60 | Four strict endpoints; range $0.15/$0.60–$0.1875/$0.75; three ZDR entries |
 | Meta diversity | `meta-llama/llama-4-maverick` | 1,048,576 / 115,200 | $0.20 / $0.696 | Five strict endpoints across providers; all five appear in ZDR API |
-| ByteDance diversity | `bytedance-seed/seed-2.0-mini` | 262,144 / 131,072 | $0.10 / $0.40 | Above 128k: $0.20/$0.80; only `seed/fp8`, listed ZDR |
-| Moonshot diversity | `moonshotai/kimi-k2.5` | 262,144 / 235,929 | $0.45 / $2.25 | Five of eight endpoints strict; strict range $0.45/$2.25–$0.60/$3.325 |
-| Small-model diversity | `google/gemma-3-12b-it` | 131,072 / 16,384 | $0.05 / $0.15 | Only `deepinfra/bf16`, listed ZDR; smallest output ceiling in the screen |
 
 These groups rank **experimental coverage**, not presumed quality. Newer, larger, or more expensive
 does not imply better page grouping. The Qwen set deliberately spans general models, explicit VL
-models, and generations; the Gemini set uses version-pinned stable IDs; the last five broaden model
-and hosting families at low-to-mid listed rates.
+models, and generations; the Gemini set uses version-pinned stable IDs; Mistral and Llama broaden
+model and hosting families.
 
 ### Requested-name disposition
 
@@ -76,8 +73,9 @@ and hosting families at low-to-mid listed rates.
 
 ## Cost-controlled evaluation design
 
-No paid-call authority exists yet. When a total cap and data policy are explicitly approved, use the
-installed native package path and published evaluation dependencies:
+The 15-call compatibility canary is approved after the live-screen setup and total-spend control are
+verified. The remaining development screen, finalist repeats, and holdout remain separately gated.
+Use the installed native package path and published evaluation dependencies:
 
 - Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
 - `jkudish/pest-plugin-ai-benchmarks` v0.1.0 for the model/endpoint comparison axis, repetitions, durable
@@ -98,19 +96,22 @@ Run the evaluation in gates:
 
 1. **Offline protocol gate:** prove every configuration produces the same frozen images, prompt,
    schema, endpoint options, and local validators. Cost: $0 provider spend.
-2. **Broad development screen:** one live grouping trial per model per development bundle:
-   \(18D\) trials for \(D\) development bundles, not a total provider-call cap. Exercising the full
-   extraction pipeline adds per-group extraction or OCR calls; count every stage and attempt in the
-   budget. This screen can identify request incompatibility,
+2. **Compatibility canary:** one live detector trial per model against one development bundle:
+   15 calls total, with grouped extraction/OCR simulated. This can identify request incompatibility,
+   schema/membership failure, and clearly unusable grouping before any wider screen.
+3. **Broad development screen:** one live grouping trial per surviving model against each remaining
+   development bundle. Exercising the full extraction pipeline instead would add per-group extraction
+   or OCR calls, so the detector screen keeps those stages simulated. This screen can identify
    chronic schema/membership failure, obvious grouping failure, or unacceptable observed cost/latency.
-3. **Development finalists:** choose 3–5 models from measured evidence, not metadata. Add repeats to
+4. **Development finalists:** choose 3–5 models from measured evidence, not metadata. Add repeats to
    reach at least three trials per finalist/development bundle. Prompt/schema changes remain confined
    to development data.
-4. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
+5. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
    and scoring before at least three repeats on each held-out bundle. Never tune on holdout outcomes.
 
-The recommendation is to screen all 18 once before choosing finalists. If an eventual approved cap
-cannot support that broad screen, three **coverage anchors**, not presumed winners, are
+The recommendation is to run the equal 15-model canary before removing technical or clearly unusable
+candidates, then screen survivors across the other development bundles. If a later approved cap
+requires a narrower screen, three **coverage anchors**, not presumed winners, are
 `qwen/qwen3.8-flash` (current low listed rate), `google/gemini-2.5-flash` (older stable Gemini with
 seven strict endpoints), and `openai/gpt-5.6-luna` (the requested cross-family replacement for Sol).
 Do not promote an anchor or any other candidate to finalist without measured development evidence.
@@ -137,7 +138,7 @@ establish extraction accuracy.
 
 ## Routing, price, and privacy caveats
 
-- Endpoint support differs within one model. For Luna, Sonnet, Haiku, and Kimi, some listed endpoints
+- Endpoint support differs within one model. For Luna, Sonnet, and Haiku, some listed endpoints
   fail the strict screen; `require_parameters = true` is mandatory. Full eligible and excluded slugs
   are in the JSON snapshot.
 - Default routing is price-weighted and allows fallback. A base provider slug can match multiple
@@ -163,7 +164,7 @@ All research used public, unauthenticated sources and no model calls:
 - [OpenRouter Models API](https://openrouter.ai/api/v1/models) for exact IDs, canonical slugs,
   modalities, prices, overrides, reasoning metadata, and context/output limits.
 - Each row's endpoint URL follows `https://openrouter.ai/api/v1/models/{author}/{model}/endpoints`;
-  all 18 exact URLs are retained in the companion JSON and were fetched independently.
+  all 15 exact URLs are retained in the companion JSON and were fetched independently.
 - [ZDR endpoint API](https://openrouter.ai/api/v1/endpoints/zdr) for current model + full endpoint
   combinations marked zero-retention.
 - [Models documentation](https://openrouter.ai/docs/guides/overview/models) for pricing units,
