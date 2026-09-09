@@ -203,7 +203,7 @@ admission spend both remain $0.051611365 rather than substituting the delayed al
 | `anthropic/claude-haiku-4.5 @ amazon-bedrock/global` | 3 / 3 | 3.000s | $0.018241000 |
 | **Total** | **12 / 12** | — | **$0.051611365** |
 
-Across both clarified-prompt gates, Gemini 2.5 Flash, Luna, and Haiku each passed all nine checks on
+Across both initial clarified-prompt gates, Gemini 2.5 Flash, Luna, and Haiku each passed all nine checks on
 all five development fixtures. Qwen2.5 VL passed all four fixtures for which quality evidence exists;
 its `mixed-document-lengths` call remains a technical failure excluded from quality claims. Gemini is
 the development leader: it ties the other fully scored routes on observed deterministic quality while
@@ -212,19 +212,37 @@ Haiku at 3.009s/$0.035994000. Qwen averaged 3.758s across five attempted calls; 
 provider-reported costs sum to $0.035293400. The two gates cost $0.089426555 in total. The maintained
 development recommendation is Gemini 2.5 Flash first, Luna as its first native-failover alternative,
 and Haiku second. Package defaults remain vendor-neutral and consumers own this order through
-published configuration. These are single samples per model/fixture, so repeats remain necessary
-before a holdout or production-default decision.
+published configuration.
 
-## Authorized finalist repeats and frozen holdout
+## Completed finalist repeats and frozen holdout
 
-The next two detector-only stages are authorized but not yet executed. The development-repeat stage
-keeps the clarified prompt, schemas, rendering, routes/options, reasoning controls, 512-token cap,
-120-second timeout, and deterministic scorers fixed. Gemini 2.5 Flash, Luna, and Haiku each run two
-new repetitions over all five `prompt-example` fixtures: 3 models × 5 fixtures × 2 = 30 calls under a
-separate $10 software cap and authenticated v5 Git-admin ledger. These calls bring each
-finalist/development pair to three same-contract observations when combined with the existing one.
+The completed development-repeat stage kept the clarified prompt, schemas, rendering, routes/options,
+reasoning controls, 512-token cap, 120-second timeout, and deterministic scorers fixed. Gemini 2.5
+Flash, Luna, and Haiku each ran two new repetitions over all five `prompt-example` fixtures: 3 models ×
+5 fixtures × 2 = 30 calls under a separate $10 software cap and authenticated v5 Git-admin ledger.
+All 30 calls produced validated quality scorecards and passed all nine grouping checks, with no
+technical failure. Every scorecard SHA-256 matches the completed authenticated ledger evidence.
 
-Only after that exact ledger is complete may the frozen holdout stage run. It uses the same three
+Provider-reported and admission spend were $0.097322782. The immediate key-allowance change was
+$0.089219782; the $0.008103000 difference exactly matches the final Haiku charge and is treated as
+timing, not replacement cost evidence.
+
+| Model @ pinned endpoint | All-nine passes / scored | Average / median detector latency | Provider-reported cost |
+| --- | ---: | ---: | ---: |
+| `google/gemini-2.5-flash @ google-vertex/global` | 10 / 10 | 2.022s / 1.575s | $0.005051200 |
+| `openai/gpt-5.6-luna @ azure/eu` | 10 / 10 | 3.089s / 2.524s | $0.020283582 |
+| `anthropic/claude-haiku-4.5 @ amazon-bedrock/global` | 10 / 10 | 2.757s / 2.669s | $0.071988000 |
+| **Total** | **30 / 30** | — | **$0.097322782** |
+
+Combined with the prior same-contract observation for every finalist/development pair, each model is
+15/15 across three observations of all five development fixtures. Gemini cost $0.007586800 and
+averaged 1.887s across those 15 calls, Luna cost $0.035887137 and averaged 2.793s, and Haiku cost
+$0.107982000 and averaged 2.841s. Gemini therefore remains the development leader, followed by Luna
+and then Haiku for provider-diverse native fallback. This is repeated development evidence, not a
+production recommendation; the package default remains vendor-neutral.
+
+The completed authenticated development ledger now permits the separately authorized frozen holdout
+after exact-target review. It uses the same three
 configurations over `same-issuer-invoices`, `ambiguous-orphan`, and `scan-like-raster`, three times
 each: 3 × 3 × 3 = 27 calls under a separate $10 cap and authenticated v6 ledger in Git administrative
 storage. The runner checks the authenticated completed development ledger, its 30 validated scorecard
@@ -252,9 +270,8 @@ remain simulated in both stages. No other paid calls are authorized by this plan
 ## Cost-controlled evaluation design
 
 The 15-call compatibility canary, 28-call broad development screen, eight-call prompt clarification
-canary, and 12-call prompt development coverage screen are complete. The exact 30-call finalist-repeat
-stage and contingent 27-call frozen holdout are authorized, subject to their offline and exact-target
-review gates.
+canary, 12-call prompt development coverage screen, and exact 30-call finalist-repeat stage are
+complete. The contingent 27-call frozen holdout is authorized, subject to its exact-target review gate.
 Use the installed native package path and published evaluation dependencies:
 
 - Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
@@ -288,10 +305,10 @@ Run the evaluation in gates:
 5. **Prompt development coverage (complete):** the same four finalists ran once across the three
    remaining development fixtures with every setting fixed: 12 exact scorecards, no holdout, and no
    same-contract repeats.
-6. **Development finalists (authorized):** run two new repetitions for Gemini 2.5 Flash, Luna, and
-   Haiku over all five development bundles—30 calls—to reach three same-contract observations per
-   finalist/bundle.
-7. **Frozen holdout (authorized after stage 6):** preserve the stage-6 contract and run three repeats
+6. **Development finalists (complete):** two new repetitions for Gemini 2.5 Flash, Luna, and Haiku
+   over all five development bundles completed 30/30 all-nine passes, reaching three same-contract
+   observations per finalist/bundle.
+7. **Frozen holdout (authorized after exact-target review):** preserve the stage-6 contract and run three repeats
    per finalist across all three held-out bundles—27 calls. Never tune on holdout outcomes.
 
 The compatibility canary removed technical and clearly unusable candidates, and the broad and
