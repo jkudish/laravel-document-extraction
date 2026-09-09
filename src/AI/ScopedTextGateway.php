@@ -82,7 +82,7 @@ final readonly class ScopedTextGateway implements StepTextGateway
         );
         $options = $options === null ? null : new FrozenGenerationOptions(
             $options,
-            $options->providerOptions($provider->name()) ?? [],
+            $options->providerOptions($this->providerOptionsKey($provider, $options)) ?? [],
         );
         $compiled = $schema === null ? null : CompiledSchema::fromNative($schema);
         $attempt = $scope->session->beginAttempt();
@@ -203,6 +203,19 @@ final readonly class ScopedTextGateway implements StepTextGateway
         }
 
         throw new InvalidAiOutputException('The provider did not preserve original structured JSON.');
+    }
+
+    private function providerOptionsKey(TextProvider $provider, TextGenerationOptions $options): string
+    {
+        if ($options->agent instanceof DocumentDetectionAgent
+            || $options->agent instanceof InlineSchemaAgent
+            || $options->agent instanceof OcrAgent) {
+            return $provider->name();
+        }
+
+        return $provider->driver() === 'openai-compatible'
+            ? $provider->name()
+            : $provider->driver();
     }
 
     /**
