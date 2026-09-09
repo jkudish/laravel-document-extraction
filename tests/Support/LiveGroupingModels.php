@@ -7,19 +7,36 @@ namespace Jkudish\DocumentExtraction\Tests\Support;
 use Jkudish\PestAiBenchmarks\Configuration;
 
 /**
- * @phpstan-type LiveModel array{id: string, canonical: string, endpoint: string, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}}
+ * @phpstan-type LiveModel array{id: string, canonical: string, endpoint: string, route: array{provider_name: string, data_region: string, service_tier: ?string}, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}}
  */
 final class LiveGroupingModels
 {
-    public const string BENCHMARK = 'live OpenRouter grouping compatibility canary';
+    public const string BENCHMARK = 'live OpenRouter grouping prompt development coverage screen';
 
-    public const string CONFIRMATION = 'run-15-paid-detector-calls';
+    public const string CONFIRMATION = 'run-12-prompt-coverage-detector-calls';
 
     public const string FIXTURE_ID = 'mixed-document-lengths';
 
     public const string FIXTURE_FILE = 'bundle-03.pdf';
 
-    public const float MAX_SPEND_USD = 5.0;
+    public const string SCREEN = 'openrouter-live-grouping-prompt-coverage-v1';
+
+    /** @var list<string> */
+    public const array FIXTURE_IDS = [
+        'single-three-page-document',
+        'three-single-page-documents',
+        'non-financial-documents',
+    ];
+
+    /** @var list<string> */
+    public const array SURVIVOR_IDS = [
+        'qwen/qwen2.5-vl-72b-instruct',
+        'google/gemini-2.5-flash',
+        'openai/gpt-5.6-luna',
+        'anthropic/claude-haiku-4.5',
+    ];
+
+    public const float MAX_SPEND_USD = 4.0;
 
     public const float MAX_KEY_LIMIT_USD = 50.0;
 
@@ -39,7 +56,7 @@ final class LiveGroupingModels
             self::model('google/gemini-3.1-flash-lite', 'google-vertex/global', true, true, 0.25, 1.5, 0.000_000_25, canonical: 'google/gemini-3.1-flash-lite-20260507'),
             self::model('google/gemini-2.5-flash', 'google-vertex/global', true, true, 0.3, 2.5, 0.000_000_3),
             self::model('google/gemini-2.5-pro', 'google-vertex/us', true, true, 2.5, 15.0, 0.000_001_25),
-            self::model('openai/gpt-5.6-luna', 'azure', true, true, 0.44, 1.98, completionTokenParameter: true, canonical: 'openai/gpt-5.6-luna-20260709'),
+            self::model('openai/gpt-5.6-luna', 'azure/eu', true, true, 0.44, 1.98, completionTokenParameter: true, canonical: 'openai/gpt-5.6-luna-20260709', observedDataRegion: 'global'),
             self::model('anthropic/claude-sonnet-5', 'amazon-bedrock/global', true, true, 2.0, 10.0, canonical: 'anthropic/claude-sonnet-5-20260630'),
             self::model('anthropic/claude-haiku-4.5', 'amazon-bedrock/global', true, true, 1.0, 5.0, canonical: 'anthropic/claude-4.5-haiku-20251001'),
             self::model('mistralai/mistral-small-2603', 'mistral/zdr', true, true, 0.15, 0.6),
@@ -47,12 +64,27 @@ final class LiveGroupingModels
         ];
     }
 
+    /** @return list<LiveModel> */
+    public static function survivors(): array
+    {
+        return array_values(array_filter(
+            self::all(),
+            static fn (array $model): bool => in_array($model['id'], self::SURVIVOR_IDS, true),
+        ));
+    }
+
+    /** @return list<string> */
+    public static function fixtureIds(): array
+    {
+        return self::FIXTURE_IDS;
+    }
+
     /** @return array<string, Configuration> */
     public static function configurations(?string $onlyModel = null): array
     {
         $configurations = [];
 
-        foreach (self::all() as $model) {
+        foreach (self::survivors() as $model) {
             if ($onlyModel !== null && $model['id'] !== $onlyModel) {
                 continue;
             }
@@ -129,6 +161,7 @@ final class LiveGroupingModels
         ?float $image = null,
         bool $completionTokenParameter = false,
         ?string $canonical = null,
+        ?string $observedDataRegion = null,
     ): array {
         $maxPrice = ['prompt' => $prompt, 'completion' => $completion];
 
@@ -140,6 +173,24 @@ final class LiveGroupingModels
             'id' => $id,
             'canonical' => $canonical ?? $id,
             'endpoint' => $endpoint,
+            'route' => [
+                'provider_name' => match (strtok($endpoint, '/')) {
+                    'alibaba' => 'Alibaba',
+                    'parasail' => 'Parasail',
+                    'google-vertex' => 'Google',
+                    'azure' => 'Azure',
+                    'amazon-bedrock' => 'Amazon Bedrock',
+                    'mistral' => 'Mistral',
+                    'digitalocean' => 'DigitalOcean',
+                    default => throw new \LogicException("The OpenRouter endpoint [{$endpoint}] has no route identity."),
+                },
+                'data_region' => $observedDataRegion ?? match (true) {
+                    str_contains($endpoint, '/us') => 'us',
+                    str_contains($endpoint, '/eu') => 'europe',
+                    default => 'global',
+                },
+                'service_tier' => str_contains($endpoint, 'priority') ? 'priority' : null,
+            ],
             'zdr' => $zdr,
             'reasoning' => $reasoning,
             'output_parameter' => $completionTokenParameter ? 'max_completion_tokens' : 'max_tokens',

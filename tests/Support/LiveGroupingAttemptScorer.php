@@ -26,9 +26,14 @@ final class LiveGroupingAttemptScorer implements Scorer
 
         $calls = $decoded['calls'] ?? null;
         $cost = $decoded['cost'] ?? null;
+        $route = $decoded['openrouter_route'] ?? null;
 
-        if (! is_array($calls) || ! array_is_list($calls) || ! is_array($cost)) {
-            return $this->result(false, 'Call and cost evidence was missing.');
+        if (! is_array($calls)
+            || ! array_is_list($calls)
+            || ! is_array($cost)
+            || ! is_array($route)
+            || array_is_list($route)) {
+            return $this->result(false, 'Call, cost, or route evidence was missing.');
         }
 
         $references = [];
@@ -102,6 +107,12 @@ final class LiveGroupingAttemptScorer implements Scorer
                 BigDecimal::zero(),
             );
             $hasSimulatedCalls = $simulatedReferences !== [];
+            $requestedConfiguration = is_string($requestedModel)
+                ? LiveGroupingModels::find($requestedModel)
+                : null;
+            $allowedServiceTiers = is_array($requestedConfiguration) && $requestedConfiguration['route']['service_tier'] === null
+                ? [null, 'default']
+                : [$requestedConfiguration['route']['service_tier'] ?? null];
             $valid = $valid
                 && count($calls) >= 1
                 && count($liveCosts) === 1
@@ -110,7 +121,17 @@ final class LiveGroupingAttemptScorer implements Scorer
                 && BigDecimal::of($known)->isEqualTo($summed)
                 && ($cost['unpriced_calls'] ?? null) === $simulatedReferences
                 && ($cost['complete'] ?? null) === ! $hasSimulatedCalls
-                && ($cost['mode'] ?? null) === ($hasSimulatedCalls ? 'mixed' : 'live');
+                && ($cost['mode'] ?? null) === ($hasSimulatedCalls ? 'mixed' : 'live')
+                && is_array($requestedConfiguration)
+                && in_array($route['model'] ?? null, [
+                    $requestedConfiguration['id'],
+                    $requestedConfiguration['canonical'],
+                ], true)
+                && ($route['provider_name'] ?? null) === $requestedConfiguration['route']['provider_name']
+                && ($route['data_region'] ?? null) === $requestedConfiguration['route']['data_region']
+                && in_array($route['service_tier'] ?? null, $allowedServiceTiers, true)
+                && in_array($route['provider_attempts'] ?? null, [null, 1], true)
+                && ($route['fallbacks_disabled'] ?? null) === true;
         } catch (Throwable) {
             $valid = false;
         }
@@ -118,17 +139,22 @@ final class LiveGroupingAttemptScorer implements Scorer
         return $this->result(
             $valid,
             $valid
-                ? sprintf('One live detector and %d simulated extraction attempt(s) were attributed exactly once.', count($simulatedReferences))
-                : 'Live detector or simulated extraction pricing evidence was inconsistent.',
+                ? sprintf(
+                    'One live detector used the approved route and %d simulated extraction attempt(s) were attributed exactly once. Output SHA-256: %s.',
+                    count($simulatedReferences),
+                    hash('sha256', $output),
+                )
+                : 'Live detector route or simulated extraction pricing evidence was inconsistent.',
+            $valid ? 'live-detector-attempt-integrity@sha256:'.hash('sha256', $output) : null,
         );
     }
 
-    private function result(bool $passed, string $reasoning): ScorerResult
+    private function result(bool $passed, string $reasoning, ?string $scorer = null): ScorerResult
     {
         return new ScorerResult(
             score: $passed ? 1.0 : 0.0,
             reasoning: $reasoning,
-            scorer: 'live-detector-attempt-integrity',
+            scorer: $scorer ?? 'live-detector-attempt-integrity',
         );
     }
 }

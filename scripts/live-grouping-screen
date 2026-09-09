@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 use Jkudish\DocumentExtraction\Dev\LiveGroupingScreen;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\NativeCommandRunner;
+use Jkudish\DocumentExtraction\Tests\Support\LiveGroupingModels;
 
 $root = dirname(__DIR__);
 require $root.'/vendor/autoload.php';
@@ -12,14 +13,20 @@ require $root.'/vendor/autoload.php';
 try {
     $environment = getenv();
     $environment = is_array($environment) ? $environment : [];
-    $screen = new LiveGroupingScreen($root, new NativeCommandRunner($root));
+    $screen = new LiveGroupingScreen(
+        $root,
+        new NativeCommandRunner($root),
+        models: LiveGroupingModels::survivors(),
+        fixtureIds: LiveGroupingModels::fixtureIds(),
+    );
     $result = $screen->execute(array_slice($argv, 1), $environment);
     fwrite(STDOUT, $result['output'].PHP_EOL);
 
     foreach ($result['runs'] as $run) {
         fwrite(STDOUT, sprintf(
-            "%s @ %s: %s, $%s (%s); scorecard %s\n",
+            "%s on %s @ %s: %s, $%s (%s); scorecard %s\n",
             $run['model'],
+            $run['fixture'],
             $run['endpoint'],
             $run['status'],
             $run['cost_usd'],

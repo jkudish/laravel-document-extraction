@@ -1,11 +1,68 @@
 {
   "retrieved_at_utc": "2026-09-07T03:47:07Z",
-  "purpose": "Expanded catalog screen for a future cost-capped synthetic document-grouping evaluation",
-  "evidence_status": "catalog-compatible only; no live Laravel SDK model requests or paid calls executed",
+  "purpose": "Catalog and measured compatibility evidence for a cost-capped synthetic document-grouping evaluation",
+  "evidence_status": "15-route compatibility canary, seven-model 28-call broad development screen, four-model eight-call prompt clarification canary, and four-model 12-call prompt development coverage screen complete",
   "actual_costs": {
-    "status": "not measured",
-    "value_usd": null,
-    "reason": "Actual cost requires an authorized completed live response with recorded provider cost or compatible usage evidence; catalog rates are estimates, not actual costs."
+    "status": "measured for all broad-screen and prompt-development-coverage calls, eight compatibility-canary calls, and seven prompt-canary calls; one prompt-canary technical failure had no observed charge",
+    "compatibility_canary": {"provider_reported_total_usd": "0.035684066", "settled_key_allowance_change_usd": "0.079192966", "scope": "Provider-reported cost was available for eight of 15 trials; delayed allowance changes cannot be assigned to individual canary calls."},
+    "broad_development_screen": {"provider_reported_total_usd": "0.091173548", "key_allowance_change_usd": "0.088660908", "scope": "All 28 unique calls have provider-reported cost; the allowance timing difference does not replace per-call evidence."},
+    "prompt_clarification_canary": {"provider_reported_total_usd": "0.037815190", "key_allowance_change_usd": "0.037815190", "admission_total_usd": "0.140727190", "scope": "Seven calls have provider-reported cost; one Qwen control technical failure had no observed charge and retained its $0.102912 reservation."},
+    "prompt_development_coverage": {"provider_reported_total_usd": "0.051611365", "key_allowance_change_usd": "0.043508365", "admission_total_usd": "0.051611365", "scope": "All 12 calls have provider-reported cost; the $0.008103 allowance difference exactly matches the final Haiku charge and is treated as timing rather than replacement cost evidence."}
+  },
+  "broad_screen_results": {
+    "completed_at_utc": "2026-09-08T21:32:58Z",
+    "paid_detector_calls": 28,
+    "grouping_scored_calls": 20,
+    "all_nine_grouping_checks_passed": 17,
+    "quality_failures": 3,
+    "technical_evidence_failures": 8,
+    "grouped_extraction_and_ocr": "simulated",
+    "models": [
+      {"id": "qwen/qwen3-vl-32b-instruct", "endpoint": "alibaba", "all_nine_passed": 0, "scored": 0, "technical_failures": 4, "average_detector_latency_ms": 3507.808, "provider_reported_cost_usd": "0.003604640"},
+      {"id": "qwen/qwen2.5-vl-72b-instruct", "endpoint": "parasail/fp8", "all_nine_passed": 2, "scored": 2, "technical_failures": 2, "average_detector_latency_ms": 4373.167, "provider_reported_cost_usd": "0.035155000"},
+      {"id": "google/gemini-3.1-flash-lite", "endpoint": "google-vertex/global", "all_nine_passed": 3, "scored": 4, "technical_failures": 0, "average_detector_latency_ms": 2261.383, "provider_reported_cost_usd": "0.005017000", "quality_finding": "blank-separator failed exact grouping, selected-page coverage, and unassigned-page handling"},
+      {"id": "google/gemini-2.5-flash", "endpoint": "google-vertex/global", "all_nine_passed": 3, "scored": 4, "technical_failures": 0, "average_detector_latency_ms": 1705.817, "provider_reported_cost_usd": "0.001908600", "quality_finding": "blank-separator failed ambiguity handling"},
+      {"id": "openai/gpt-5.6-luna", "endpoint": "azure/eu", "observed_data_region": "global", "all_nine_passed": 2, "scored": 2, "technical_failures": 2, "average_detector_latency_ms": 3344.943, "provider_reported_cost_usd": "0.011315700"},
+      {"id": "anthropic/claude-haiku-4.5", "endpoint": "amazon-bedrock/global", "all_nine_passed": 4, "scored": 4, "technical_failures": 0, "average_detector_latency_ms": 2601.093, "provider_reported_cost_usd": "0.026089000"},
+      {"id": "meta-llama/llama-4-maverick", "endpoint": "digitalocean", "all_nine_passed": 3, "scored": 4, "technical_failures": 0, "average_detector_latency_ms": 6313.799, "provider_reported_cost_usd": "0.008083608", "quality_finding": "blank-separator failed ambiguity handling"}
+    ],
+    "technical_failure_note": "Six calls completed before bounded generation-metadata polling was added; two Luna calls exposed undocumented data_region behavior for the exact azure/eu route. They were not model-quality failures and were not repeated."
+  },
+  "prompt_clarification_results": {
+    "completed_at_utc": "2026-09-08T23:08:32Z",
+    "git_target": "3e2fd6bd449a4af39a2b7b7e44e8a7d09f275458",
+    "contract_fingerprint": "sha256:345df7b7538345587016d9484aaadaea7a4e2d393274079086ed912320cbc0df",
+    "paid_detector_calls": 8,
+    "grouping_scored_calls": 7,
+    "all_nine_grouping_checks_passed": 7,
+    "blank_separator_all_nine_passed": 4,
+    "control_all_nine_passed": 3,
+    "technical_evidence_failures": 1,
+    "grouped_extraction_and_ocr": "simulated",
+    "models": [
+      {"id": "qwen/qwen2.5-vl-72b-instruct", "endpoint": "parasail/fp8", "all_nine_passed": 1, "scored": 1, "technical_failures": 1, "average_detector_latency_ms": 3167.968, "provider_reported_cost_usd": "0.011010000", "technical_finding": "mixed-document-lengths failed before effective-model, usage, cost, or grouping evidence"},
+      {"id": "google/gemini-2.5-flash", "endpoint": "google-vertex/global", "all_nine_passed": 2, "scored": 2, "technical_failures": 0, "average_detector_latency_ms": 1734.425, "provider_reported_cost_usd": "0.001288500", "quality_finding": "blank-separator improved from a prior ambiguity miss to all-nine exact under the clarified prompt"},
+      {"id": "openai/gpt-5.6-luna", "endpoint": "azure/eu", "observed_data_region": "global", "all_nine_passed": 2, "scored": 2, "technical_failures": 0, "average_detector_latency_ms": 2228.672, "provider_reported_cost_usd": "0.007763690"},
+      {"id": "anthropic/claude-haiku-4.5", "endpoint": "amazon-bedrock/global", "all_nine_passed": 2, "scored": 2, "technical_failures": 0, "average_detector_latency_ms": 3021.114, "provider_reported_cost_usd": "0.017753000"}
+    ],
+    "interpretation": "All four blank-separator calls and all three scored controls passed all nine checks. This supports retaining the generic clarification for further development evaluation, but one sample per model/fixture does not establish a production default or eliminate stochastic variance."
+  },
+  "prompt_development_coverage_results": {
+    "completed_at_utc": "2026-09-09T00:40:40Z",
+    "git_target": "8146e092c88ddd8285c9aaf1edf5c8abe268eca8",
+    "contract_fingerprint": "sha256:706980fc7fe0192a18aaa25eaa01f498a2385a0238c8ae009f048a224f7bf88c",
+    "paid_detector_calls": 12,
+    "grouping_scored_calls": 12,
+    "all_nine_grouping_checks_passed": 12,
+    "technical_evidence_failures": 0,
+    "grouped_extraction_and_ocr": "simulated",
+    "models": [
+      {"id": "qwen/qwen2.5-vl-72b-instruct", "endpoint": "parasail/fp8", "all_nine_passed": 3, "scored": 3, "technical_failures": 0, "average_detector_latency_ms": 4151.648, "provider_reported_cost_usd": "0.024283400"},
+      {"id": "google/gemini-2.5-flash", "endpoint": "google-vertex/global", "all_nine_passed": 3, "scored": 3, "technical_failures": 0, "average_detector_latency_ms": 1535.874, "provider_reported_cost_usd": "0.001247100"},
+      {"id": "openai/gpt-5.6-luna", "endpoint": "azure/eu", "observed_data_region": "global", "all_nine_passed": 3, "scored": 3, "technical_failures": 0, "average_detector_latency_ms": 2178.575, "provider_reported_cost_usd": "0.007839865"},
+      {"id": "anthropic/claude-haiku-4.5", "endpoint": "amazon-bedrock/global", "all_nine_passed": 3, "scored": 3, "technical_failures": 0, "average_detector_latency_ms": 3000.415, "provider_reported_cost_usd": "0.018241000"}
+    ],
+    "combined_clarified_prompt_evidence": {"paid_detector_calls": 20, "grouping_scored_calls": 19, "all_nine_grouping_checks_passed": 19, "technical_evidence_failures": 1, "provider_reported_total_usd": "0.089426555", "fully_scored_models": ["google/gemini-2.5-flash", "openai/gpt-5.6-luna", "anthropic/claude-haiku-4.5"], "recommended_order": ["google/gemini-2.5-flash", "openai/gpt-5.6-luna", "anthropic/claude-haiku-4.5"], "package_default": "vendor-neutral", "interpretation": "The three fully scored models passed all five development fixtures. Qwen passed all four fixtures with quality evidence; its control remains a technical failure. One sample per model/fixture does not establish a production default or eliminate stochastic variance."}
   },
   "pricing_units": {
     "raw_token_fields": "USD per token",
@@ -197,14 +254,16 @@
   ],
   "evaluation_design": {
     "ranking_basis": "experimental lineage, architecture, provider, price-tier, and endpoint coverage; not presumed quality",
-    "recommendation": "Run an equal 15-model canary, remove only technical or clearly unusable failures, then screen survivors across the remaining development bundles.",
-    "coverage_anchors_if_cap_requires_narrowing": ["qwen/qwen3.8-flash", "google/gemini-2.5-flash", "openai/gpt-5.6-luna"],
+    "recommendation": "Advance Gemini 2.5 Flash as the leading development default candidate because it ties Luna and Haiku at five of five exact fixtures while being fastest and least expensive. Retain Luna and Haiku for provider-diverse repeats; demote Qwen2.5 VL unless its older-vision diversity justifies incomplete control coverage and higher cost. No production default until repeats and a frozen holdout.",
+    "broad_screen_models": ["qwen/qwen3-vl-32b-instruct", "qwen/qwen2.5-vl-72b-instruct", "google/gemini-3.1-flash-lite", "google/gemini-2.5-flash", "openai/gpt-5.6-luna", "anthropic/claude-haiku-4.5", "meta-llama/llama-4-maverick"],
     "harness": ["pestphp/pest-plugin-evals", "jkudish/pest-plugin-ai-benchmarks", "jkudish/laravel-ai-pricing"],
     "dependency_status": "pest-plugin-ai-benchmarks v0.1.0, pest-plugin-evals ^5.0.2, and laravel-ai-pricing v0.1.0 installed from public releases; no VCS or path repository required",
     "stages": [
       {"name": "offline protocol gate", "paid_calls": 0},
-      {"name": "compatibility canary", "models": 15, "development_bundles": 1, "repeats": 1, "paid_detector_calls": 15, "extraction_mode": "simulated"},
-      {"name": "broad development screen", "models": "survivors from measured canary evidence", "remaining_development_bundles": 4, "repeats": 1, "budget_note": "Detector calls only; grouped extraction and OCR remain simulated."},
+      {"name": "compatibility canary", "status": "complete", "models": 15, "development_bundles": 1, "repeats": 1, "paid_detector_calls": 15, "extraction_mode": "simulated"},
+      {"name": "broad development screen", "status": "complete", "models": 7, "remaining_development_bundles": 4, "repeats": 1, "paid_detector_calls": 28, "software_cap_usd": 5, "provider_reported_total_usd": "0.091173548", "budget_note": "Detector calls only; grouped extraction and OCR remained simulated."},
+      {"name": "prompt clarification canary", "status": "complete", "models": 4, "development_bundles": 2, "repeats": 1, "paid_detector_calls": 8, "grouping_scored_calls": 7, "all_nine_passed": 7, "technical_failures": 1, "software_cap_usd": 1, "provider_reported_total_usd": "0.037815190", "admission_total_usd": "0.140727190", "fixtures": ["blank-separator", "mixed-document-lengths"], "budget_note": "New prompt fingerprint; detector calls only; grouped extraction and OCR simulated; no holdout."},
+      {"name": "prompt development coverage screen", "status": "complete", "models": 4, "development_bundles": 3, "repeats": 1, "paid_detector_calls": 12, "grouping_scored_calls": 12, "all_nine_passed": 12, "technical_failures": 0, "software_cap_usd": 4, "provider_reported_total_usd": "0.051611365", "key_allowance_change_usd": "0.043508365", "admission_total_usd": "0.051611365", "fixtures": ["single-three-page-document", "three-single-page-documents", "non-financial-documents"], "budget_note": "Same clarified prompt and model settings; detector calls only; grouped extraction and OCR simulated; no holdout or same-contract repeat."},
       {"name": "development finalists", "models": "3-5 chosen from measured evidence", "minimum_total_repeats_per_bundle": 3},
       {"name": "frozen holdout", "minimum_repeats_per_finalist_bundle": 3, "tuning_allowed": false}
     ],

@@ -9,8 +9,13 @@ use Closure;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\Client\Factory;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\CommandRunner;
+use Jkudish\DocumentExtraction\Tests\Support\GroupingBenchmarkCorpus;
 use Jkudish\DocumentExtraction\Tests\Support\GroupingMetric;
+use Jkudish\DocumentExtraction\Tests\Support\LiveGroupingAttemptScorer;
 use Jkudish\DocumentExtraction\Tests\Support\LiveGroupingModels;
+use Jkudish\PestAiBenchmarks\Runs\RunId;
+use Jkudish\PestAiBenchmarks\Runs\RunPaths;
+use Jkudish\PestAiBenchmarks\Runs\SavedRun;
 use Jkudish\PestAiBenchmarks\Runs\StableScorecardValidator;
 use RuntimeException;
 use Throwable;
@@ -18,7 +23,8 @@ use Throwable;
 /**
  * @phpstan-import-type LiveModel from LiveGroupingModels
  *
- * @phpstan-type LiveAuthorization array{schema_version: 2, confirmation: string, key_fingerprint: string, model_ids: list<string>, initial_remaining: string, recorded_spend: string, admission_spend: string, completed_models: list<string>, pending: array{model: string, reservation: string}|null}
+ * @phpstan-type LiveTrial array{id: string, model: LiveModel, fixture: string}
+ * @phpstan-type LiveAuthorization array{schema_version: 3, confirmation: string, key_fingerprint: string, contract_fingerprint: string, trial_ids: list<string>, initial_remaining: string, recorded_spend: string, admission_spend: string, completed_trials: list<string>, pending: array{trial: string, reservation: string}|null}
  */
 final class LiveGroupingScreen
 {
@@ -28,11 +34,15 @@ final class LiveGroupingScreen
     /** @var list<LiveModel> */
     private array $models;
 
+    /** @var list<string> */
+    private array $fixtureIds;
+
     private readonly string $authorizationFile;
 
     /**
      * @param  Closure(string, ?string): array<string, mixed>|null  $fetch
      * @param  list<LiveModel>|null  $models
+     * @param  list<string>|null  $fixtureIds
      */
     public function __construct(
         private readonly string $repositoryRoot,
@@ -41,27 +51,38 @@ final class LiveGroupingScreen
         ?array $models = null,
         private readonly bool $offlineInference = false,
         ?string $authorizationPath = null,
+        ?array $fixtureIds = null,
     ) {
         $this->fetch = $fetch ?? $this->request(...);
-        $this->models = $models ?? LiveGroupingModels::all();
+        $this->models = $models ?? LiveGroupingModels::survivors();
+        $this->fixtureIds = $fixtureIds ?? LiveGroupingModels::fixtureIds();
         $this->authorizationFile = $authorizationPath
-            ?? $this->repositoryRoot.'/storage/app/ai-evals/live-grouping-screen-v1.json';
+            ?? $this->repositoryRoot.'/storage/app/ai-evals/live-grouping-screen-v4.json';
 
         if ($this->models === [] || count(array_unique(array_column($this->models, 'id'))) !== count($this->models)) {
             throw new RuntimeException('The live grouping screen requires unique approved models.');
         }
 
         foreach ($this->models as $model) {
-            if (LiveGroupingModels::find($model['id']) !== $model) {
+            if (! in_array($model['id'], LiveGroupingModels::SURVIVOR_IDS, true)
+                || LiveGroupingModels::find($model['id']) !== $model) {
                 throw new RuntimeException('The live grouping screen contains an unapproved configuration.');
             }
+        }
+
+        if ($this->fixtureIds === [] || count(array_unique($this->fixtureIds)) !== count($this->fixtureIds)) {
+            throw new RuntimeException('The live grouping screen requires unique approved fixtures.');
+        }
+
+        foreach ($this->fixtureIds as $fixtureId) {
+            $this->fixture($fixtureId);
         }
     }
 
     /**
      * @param  list<string>  $arguments
      * @param  array<string, string>  $environment
-     * @return array{live: bool, output: string, runs: list<array{model: string, endpoint: string, cost_usd: string, cost_source: string, status: string, attempts: int, scorecard: string}>}
+     * @return array{live: bool, output: string, runs: list<array{model: string, endpoint: string, fixture: string, cost_usd: string, cost_source: string, status: string, attempts: int, scorecard: string}>}
      */
     public function execute(array $arguments, array $environment): array
     {
@@ -89,14 +110,17 @@ final class LiveGroupingScreen
         $lock = $this->acquireLock();
         $currentRemaining = $this->validateKey($key, requireFullCap: ! is_file($this->authorizationPath()));
         $authorization = $this->authorization($key, $currentRemaining);
+        $trials = $this->trials();
         $initialRemaining = BigDecimal::of($authorization['initial_remaining']);
         $summaries = [];
         $recordedSpend = BigDecimal::of($authorization['recorded_spend']);
         $admissionSpend = BigDecimal::of($authorization['admission_spend']);
-        $completed = count($authorization['completed_models']);
+        $completed = count($authorization['completed_trials']);
 
-        foreach (array_slice($this->models, $completed) as $model) {
-            $reservation = $this->validateCatalog($model);
+        foreach (array_slice($trials, $completed) as $trial) {
+            $model = $trial['model'];
+            $fixture = $this->fixture($trial['fixture']);
+            $reservation = $this->validateCatalog($model, $fixture['page_count']);
             $remaining = $this->validateKey($key, requireFullCap: false);
             $spent = $initialRemaining->minus($remaining);
             $budgetedSpend = $admissionSpend->isGreaterThan($spent) ? $admissionSpend : $spent;
@@ -108,7 +132,7 @@ final class LiveGroupingScreen
             }
 
             $authorization['pending'] = [
-                'model' => $model['id'],
+                'trial' => $trial['id'],
                 'reservation' => (string) $reservation,
             ];
             $this->writeAuthorization($authorization);
@@ -129,6 +153,9 @@ final class LiveGroupingScreen
                     'OPENROUTER_API_KEY' => $key,
                     'LDE_LIVE_GROUPING_CONFIRM' => LiveGroupingModels::CONFIRMATION,
                     'LDE_LIVE_GROUPING_MODEL' => $model['id'],
+                    'LDE_LIVE_GROUPING_FIXTURE' => $fixture['id'],
+                    'LDE_LIVE_GROUPING_FIXTURE_SHA256' => $fixture['sha256'],
+                    'LDE_LIVE_GROUPING_FIXTURE_SIZE' => (string) $fixture['size'],
                 ];
 
                 if ($this->offlineInference) {
@@ -158,7 +185,7 @@ final class LiveGroupingScreen
             $runDirectory = $this->ownedRunDirectory($created[0]);
 
             try {
-                $summary = $this->validateRun($runDirectory, $model);
+                $summary = $this->validateRun($runDirectory, $model, $fixture['id']);
 
                 if ($result->exitCode !== 0 && ! $summary['technical_failure']) {
                     throw new RuntimeException('The live grouping trial failed before producing one complete scorecard.');
@@ -193,7 +220,7 @@ final class LiveGroupingScreen
                 $recordedSpend = $observedSpend;
             }
 
-            $authorization['completed_models'][] = $model['id'];
+            $authorization['completed_trials'][] = $trial['id'];
             $authorization['recorded_spend'] = (string) $recordedSpend;
             $authorization['admission_spend'] = (string) $admissionSpend;
             $authorization['pending'] = null;
@@ -207,6 +234,7 @@ final class LiveGroupingScreen
             $summaries[] = [
                 'model' => $summary['model'],
                 'endpoint' => $summary['endpoint'],
+                'fixture' => $fixture['id'],
                 'cost_usd' => (string) $trialCost,
                 'cost_source' => match (true) {
                     $trialCost->isZero() => 'no_observed_charge',
@@ -233,7 +261,7 @@ final class LiveGroupingScreen
             'live' => true,
             'output' => sprintf(
                 'Validated %d paid detector calls; reconciled spend was $%s (key allowance change $%s).',
-                count($authorization['completed_models']),
+                count($authorization['completed_trials']),
                 (string) $recordedSpend,
                 (string) $spent,
             ),
@@ -245,8 +273,17 @@ final class LiveGroupingScreen
     {
         $lines = [
             'DRY RUN — no provider calls made',
-            sprintf('Fixture: %s (%s)', LiveGroupingModels::FIXTURE_ID, LiveGroupingModels::FIXTURE_FILE),
-            sprintf('Calls: %d paid detector calls; grouped extraction/OCR simulated', count($this->models)),
+            'Fixtures:',
+        ];
+
+        foreach ($this->fixtureIds as $fixtureId) {
+            $fixture = $this->fixture($fixtureId);
+            $lines[] = sprintf('- %s (%s)', $fixture['id'], $fixture['file']);
+        }
+
+        $lines = [
+            ...$lines,
+            sprintf('Calls: %d paid detector calls; grouped extraction/OCR simulated', count($this->trials())),
             sprintf('Logical spend cap: $%.2f USD', LiveGroupingModels::MAX_SPEND_USD),
             'Routes:',
         ];
@@ -263,6 +300,88 @@ final class LiveGroupingScreen
         $lines[] = 'To execute: scripts/live-grouping-screen --live --confirm='.LiveGroupingModels::CONFIRMATION;
 
         return implode(PHP_EOL, $lines);
+    }
+
+    public function contractFingerprint(): string
+    {
+        $fixtures = array_map($this->fixture(...), $this->fixtureIds);
+        $paths = array_values(array_unique([
+            ...GroupingBenchmarkCorpus::dependencies(),
+            'scripts/LiveGroupingScreen.php',
+            'scripts/live-grouping-screen',
+            'tests/Evals/LiveGroupingBenchmarkTest.php',
+            'tests/Support/LiveGroupingAttemptScorer.php',
+            'tests/Support/LiveGroupingModels.php',
+            'tests/Support/OpenRouterGenerationMetadata.php',
+        ]));
+        $dependencies = [];
+
+        foreach ($paths as $path) {
+            $absolute = $this->repositoryRoot.'/'.$path;
+            $hash = hash_file('sha256', $absolute);
+
+            if (! is_string($hash)) {
+                throw new RuntimeException("Unable to fingerprint the live grouping dependency [{$path}].");
+            }
+
+            $dependencies[$path] = $hash;
+        }
+
+        return 'sha256:'.hash('sha256', json_encode([
+            'screen' => LiveGroupingModels::SCREEN,
+            'benchmark' => LiveGroupingModels::BENCHMARK,
+            'confirmation' => LiveGroupingModels::CONFIRMATION,
+            'max_spend_usd' => (string) LiveGroupingModels::MAX_SPEND_USD,
+            'max_output_tokens' => LiveGroupingModels::MAX_OUTPUT_TOKENS,
+            'models' => $this->models,
+            'fixtures' => $fixtures,
+            'dependencies' => $dependencies,
+        ], JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+    }
+
+    /** @return list<LiveTrial> */
+    private function trials(): array
+    {
+        $trials = [];
+
+        foreach ($this->models as $model) {
+            foreach ($this->fixtureIds as $fixtureId) {
+                $trials[] = [
+                    'id' => $model['id'].'|'.$fixtureId,
+                    'model' => $model,
+                    'fixture' => $fixtureId,
+                ];
+            }
+        }
+
+        return $trials;
+    }
+
+    /** @return array{id: string, file: string, split: string, page_count: int, sha256: string, size: int} */
+    private function fixture(string $fixtureId): array
+    {
+        if (! in_array($fixtureId, LiveGroupingModels::fixtureIds(), true)) {
+            throw new RuntimeException('The live grouping screen contains an unapproved fixture.');
+        }
+
+        foreach (GroupingBenchmarkCorpus::manifest()['fixtures'] as $fixture) {
+            if ($fixture['id'] === $fixtureId && $fixture['split'] === 'prompt-example') {
+                $approved = [
+                    'id' => $fixture['id'],
+                    'file' => $fixture['file'],
+                    'split' => $fixture['split'],
+                    'page_count' => $fixture['page_count'],
+                    'sha256' => $fixture['sha256'],
+                    'size' => $fixture['size'],
+                ];
+
+                GroupingBenchmarkCorpus::verifiedFixturePath($approved);
+
+                return $approved;
+            }
+        }
+
+        throw new RuntimeException('The approved live grouping fixture is unavailable or no longer development-only.');
     }
 
     private function validateKey(string $key, bool $requireFullCap = true): BigDecimal
@@ -288,7 +407,7 @@ final class LiveGroupingScreen
     }
 
     /** @param LiveModel $model */
-    private function validateCatalog(array $model): BigDecimal
+    private function validateCatalog(array $model, int $pageCount): BigDecimal
     {
         $catalogResponse = ($this->fetch)('https://openrouter.ai/api/v1/models', null);
         $catalog = $this->list($catalogResponse['data'] ?? null, 'OpenRouter model catalog');
@@ -316,6 +435,7 @@ final class LiveGroupingScreen
         $parameters = $this->strings($endpoint['supported_parameters'] ?? null, 'endpoint parameters');
 
         if (($endpoint['model_id'] ?? null) !== $model['id']
+            || ($endpoint['provider_name'] ?? null) !== $model['route']['provider_name']
             || ($endpoint['status'] ?? null) !== 0
             || ! in_array($model['output_parameter'], $parameters, true)
             || ! $this->supportsStructuredOutput($parameters)) {
@@ -328,7 +448,7 @@ final class LiveGroupingScreen
             throw new RuntimeException("OpenRouter endpoint [{$model['id']} @ {$model['endpoint']}] is no longer ZDR.");
         }
 
-        return $this->maximumCallCost($endpoint);
+        return $this->maximumCallCost($endpoint, $pageCount);
     }
 
     /** @param array<string, mixed> $endpoint
@@ -337,6 +457,7 @@ final class LiveGroupingScreen
     private function validatePrices(array $endpoint, array $model): void
     {
         $pricing = $this->object($endpoint['pricing'] ?? null, 'OpenRouter endpoint pricing');
+        $this->validatePricingUnits($pricing);
 
         foreach (['prompt', 'completion'] as $unit) {
             $actual = $this->maximumUnitPrice($pricing, [$unit], "endpoint {$unit} price")->multipliedBy('1000000');
@@ -361,8 +482,47 @@ final class LiveGroupingScreen
         }
     }
 
+    /** @param array<string, mixed> $pricing */
+    private function validatePricingUnits(array $pricing, bool $override = false): void
+    {
+        $allowed = [
+            'prompt',
+            'completion',
+            'image',
+            'image_token',
+            'internal_reasoning',
+            'input_cache_read',
+            'input_cache_write',
+            'input_cache_write_1h',
+            'request',
+            // These catalog units cannot apply because this request has no audio, web-search, or discount credit.
+            'audio',
+            'input_audio_cache',
+            'web_search',
+            'discount',
+        ];
+
+        if ($override) {
+            $allowed[] = 'min_prompt_tokens';
+        } else {
+            $allowed[] = 'overrides';
+        }
+
+        foreach (array_keys($pricing) as $unit) {
+            if (! in_array($unit, $allowed, true)) {
+                throw new RuntimeException("OpenRouter endpoint pricing contains an unsupported unit [{$unit}].");
+            }
+        }
+
+        if (! $override && array_key_exists('overrides', $pricing)) {
+            foreach ($this->list($pricing['overrides'], 'endpoint pricing overrides') as $candidate) {
+                $this->validatePricingUnits($this->object($candidate, 'endpoint pricing override'), true);
+            }
+        }
+    }
+
     /** @param array<string, mixed> $endpoint */
-    private function maximumCallCost(array $endpoint): BigDecimal
+    private function maximumCallCost(array $endpoint, int $pageCount): BigDecimal
     {
         $contextLength = $endpoint['context_length'] ?? null;
 
@@ -387,7 +547,7 @@ final class LiveGroupingScreen
 
         return $inputRate->multipliedBy($contextLength)
             ->plus($completionRate->plus($reasoningRate)->multipliedBy(LiveGroupingModels::MAX_OUTPUT_TOKENS))
-            ->plus($imageRate->multipliedBy(6));
+            ->plus($imageRate->multipliedBy($pageCount));
     }
 
     /**
@@ -445,7 +605,7 @@ final class LiveGroupingScreen
     /** @param LiveModel $model
      * @return array{model: string, endpoint: string, provider_cost_usd: ?string, technical_failure: bool, attempts: int}
      */
-    private function validateRun(string $runDirectory, array $model): array
+    private function validateRun(string $runDirectory, array $model, string $fixtureId): array
     {
         $scorecard = $this->jsonObject($runDirectory.'/scorecard.json');
         StableScorecardValidator::assert($scorecard);
@@ -453,8 +613,8 @@ final class LiveGroupingScreen
         $context = $this->object($scorecard['context'] ?? null, 'scorecard context');
 
         if (($scorecard['benchmark'] ?? null) !== LiveGroupingModels::BENCHMARK
-            || ($context['screen'] ?? null) !== 'openrouter-live-grouping-canary-v1'
-            || ($context['fixture'] ?? null) !== LiveGroupingModels::FIXTURE_ID
+            || ($context['screen'] ?? null) !== LiveGroupingModels::SCREEN
+            || ($context['fixture'] ?? null) !== $fixtureId
             || count($trials) !== 1) {
             throw new RuntimeException('The live grouping scorecard has an unexpected identity.');
         }
@@ -477,7 +637,11 @@ final class LiveGroupingScreen
                 throw new RuntimeException('The failed live grouping trial has unexpected attempt evidence.');
             }
 
-            $this->validateMeasurement($measurements[0], $model, 'live', allowUnavailable: true);
+            $measurement = $this->validateMeasurement($measurements[0], $model, 'live', allowUnavailable: true);
+
+            if (($measurement['effective_model'] ?? null) !== null || $this->liveCost($measurement) !== null) {
+                throw new RuntimeException('The live grouping trial failed after receiving a response and cannot be accepted as a technical failure.');
+            }
 
             return [
                 'model' => $model['id'],
@@ -491,14 +655,14 @@ final class LiveGroupingScreen
         $expectedScorers = [
             'pest:test',
             ...array_map(static fn (GroupingMetric $metric): string => $metric->value, GroupingMetric::cases()),
-            'live-detector-attempt-integrity',
         ];
         $scorers = array_map(
             fn (mixed $result): mixed => $this->object($result, 'trial result')['scorer'] ?? null,
             $results,
         );
 
-        if ($scorers !== $expectedScorers) {
+        if (count($scorers) !== count($expectedScorers) + 1
+            || array_slice($scorers, 0, -1) !== $expectedScorers) {
             throw new RuntimeException('The live grouping scorecard does not match the approved configuration.');
         }
 
@@ -508,12 +672,21 @@ final class LiveGroupingScreen
 
         if (($primary['scorer'] ?? null) !== 'pest:test'
             || ($primary['passed'] ?? null) !== true
-            || ($integrity['scorer'] ?? null) !== 'live-detector-attempt-integrity'
+            || ! is_string($integrity['scorer'] ?? null)
+            || ! str_starts_with($integrity['scorer'], 'live-detector-attempt-integrity@sha256:')
             || ($integrity['passed'] ?? null) !== true
             || (! is_int($integrityScore) && ! is_float($integrityScore))
             || (float) $integrityScore !== 1.0
             || $measurements === []) {
             throw new RuntimeException('The live grouping trial or its attempt-integrity scorer failed.');
+        }
+
+        foreach ($results as $rawResult) {
+            $result = $this->object($rawResult, 'trial result');
+
+            if ($this->list($result['measurements'] ?? null, 'result measurements') !== $measurements) {
+                throw new RuntimeException('The live grouping scorer results do not share identical target measurements.');
+            }
         }
 
         $providerCost = null;
@@ -534,9 +707,7 @@ final class LiveGroupingScreen
             }
         }
 
-        if (! is_file($runDirectory.'/replay.private.json')) {
-            throw new RuntimeException('The private live replay is missing.');
-        }
+        $this->validateReplay($runDirectory, $trial, $integrity, $model, $fixtureId);
 
         return [
             'model' => $model['id'],
@@ -545,6 +716,71 @@ final class LiveGroupingScreen
             'technical_failure' => false,
             'attempts' => count($measurements),
         ];
+    }
+
+    /** @param array<string, mixed> $trial
+     * @param  array<string, mixed>  $integrity
+     * @param  LiveModel  $model
+     */
+    private function validateReplay(
+        string $runDirectory,
+        array $trial,
+        array $integrity,
+        array $model,
+        string $fixtureId,
+    ): void {
+        $caseId = $trial['case_id'] ?? null;
+        $configuration = $trial['configuration'] ?? null;
+        $repeat = $trial['repeat'] ?? null;
+        $fingerprint = $trial['fingerprint'] ?? null;
+
+        if (! is_string($caseId)
+            || ! is_string($configuration)
+            || ! is_int($repeat)
+            || ! is_string($fingerprint)) {
+            throw new RuntimeException('The live grouping trial lacks replay identity.');
+        }
+
+        $saved = (new SavedRun(
+            RunPaths::forProject($this->repositoryRoot),
+            new RunId(basename($runDirectory)),
+        ))->completedTrial(
+            LiveGroupingModels::BENCHMARK,
+            $caseId,
+            $configuration,
+            $repeat,
+            $fingerprint,
+        );
+
+        if ($saved === null) {
+            throw new RuntimeException('The private live replay does not match the completed trial.');
+        }
+
+        $output = GroupingBenchmarkCorpus::outputObject($saved['output']);
+        $fixture = $this->fixture($fixtureId);
+        $route = $this->object($output['openrouter_route'] ?? null, 'OpenRouter route evidence');
+        $replayedIntegrity = (new LiveGroupingAttemptScorer)->score(
+            '',
+            json_encode($output, JSON_THROW_ON_ERROR),
+        );
+
+        $allowedServiceTiers = $model['route']['service_tier'] === null
+            ? [null, 'default']
+            : [$model['route']['service_tier']];
+
+        if (($output['fixture_id'] ?? null) !== $fixtureId
+            || ($output['source_sha256'] ?? null) !== $fixture['sha256']
+            || ($output['page_count'] ?? null) !== $fixture['page_count']
+            || ! in_array($route['model'] ?? null, [$model['id'], $model['canonical']], true)
+            || ($route['provider_name'] ?? null) !== $model['route']['provider_name']
+            || ($route['data_region'] ?? null) !== $model['route']['data_region']
+            || ! in_array($route['service_tier'] ?? null, $allowedServiceTiers, true)
+            || ! in_array($route['provider_attempts'] ?? null, [null, 1], true)
+            || ($route['fallbacks_disabled'] ?? null) !== true
+            || $replayedIntegrity->score !== 1.0
+            || ($integrity['scorer'] ?? null) !== $replayedIntegrity->scorer) {
+            throw new RuntimeException('The private live replay does not match the approved scored output.');
+        }
     }
 
     /** @param LiveModel $model
@@ -703,6 +939,7 @@ final class LiveGroupingScreen
     private function authorization(string $key, BigDecimal $currentRemaining): array
     {
         $path = $this->authorizationPath();
+        $trialIds = array_column($this->trials(), 'id');
 
         if (is_link($path)) {
             throw new RuntimeException('The live grouping authorization ledger must not be a symbolic link.');
@@ -710,14 +947,15 @@ final class LiveGroupingScreen
 
         if (! is_file($path)) {
             $authorization = [
-                'schema_version' => 2,
+                'schema_version' => 3,
                 'confirmation' => LiveGroupingModels::CONFIRMATION,
                 'key_fingerprint' => hash('sha256', $key),
-                'model_ids' => array_column($this->models, 'id'),
+                'contract_fingerprint' => $this->contractFingerprint(),
+                'trial_ids' => $trialIds,
                 'initial_remaining' => (string) $currentRemaining,
                 'recorded_spend' => '0',
                 'admission_spend' => '0',
-                'completed_models' => [],
+                'completed_trials' => [],
                 'pending' => null,
             ];
             $this->writeAuthorization($authorization);
@@ -726,35 +964,19 @@ final class LiveGroupingScreen
         }
 
         $authorization = $this->jsonObject($path);
-        $modelIds = $this->strings($authorization['model_ids'] ?? null, 'authorization models');
-        $completed = $this->strings($authorization['completed_models'] ?? null, 'completed authorization models');
+        $storedTrialIds = $this->strings($authorization['trial_ids'] ?? null, 'authorization trials');
+        $completed = $this->strings($authorization['completed_trials'] ?? null, 'completed authorization trials');
         $initial = $this->decimal($authorization['initial_remaining'] ?? null, 'authorization initial allowance');
         $recorded = $this->decimal($authorization['recorded_spend'] ?? null, 'authorization recorded spend');
-
-        if (($authorization['schema_version'] ?? null) === 1) {
-            if (($authorization['confirmation'] ?? null) === LiveGroupingModels::CONFIRMATION
-                && is_string($authorization['key_fingerprint'] ?? null)
-                && hash_equals($authorization['key_fingerprint'], hash('sha256', $key))
-                && $modelIds === array_column($this->models, 'id')
-                && count($completed) === count($this->models)
-                && ($authorization['pending'] ?? null) === null
-                && $initial->isGreaterThanOrEqualTo(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
-                && $recorded->isGreaterThanOrEqualTo(BigDecimal::zero())
-                && $recorded->isLessThanOrEqualTo(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))) {
-                throw new RuntimeException('The live grouping authorization has already been consumed.');
-            }
-
-            throw new RuntimeException('The live grouping authorization ledger is invalid or belongs to another key.');
-        }
-
-        $expected = array_column(array_slice($this->models, 0, count($completed)), 'id');
+        $expected = array_slice($trialIds, 0, count($completed));
         $admission = $this->decimal($authorization['admission_spend'] ?? null, 'authorization admission spend');
 
-        if (($authorization['schema_version'] ?? null) !== 2
+        if (($authorization['schema_version'] ?? null) !== 3
             || ($authorization['confirmation'] ?? null) !== LiveGroupingModels::CONFIRMATION
             || ! is_string($authorization['key_fingerprint'] ?? null)
             || ! hash_equals($authorization['key_fingerprint'], hash('sha256', $key))
-            || $modelIds !== array_column($this->models, 'id')
+            || ($authorization['contract_fingerprint'] ?? null) !== $this->contractFingerprint()
+            || $storedTrialIds !== $trialIds
             || $initial->isLessThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
             || $recorded->isNegative()
             || $recorded->isGreaterThan(BigDecimal::of((string) LiveGroupingModels::MAX_SPEND_USD))
@@ -768,7 +990,7 @@ final class LiveGroupingScreen
             throw new RuntimeException('The live grouping authorization has an unresolved paid call and cannot be resumed.');
         }
 
-        if (count($completed) === count($this->models)) {
+        if (count($completed) === count($trialIds)) {
             throw new RuntimeException('The live grouping authorization has already been consumed.');
         }
 

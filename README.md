@@ -55,6 +55,85 @@ method/attribute > Laravel AI default. The pending request snapshots these value
 Laravel's global configuration. A configured provider array is passed to Laravel AI's native
 failover unchanged; models belong in its provider map and cannot be combined with a separate model.
 
+The package intentionally ships without a vendor or model default. The current development evidence
+recommends Gemini 2.5 Flash for document detection, then Luna and Haiku. An application can adopt or
+replace that order entirely through published configuration. Because all three evaluated models use
+OpenRouter, define distinct Laravel AI provider aliases so each attempt keeps its own endpoint
+options:
+
+```php
+// config/ai.php
+'providers' => [
+    // ...
+    'grouping-gemini' => [
+        'driver' => 'openrouter',
+        'key' => env('OPENROUTER_API_KEY'),
+    ],
+    'grouping-luna' => [
+        'driver' => 'openrouter',
+        'key' => env('OPENROUTER_API_KEY'),
+    ],
+    'grouping-haiku' => [
+        'driver' => 'openrouter',
+        'key' => env('OPENROUTER_API_KEY'),
+    ],
+],
+```
+
+```php
+// config/extraction.php
+'detection' => [
+    'provider' => [
+        'grouping-gemini' => env('EXTRACTION_GROUPING_GEMINI_MODEL', 'google/gemini-2.5-flash'),
+        'grouping-luna' => env('EXTRACTION_GROUPING_LUNA_MODEL', 'openai/gpt-5.6-luna'),
+        'grouping-haiku' => env('EXTRACTION_GROUPING_HAIKU_MODEL', 'anthropic/claude-haiku-4.5'),
+    ],
+    'model' => null,
+    'timeout' => null,
+    'options' => [
+        'grouping-gemini' => [
+            'max_tokens' => 512,
+            'reasoning' => ['effort' => 'none', 'exclude' => true],
+            'provider' => [
+                'only' => [env('EXTRACTION_GROUPING_GEMINI_ENDPOINT', 'google-vertex/global')],
+                'allow_fallbacks' => false,
+                'require_parameters' => true,
+                'data_collection' => 'deny',
+                'zdr' => true,
+            ],
+        ],
+        'grouping-luna' => [
+            'max_completion_tokens' => 512,
+            'reasoning' => ['effort' => 'none', 'exclude' => true],
+            'provider' => [
+                'only' => [env('EXTRACTION_GROUPING_LUNA_ENDPOINT', 'azure/eu')],
+                'allow_fallbacks' => false,
+                'require_parameters' => true,
+                'data_collection' => 'deny',
+                'zdr' => true,
+            ],
+        ],
+        'grouping-haiku' => [
+            'max_tokens' => 512,
+            'reasoning' => ['effort' => 'none', 'exclude' => true],
+            'provider' => [
+                'only' => [env('EXTRACTION_GROUPING_HAIKU_ENDPOINT', 'amazon-bedrock/global')],
+                'allow_fallbacks' => false,
+                'require_parameters' => true,
+                'data_collection' => 'deny',
+                'zdr' => true,
+            ],
+        ],
+    ],
+],
+```
+
+Laravel AI advances through that map only for its native failoverable provider failures. Invalid
+JSON/schema output, package limits, and programming errors remain observable failures rather than
+silently changing models. Consumers can reorder, replace, or remove aliases and models without
+changing package code. The evaluated routes, evidence limits, and volatile pricing caveats are in
+[`docs/grouping-models.md`](docs/grouping-models.md).
+
 Package-owned OCR and inline-schema agents read `extraction.options` and purpose-specific options,
 keyed by provider name, and `extraction.middleware`. A purpose provider's option array replaces its
 root provider option array rather than being deep-merged. An application agent supplied through

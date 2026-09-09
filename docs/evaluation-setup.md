@@ -119,13 +119,13 @@ future real corpus.
 This dry run proves wiring, deterministic scoring, custody, configuration restoration, evidence
 cardinality, and replay invalidation. Because every AI response is simulated, it does not establish
 semantic grouping quality, transport compatibility, billable cost, or a winning model. The documented
-15-model screen remains gated by its explicit live opt-in and total spend/data-routing controls.
+live screen remains gated by its explicit live opt-in and total spend/data-routing controls.
 
-## Live OpenRouter grouping canary
+## Live OpenRouter grouping screen
 
 `scripts/live-grouping-screen` is the only live entry point. With no arguments it makes no network
-requests and prints the exact 15 models, endpoint routes, one approved prompt-example fixture, call
-count, privacy settings, and $5 logical spend cap:
+requests and prints the four development finalists, their endpoint routes, three approved prompt-example
+fixtures, the 12-call prompt-coverage matrix, privacy settings, and $4 logical spend cap:
 
 ```sh
 scripts/live-grouping-screen
@@ -133,40 +133,53 @@ scripts/live-grouping-screen
 
 The live mode is intentionally narrow. It requires the exact printed confirmation and an
 `OPENROUTER_API_KEY`; do not paste the key into the command line or logs. Before inference it verifies
-that the key has a finite monthly limit no larger than $50 and at least $5 remaining. It then fetches
+that the key has a finite monthly limit no larger than $50 and at least $4 remaining. It then fetches
 the current public catalog and rejects missing models, stale endpoints, unsupported image/structured
 output, endpoint price increases, unavailable routes, or missing ZDR where the selected route requires
-it. The five Alibaba Qwen routes do not advertise ZDR and instead pin `data_collection = deny`; every
-other selected route requires both.
+it. Every selected route requires ZDR and also pins `data_collection = deny`. Before any request
+carrying page content, the parent and isolated child both
+verify that the selected regular, non-symlink PDF remains inside the synthetic fixture directory and
+matches its approved size and SHA-256.
 
 ```sh
-scripts/live-grouping-screen --live --confirm=run-15-paid-detector-calls
+scripts/live-grouping-screen --live --confirm=run-12-prompt-coverage-detector-calls
 ```
 
-Each model runs as one separately validated Pest benchmark trial before the next paid request. The
-public `Extraction::fromPath(...)->detectDocuments()->schema(...)->extract()` path sends the detector
+Each model/fixture pair runs as one separately validated Pest benchmark trial before the next paid
+request. The public `Extraction::fromPath(...)->detectDocuments()->schema(...)->extract()` path sends
+the detector
 through OpenRouter with the exact model and endpoint, `allow_fallbacks = false`,
 `require_parameters = true`, a 512-token output limit, reasoning disabled where supported, and the
 recorded rate ceilings. The application extraction agent remains Laravel AI-faked, so each trial has
 exactly one paid detector request even when it detects several groups. No holdout fixture is selectable.
+After the completion, a bounded non-inference OpenRouter generation-metadata poll must confirm the
+model, provider, observed data-region value, standard service tier, and no model router. A newly
+completed generation can briefly return 404, so the poll retries only 404 with fixed 1s, 2s, 4s, 8s,
+and 15s delays; any other error or a sixth 404 fails. When OpenRouter exposes its nullable
+provider-response chain, it must contain exactly one successful response. The trial stops if that
+independent route evidence is absent or inconsistent; fallback prevention also remains pinned in the
+request and benchmark contract. OpenRouter does not document `data_region` as endpoint geography, so
+Luna's exact request remains `azure/eu` while its separately observed value is pinned to `global`.
 
-The runner enforces a $5 software admission budget. Before each sequential request, reconciled spend
+The runner enforces a $4 software admission budget. Before each sequential request, reconciled spend
 plus a conservative reservation derived from the selected endpoint's full context capacity, the
 highest advertised base or override input/cache/image-token rate, 512 output and reasoning tokens,
-and six possible per-image charges must fit under $5. Unbounded applicable charges, incomplete cost
-evidence, or reservation overruns stop the run. Immediately after each request, the runner refreshes
+and the selected fixture's page count must fit under $4. Unbounded applicable charges, incomplete cost
+evidence, unknown pricing units, or reservation overruns stop the run. Immediately after each request, the runner refreshes
 the key allowance and uses validated provider-reported cost when available, otherwise the observed
 allowance depletion. Delayed allowance changes are not attributed to a later call's reservation; the
-cumulative allowance change and a persistent admission total are independently checked against $5.
+cumulative allowance change and a persistent admission total are independently checked against $4.
 The admission total uses validated provider cost when available and otherwise retains the call's full
 catalog-derived reservation, including for technical failures, so delayed charges cannot create room
 for another request.
-This is a software safeguard, not a provider-level $5 cap: it cannot undo an in-flight provider charge,
+This is a software safeguard, not a provider-level $4 cap: it cannot undo an in-flight provider charge,
 and unrelated use of the same key is conservatively counted against this screen.
 The ignored, private authorization ledger survives command restarts, binds the run to the current key,
-and records a reservation before dispatch. A completed prefix can resume, but an unresolved in-flight
-call or a fully consumed 15-call authorization cannot be run again. The selected route and reservation
-are refreshed from the catalog immediately before every request.
+the exact ordered model/fixture matrix, $4 cap, fixture identities, route options, and hashed execution
+dependencies, and records a reservation before dispatch. A completed prefix
+can resume, but an unresolved in-flight call or a fully consumed 12-call authorization cannot be run
+again. The selected route and reservation are refreshed from the catalog immediately before every
+request.
 
 The nine quality scorers deliberately use a zero threshold so weak models remain recorded evidence
 instead of aborting the screen; their numeric scores—not their `passed` flag—are the quality result.
@@ -174,6 +187,8 @@ instead of aborting the screen; their numeric scores—not their `passed` flag�
 After every trial, the command applies the benchmark plugin's stable scorecard validator and checks
 fixture identity, all nine deterministic grouping scores, requested/effective model evidence, one
 live detector measurement, simulated grouped extraction measurements, and unique call ordinals. The
+runner also requires every scorer to reference the same target measurements and validates the private
+replay's trial fingerprint, fixture identity, source hash, page count, and audited route before cleanup. The
 production result's integrity scorer still requires one positive provider-reported USD cost with
 matching extraction totals. When the outer benchmark observer cannot expose response pricing after a
 locally rejected structured result, the command records the immediate key-allowance change instead of
@@ -186,5 +201,21 @@ Scorecards contain bounded metrics and call evidence, not source documents, prom
 responses.
 
 The normal test suite never sets the confirmation and never makes these requests. Its focused offline
-test fakes both OpenRouter preflight and inference while exercising the same command, public extraction
-path, scorecard validation, replay cleanup, and fail-closed cases.
+test fakes both OpenRouter preflight and inference while exercising the same command, fixture
+selection, public extraction path, scorecard validation, replay cleanup, and fail-closed cases.
+
+The broad-screen run completed on **2026-09-08**. It consumed all 28 unique model/fixture pairs,
+produced 20 validated grouping scorecards and eight technical-evidence scorecards, and reconciled
+$0.091173548 of provider-reported spend under its $5 software cap. Its ignored v2 ledger remains fully
+consumed and separate from this stage. The prompt canary had fresh authorization for exactly
+four finalists × `blank-separator` and `mixed-document-lengths`, used an ignored v3 ledger, and changed
+only the detector instructions. It completed all eight calls with seven all-nine quality scorecards,
+one bounded technical failure, $0.037815190 of provider-reported spend, and a $0.140727190 conservative
+admission total. The v3 ledger is fully consumed and cannot repeat the matrix. Results and their limits
+are summarized in [`grouping-models.md`](grouping-models.md). The coverage screen then ran the same four
+models × `single-three-page-document`, `three-single-page-documents`, and
+`non-financial-documents`: 12 unique calls under a $4 software cap, using an ignored v4 ledger with no
+prompt or model-setting change. All 12 passed all nine quality checks. Provider-reported and admission
+spend were $0.051611365; the delayed key-allowance snapshot changed by $0.043508365. The v4 ledger is
+fully consumed and cannot repeat the matrix. Any additional calls or any holdout run require new
+explicit authorization.

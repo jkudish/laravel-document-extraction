@@ -29,7 +29,7 @@ final class DocumentDetectionAgent implements Agent, HasMiddleware, HasProviderO
 
     public function instructions(): string
     {
-        return 'Identify separate logical documents among the supplied original physical pages. Assign a page only when its membership is clear. Mark a group ambiguous when its boundary or membership is uncertain. Never invent page numbers or document content.';
+        return "Identify separate logical documents among the supplied original physical pages. Assign a page only when its membership is clear. Include a blank or contentless page only when visible pagination or document continuity clearly establishes its membership; otherwise omit it from every group so it is reported as unassigned. Set a group's ambiguous flag only when document-bearing pages have genuinely uncertain membership or boundaries; do not use ambiguity for a page with no identifiable document. Never invent page numbers or document content.";
     }
 
     /** @return array<string, Type> */

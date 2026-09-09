@@ -60,6 +60,40 @@ final class ChangingProviderOptionsAgent implements Agent, HasProviderOptions, H
     }
 }
 
+final class OpenRouterDriverOptionsAgent implements Agent, HasProviderOptions, HasStructuredOutput
+{
+    use Promptable;
+
+    /** @var list<string> */
+    public array $optionProviders = [];
+
+    public function instructions(): string
+    {
+        return 'Extract the value.';
+    }
+
+    /** @return array<string, Type> */
+    public function schema(JsonSchema $schema): array
+    {
+        return ['value' => $schema->string()->required()];
+    }
+
+    /** @return array<string, mixed> */
+    public function providerOptions(Lab|string $provider): array
+    {
+        $name = $provider instanceof Lab ? $provider->value : $provider;
+        $this->optionProviders[] = $name;
+
+        return $name === 'openrouter' ? [
+            'provider' => [
+                'only' => ['google-vertex/global'],
+                'data_collection' => 'deny',
+                'zdr' => true,
+            ],
+        ] : [];
+    }
+}
+
 beforeEach(function (): void {
     config()->set('extraction.provider', 'openai');
     config()->set('extraction.model', 'fixture-model');
@@ -150,6 +184,33 @@ it('preserves the native custom OpenAI-compatible provider-name option selector'
     expect($result->data)->toBe(['value' => 'ok'])
         ->and($agent->optionProviders)->toBe(['private-compatible']);
     Http::assertSent(fn (Request $request): bool => data_get($request->data(), 'metadata.checked') === 'yes');
+});
+
+it('preserves native driver-keyed application options for a named OpenRouter provider', function (): void {
+    config()->set('ai.providers.review-openrouter-alias', [
+        'driver' => 'openrouter',
+        'key' => 'fixture-key',
+    ]);
+    Http::fake(['https://openrouter.ai/api/v1/chat/completions' => Http::response([
+        'id' => 'generation_fixture',
+        'model' => 'google/gemini-2.5-flash',
+        'choices' => [[
+            'finish_reason' => 'stop',
+            'message' => ['role' => 'assistant', 'content' => '{"value":"ok"}'],
+        ]],
+        'usage' => ['prompt_tokens' => 2, 'completion_tokens' => 3],
+    ])]);
+    $agent = new OpenRouterDriverOptionsAgent;
+
+    $result = app(DocumentExtraction::class)->fromString('source', 'text/plain')->using($agent)
+        ->extract('review-openrouter-alias', 'google/gemini-2.5-flash');
+
+    expect($result->data)->toBe(['value' => 'ok'])
+        ->and($agent->optionProviders)->toBe(['openrouter']);
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://openrouter.ai/api/v1/chat/completions'
+        && data_get($request->data(), 'provider.only') === ['google-vertex/global']
+        && data_get($request->data(), 'provider.data_collection') === 'deny'
+        && data_get($request->data(), 'provider.zdr') === true);
 });
 
 it('preserves native provider-side compaction without allowing request replacement', function (): void {
