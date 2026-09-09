@@ -3,6 +3,7 @@ tests/Fixtures/Pdf/**/*.pdf binary
 
 /.agents export-ignore
 /.amp export-ignore
+/.git export-ignore
 /.pest export-ignore
 /.phpunit.cache export-ignore
 /.gitattributes export-ignore

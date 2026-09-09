@@ -36,7 +36,7 @@ archive="$(find "$archive_dir" -maxdepth 1 -type f -name '*.zip' -print -quit)"
 [[ -n "$archive" && -f "$archive" ]] || { echo 'Composer did not create the package archive.' >&2; exit 1; }
 
 entries="$work/archive-entries.txt"
-unzip -Z1 "$archive" | sed 's#^[^/]*/##' | sed '/^$/d' | sort > "$entries"
+unzip -Z1 "$archive" | sed '/\/$/d' | sort > "$entries"
 
 for required in \
     composer.json \
@@ -51,7 +51,7 @@ for required in \
     grep -Fxq "$required" "$entries" || { echo "Archive is missing required file [$required]." >&2; exit 1; }
 done
 
-if grep -Eq '(^|/)(\.agents|\.amp|\.pest|\.phpunit\.cache|tests|scripts|vendor|storage)(/|$)|(^|/)(AGENTS\.md|composer\.lock|phpstan\.neon|phpunit\.xml|pint\.json|\.gitignore|\.gitattributes)$|\.(bundle|env)$|(^|/)(replay|scorecard|ledger|receipt)(\.|/)' "$entries"; then
+if grep -Eq '(^|/)(\.agents|\.amp|\.git|\.pest|\.phpunit\.cache|tests|scripts|vendor|storage)(/|$)|(^|/)(AGENTS\.md|composer\.lock|phpstan\.neon|phpunit\.xml|pint\.json|\.gitignore|\.gitattributes)$|\.(bundle|env)$|(^|/)(replay|scorecard|ledger|receipt)(\.|/)' "$entries"; then
     echo 'Archive contains an excluded development or private-evidence path.' >&2
     exit 1
 fi
