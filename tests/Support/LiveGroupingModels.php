@@ -11,20 +11,21 @@ use Jkudish\PestAiBenchmarks\Configuration;
  */
 final class LiveGroupingModels
 {
-    public const string BENCHMARK = 'live OpenRouter grouping prompt clarification canary';
+    public const string BENCHMARK = 'live OpenRouter grouping prompt development coverage screen';
 
-    public const string CONFIRMATION = 'run-8-prompt-canary-detector-calls';
+    public const string CONFIRMATION = 'run-12-prompt-coverage-detector-calls';
 
     public const string FIXTURE_ID = 'mixed-document-lengths';
 
     public const string FIXTURE_FILE = 'bundle-03.pdf';
 
-    public const string SCREEN = 'openrouter-live-grouping-prompt-canary-v1';
+    public const string SCREEN = 'openrouter-live-grouping-prompt-coverage-v1';
 
     /** @var list<string> */
     public const array FIXTURE_IDS = [
-        'blank-separator',
-        'mixed-document-lengths',
+        'single-three-page-document',
+        'three-single-page-documents',
+        'non-financial-documents',
     ];
 
     /** @var list<string> */
@@ -35,7 +36,7 @@ final class LiveGroupingModels
         'anthropic/claude-haiku-4.5',
     ];
 
-    public const float MAX_SPEND_USD = 1.0;
+    public const float MAX_SPEND_USD = 4.0;
 
     public const float MAX_KEY_LIMIT_USD = 50.0;
 

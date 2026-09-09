@@ -124,8 +124,8 @@ live screen remains gated by its explicit live opt-in and total spend/data-routi
 ## Live OpenRouter grouping screen
 
 `scripts/live-grouping-screen` is the only live entry point. With no arguments it makes no network
-requests and prints the four development finalists, their endpoint routes, two approved prompt-example
-fixtures, the eight-call prompt-canary matrix, privacy settings, and $1 logical spend cap:
+requests and prints the four development finalists, their endpoint routes, three approved prompt-example
+fixtures, the 12-call prompt-coverage matrix, privacy settings, and $4 logical spend cap:
 
 ```sh
 scripts/live-grouping-screen
@@ -133,7 +133,7 @@ scripts/live-grouping-screen
 
 The live mode is intentionally narrow. It requires the exact printed confirmation and an
 `OPENROUTER_API_KEY`; do not paste the key into the command line or logs. Before inference it verifies
-that the key has a finite monthly limit no larger than $50 and at least $1 remaining. It then fetches
+that the key has a finite monthly limit no larger than $50 and at least $4 remaining. It then fetches
 the current public catalog and rejects missing models, stale endpoints, unsupported image/structured
 output, endpoint price increases, unavailable routes, or missing ZDR where the selected route requires
 it. Every selected route requires ZDR and also pins `data_collection = deny`. Before any request
@@ -142,7 +142,7 @@ verify that the selected regular, non-symlink PDF remains inside the synthetic f
 matches its approved size and SHA-256.
 
 ```sh
-scripts/live-grouping-screen --live --confirm=run-8-prompt-canary-detector-calls
+scripts/live-grouping-screen --live --confirm=run-12-prompt-coverage-detector-calls
 ```
 
 Each model/fixture pair runs as one separately validated Pest benchmark trial before the next paid
@@ -161,23 +161,23 @@ independent route evidence is absent or inconsistent; fallback prevention also r
 request and benchmark contract. OpenRouter does not document `data_region` as endpoint geography, so
 Luna's exact request remains `azure/eu` while its separately observed value is pinned to `global`.
 
-The runner enforces a $1 software admission budget. Before each sequential request, reconciled spend
+The runner enforces a $4 software admission budget. Before each sequential request, reconciled spend
 plus a conservative reservation derived from the selected endpoint's full context capacity, the
 highest advertised base or override input/cache/image-token rate, 512 output and reasoning tokens,
-and the selected fixture's page count must fit under $1. Unbounded applicable charges, incomplete cost
+and the selected fixture's page count must fit under $4. Unbounded applicable charges, incomplete cost
 evidence, unknown pricing units, or reservation overruns stop the run. Immediately after each request, the runner refreshes
 the key allowance and uses validated provider-reported cost when available, otherwise the observed
 allowance depletion. Delayed allowance changes are not attributed to a later call's reservation; the
-cumulative allowance change and a persistent admission total are independently checked against $1.
+cumulative allowance change and a persistent admission total are independently checked against $4.
 The admission total uses validated provider cost when available and otherwise retains the call's full
 catalog-derived reservation, including for technical failures, so delayed charges cannot create room
 for another request.
-This is a software safeguard, not a provider-level $1 cap: it cannot undo an in-flight provider charge,
+This is a software safeguard, not a provider-level $4 cap: it cannot undo an in-flight provider charge,
 and unrelated use of the same key is conservatively counted against this screen.
 The ignored, private authorization ledger survives command restarts, binds the run to the current key,
-the exact ordered model/fixture matrix, $1 cap, fixture identities, route options, and hashed execution
+the exact ordered model/fixture matrix, $4 cap, fixture identities, route options, and hashed execution
 dependencies, and records a reservation before dispatch. A completed prefix
-can resume, but an unresolved in-flight call or a fully consumed eight-call authorization cannot be run
+can resume, but an unresolved in-flight call or a fully consumed 12-call authorization cannot be run
 again. The selected route and reservation are refreshed from the catalog immediately before every
 request.
 
@@ -212,5 +212,8 @@ four finalists × `blank-separator` and `mixed-document-lengths`, used an ignore
 only the detector instructions. It completed all eight calls with seven all-nine quality scorecards,
 one bounded technical failure, $0.037815190 of provider-reported spend, and a $0.140727190 conservative
 admission total. The v3 ledger is fully consumed and cannot repeat the matrix. Results and their limits
-are summarized in [`grouping-models.md`](grouping-models.md); any additional repeats or holdout run
-require new explicit authorization.
+are summarized in [`grouping-models.md`](grouping-models.md). The current coverage screen has fresh
+authorization for the same four models × `single-three-page-document`,
+`three-single-page-documents`, and `non-financial-documents`: 12 unique calls under a $4 software cap,
+using an ignored v4 ledger with no prompt or model-setting change. Any calls beyond this matrix or any
+holdout run require new explicit authorization.

@@ -268,7 +268,7 @@ function liveGroupingApis(array $models, Closure $remaining, array $endpointOver
     };
 }
 
-it('freezes the canary history and the four-model two-fixture prompt canary', function (): void {
+it('freezes the canary history and the four-model three-fixture prompt coverage screen', function (): void {
     $models = LiveGroupingModels::all();
     $ids = array_column($models, 'id');
     $luna = LiveGroupingModels::find('openai/gpt-5.6-luna');
@@ -290,11 +290,12 @@ it('freezes the canary history and the four-model two-fixture prompt canary', fu
         ->and($luna['endpoint'])->toBe('azure/eu')
         ->and($luna['route']['data_region'])->toBe('global')
         ->and(LiveGroupingModels::fixtureIds())->toBe([
-            'blank-separator',
-            'mixed-document-lengths',
+            'single-three-page-document',
+            'three-single-page-documents',
+            'non-financial-documents',
         ])
         ->not->toContain('same-issuer-invoices', 'ambiguous-orphan', 'scan-like-raster')
-        ->and(LiveGroupingModels::MAX_SPEND_USD)->toBe(1.0);
+        ->and(LiveGroupingModels::MAX_SPEND_USD)->toBe(4.0);
 
     foreach ($models as $model) {
         $options = LiveGroupingModels::options($model)['openrouter'];
@@ -384,8 +385,8 @@ it('defaults to a network-free dry run', function (): void {
         ->and($result['runs'])->toBe([])
         ->and($result['output'])->toContain(
             'DRY RUN — no provider calls made',
-            'Calls: 8 paid detector calls',
-            'Logical spend cap: $1.00 USD',
+            'Calls: 12 paid detector calls',
+            'Logical spend cap: $4.00 USD',
         )
         ->and($fetches)->toBe(0);
 });
@@ -443,7 +444,7 @@ it('rejects unsafe key limits before the inference runner', function (array $key
 })->with([
     'unlimited' => [['limit' => null]],
     'oversized' => [['limit' => 50.01, 'limit_remaining' => 50.01]],
-    'insufficient remaining' => [['limit_remaining' => 0.99]],
+    'insufficient remaining' => [['limit_remaining' => 3.99]],
     'resetting daily' => [['limit_reset' => 'daily']],
     'free tier' => [['is_free_tier' => true]],
     'management key' => [['is_management_key' => true]],
@@ -595,7 +596,7 @@ it('runs one approved detector trial offline and removes private replay after fu
             ->and($run['fixture'])->toBe(LiveGroupingModels::fixtureIds()[0])
             ->and($run['cost_usd'])->toBe('0.012345')
             ->and($run['cost_source'])->toBe('provider_reported')
-            ->and($run['attempts'])->toBe(3)
+            ->and($run['attempts'])->toBe(2)
             ->and(is_file($run['scorecard']))->toBeTrue()
             ->and(is_file(dirname($run['scorecard']).'/replay.private.json'))->toBeFalse()
             ->and(fn () => $screen->execute([
@@ -746,7 +747,7 @@ it('retains the full reservation when a successful call has no authoritative cos
             ['pricing' => [
                 'prompt' => '0.000000104',
                 'completion' => '0.000000416',
-                'input_cache_write_1h' => '0.00000045',
+                'input_cache_write_1h' => '0.0000018',
             ]],
         ),
         [$first, $second],
@@ -772,7 +773,7 @@ it('retains the full reservation when a successful call has no authoritative cos
             throw new RuntimeException('The authorization ledger did not decode to an object.');
         }
 
-        expect(BigDecimal::of($authorization['admission_spend'])->isEqualTo('0.900425984'))->toBeTrue()
+        expect(BigDecimal::of($authorization['admission_spend'])->isEqualTo('3.600425984'))->toBeTrue()
             ->and($authorization['completed_trials'] ?? null)->toBe([
                 $first['id'].'|'.LiveGroupingModels::fixtureIds()[0],
                 $first['id'].'|'.LiveGroupingModels::fixtureIds()[1],
@@ -807,7 +808,7 @@ it('retains the full reservation for a technical failure with no observed charge
             ['pricing' => [
                 'prompt' => '0.000000104',
                 'completion' => '0.000000416',
-                'input_cache_write_1h' => '0.00000045',
+                'input_cache_write_1h' => '0.0000018',
             ]],
         ),
         [$first, $second],
@@ -834,7 +835,7 @@ it('retains the full reservation for a technical failure with no observed charge
         }
 
         expect($authorization['recorded_spend'] ?? null)->toBe('0')
-            ->and(BigDecimal::of($authorization['admission_spend'])->isEqualTo('0.900425984'))->toBeTrue();
+            ->and(BigDecimal::of($authorization['admission_spend'])->isEqualTo('3.600425984'))->toBeTrue();
     } finally {
         $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
 
@@ -869,7 +870,7 @@ it('preserves admission reservations across a resumed run', function (): void {
             ['pricing' => [
                 'prompt' => '0.000000104',
                 'completion' => '0.000000416',
-                'input_cache_write_1h' => '0.00000045',
+                'input_cache_write_1h' => '0.0000018',
             ]],
         ),
         [$first, $second],
@@ -884,7 +885,7 @@ it('preserves admission reservations across a resumed run', function (): void {
         'trial_ids' => $trialIds,
         'initial_remaining' => '50',
         'recorded_spend' => '0.001',
-        'admission_spend' => '0.900425984',
+        'admission_spend' => '3.600425984',
         'completed_trials' => array_slice($trialIds, 0, 2),
         'pending' => null,
     ], JSON_THROW_ON_ERROR));

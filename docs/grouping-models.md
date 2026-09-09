@@ -179,6 +179,16 @@ production default or eliminate stochastic variance. The four-model shortlist re
 repeats; Qwen's missing control result and higher observed cost keep it behind the three fully scored
 routes rather than turning its technical failure into a quality loss.
 
+## Prompt development coverage screen
+
+The next authorized gate keeps the clarified prompt and all other runtime/model settings fixed while
+covering the three development fixtures not used by the prompt canary:
+`single-three-page-document`, `three-single-page-documents`, and `non-financial-documents`. The same
+four models each run once, for 12 unique detector calls under a fresh $4 software cap and ignored v4
+ledger. Grouped extraction and OCR remain simulated. These fixtures were evaluated under the prior
+prompt, but they are new pairs for this prompt fingerprint and are not pooled with prior-contract
+results. No holdout or same-contract repeat is included.
+
 ### Requested-name disposition
 
 - **GPT-5.6 Luna:** exact `openai/gpt-5.6-luna` is present and retained. The former Sol row is removed.
@@ -197,7 +207,8 @@ routes rather than turning its technical failure into a quality loss.
 ## Cost-controlled evaluation design
 
 The 15-call compatibility canary, 28-call broad development screen, and eight-call prompt clarification
-canary are complete. Further repeats and holdout remain gated.
+canary are complete. The 12-call prompt development coverage screen is separately authorized; further
+repeats and holdout remain gated.
 Use the installed native package path and published evaluation dependencies:
 
 - Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
@@ -228,16 +239,19 @@ Run the evaluation in gates:
 4. **Prompt clarification canary (complete):** four finalists ran once on `blank-separator` and one
    previously clean development control after the generic blank-page instruction change: eight calls,
    seven exact scorecards, one technical failure, no holdout, and no pooling with prior-prompt trials.
-5. **Development finalists:** use the canary outcome to decide whether to keep the prompt, then add
-   separately authorized repeats to reach at least three trials per finalist/development bundle.
-6. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
+5. **Prompt development coverage (authorized):** run the same four finalists once across the three
+   remaining development fixtures with every setting fixed: 12 calls, no holdout, and no same-contract
+   repeats.
+6. **Development finalists:** use the coverage outcome to add separately authorized repeats and reach
+   at least three trials per finalist/development bundle.
+7. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
    and scoring before at least three repeats on each held-out bundle. Never tune on holdout outcomes.
 
 The compatibility canary removed technical and clearly unusable candidates, and the broad screen
 supplies the development evidence above. The prompt canary supports retaining Haiku, Luna, Gemini 2.5
 Flash, and Qwen2.5 VL while ranking the three fully scored routes ahead of Qwen's incomplete control
 coverage. Llama is the first reserve; Qwen3 VL needs fresh quality evidence before promotion. Any
-additional calls remain separately gated.
+calls beyond the authorized 12 remain separately gated.
 
 The executable screen is deliberately smaller than a manifest system: the test-owned model and
 fixture lists in `tests/Support/LiveGroupingModels.php`, one Pest benchmark, and

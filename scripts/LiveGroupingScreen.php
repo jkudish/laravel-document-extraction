@@ -57,7 +57,7 @@ final class LiveGroupingScreen
         $this->models = $models ?? LiveGroupingModels::survivors();
         $this->fixtureIds = $fixtureIds ?? LiveGroupingModels::fixtureIds();
         $this->authorizationFile = $authorizationPath
-            ?? $this->repositoryRoot.'/storage/app/ai-evals/live-grouping-screen-v3.json';
+            ?? $this->repositoryRoot.'/storage/app/ai-evals/live-grouping-screen-v4.json';
 
         if ($this->models === [] || count(array_unique(array_column($this->models, 'id'))) !== count($this->models)) {
             throw new RuntimeException('The live grouping screen requires unique approved models.');
