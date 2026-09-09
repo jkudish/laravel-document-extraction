@@ -106,7 +106,26 @@ cat > "$consumer/testbench.yaml" <<'YAML'
 providers:
   - Laravel\Ai\AiServiceProvider
   - Jkudish\DocumentExtraction\DocumentExtractionServiceProvider
+env:
+  IMAGE_DRIVER: imagick
 YAML
+
+cat > "$consumer/phpunit.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/13.0/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         cacheDirectory=".phpunit.cache"
+         colors="true"
+         failOnRisky="true"
+         failOnWarning="true">
+    <testsuites>
+        <testsuite name="Portable consumer">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>
+XML
 
 (
     cd "$consumer"
@@ -128,7 +147,13 @@ YAML
         && ($aliases["Extraction"] ?? null) === "Jkudish\\DocumentExtraction\\Facades\\Extraction" ? 0 : 1);
     '
     vendor/bin/testbench package:discover --no-interaction >/dev/null
-    vendor/bin/testbench extraction:doctor --no-interaction | grep -q 'Document preparation is ready'
+
+    if ! doctor_output="$(vendor/bin/testbench extraction:doctor --no-interaction 2>&1)"; then
+        printf '%s\n' "$doctor_output" >&2
+        exit 1
+    fi
+
+    grep -q 'Document preparation is ready' <<< "$doctor_output"
     LDE_SOURCE_ROOT="$root" vendor/bin/pest tests/PortableConsumerTest.php --no-tia --colors=never
 )
 

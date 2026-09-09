@@ -73,7 +73,7 @@ it('proves jMail can consume direct and partial text without surrendering stream
         throw new RuntimeException('Unable to create the jMail consumer stream.');
     }
 
-    fwrite($stream, "Subject: Portable contract\r\n\r\nFirst line.\r\nSecond line.");
+    fwrite($stream, "Portable contract\r\nFirst line.\r\nSecond line.");
     rewind($stream);
 
     try {
@@ -81,7 +81,7 @@ it('proves jMail can consume direct and partial text without surrendering stream
             ->withoutAi()
             ->text();
 
-        expect($direct->text)->toBe("Subject: Portable contract\n\nFirst line.\nSecond line.")
+        expect($direct->text)->toBe("Portable contract\nFirst line.\nSecond line.")
             ->and($direct->complete())->toBeTrue()
             ->and($direct->calls)->toBeEmpty()
             ->and(is_resource($stream))->toBeTrue();
@@ -165,6 +165,8 @@ it('proves a third consumer can use a reusable nested shipping-manifest agent', 
         'driver' => 'openrouter',
         'key' => 'offline-consumer-proof',
     ]);
+    config()->set('extraction.provider', null);
+    config()->set('extraction.model', null);
     ShippingManifestAgent::$optionSelectors = [];
     ShippingManifestAgent::fake([json_encode([
         'manifest_number' => 'MAN-2048',
