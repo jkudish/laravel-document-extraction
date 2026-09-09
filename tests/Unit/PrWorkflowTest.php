@@ -76,6 +76,7 @@ it('writes a private exact-SHA receipt after the complete isolated ordered plan'
 
         expect($steps)->toContain(
             'composer install --no-interaction --prefer-dist --no-progress',
+            'bash scripts/prove-consumer-contracts',
             PHP_BINARY.' vendor/bin/phpstan analyse --level=10 --memory-limit=1G --no-progress',
             PHP_BINARY.' vendor/bin/pest --no-tia --colors=never',
             'bash scripts/test-matrix',

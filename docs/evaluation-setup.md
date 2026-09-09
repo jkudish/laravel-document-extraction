@@ -123,17 +123,18 @@ live screen remains gated by its explicit live opt-in and total spend/data-routi
 
 ## Live OpenRouter grouping screen
 
-`scripts/live-grouping-screen` is the only live entry point. With no arguments it makes no network
-requests and prints the four development finalists, their endpoint routes, three approved prompt-example
-fixtures, the 12-call prompt-coverage matrix, privacy settings, and $4 logical spend cap:
+`scripts/live-grouping-screen` is the only live entry point. An explicit stage is required even for a
+dry run. Each dry run makes no network request and prints its exact finalist routes, fixture split,
+repetitions, call count, privacy settings, confirmation, and $10 logical spend cap:
 
 ```sh
-scripts/live-grouping-screen
+scripts/live-grouping-screen --stage=development-repeats
+scripts/live-grouping-screen --stage=frozen-holdout
 ```
 
 The live mode is intentionally narrow. It requires the exact printed confirmation and an
 `OPENROUTER_API_KEY`; do not paste the key into the command line or logs. Before inference it verifies
-that the key has a finite monthly limit no larger than $50 and at least $4 remaining. It then fetches
+that the key has a finite monthly limit no larger than $50 and at least $10 remaining. It then fetches
 the current public catalog and rejects missing models, stale endpoints, unsupported image/structured
 output, endpoint price increases, unavailable routes, or missing ZDR where the selected route requires
 it. Every selected route requires ZDR and also pins `data_collection = deny`. Before any request
@@ -142,16 +143,35 @@ verify that the selected regular, non-symlink PDF remains inside the synthetic f
 matches its approved size and SHA-256.
 
 ```sh
-scripts/live-grouping-screen --live --confirm=run-12-prompt-coverage-detector-calls
+scripts/live-grouping-screen --stage=development-repeats --live \
+  --confirm=run-30-finalist-development-repeat-detector-calls
+
+scripts/live-grouping-screen --stage=frozen-holdout --live \
+  --confirm=run-27-frozen-holdout-detector-calls
 ```
 
-Each model/fixture pair runs as one separately validated Pest benchmark trial before the next paid
-request. The public `Extraction::fromPath(...)->detectDocuments()->schema(...)->extract()` path sends
+The completed development-repeat stage was Gemini 2.5 Flash, Luna, and Haiku × all five
+`prompt-example` fixtures × two new repetitions: exactly 30 detector calls in a private authenticated
+v5 ledger under Git administrative storage. The completed holdout stage froze those same three model
+configurations and ran `same-issuer-invoices`, `ambiguous-orphan`, and `scan-like-raster` × three
+repetitions: exactly 27 detector calls in a separate authenticated v6 ledger. The holdout refused
+before network access unless the v5 ledger recorded the exact completed 30-call matrix and
+validated scorecard fingerprints for the same key, its authentication verified, and its development
+contract fingerprint still matched the prompt, schemas, rendering, routes/options, scorers,
+fixtures, lockfile, and execution owners. Any intervening configuration change therefore requires a
+new reviewed development gate rather than silently retuning on holdout.
+
+Each model/fixture/repetition runs as one separately validated Pest benchmark trial before the next paid
+request. The parent issues a random, single-use child capability only after persisting that trial's
+reservation. The benchmark claims that capability before enabling inference; invoking the Pest file
+directly with its public stage/model/fixture selectors therefore fails before HTTP. The public
+`Extraction::fromPath(...)->detectDocuments()->schema(...)->extract()` path sends
 the detector
 through OpenRouter with the exact model and endpoint, `allow_fallbacks = false`,
 `require_parameters = true`, a 512-token output limit, reasoning disabled where supported, and the
 recorded rate ceilings. The application extraction agent remains Laravel AI-faked, so each trial has
-exactly one paid detector request even when it detects several groups. No holdout fixture is selectable.
+exactly one paid detector request even when it detects several groups. Fixture IDs, split names,
+repetition labels, and expected grouping truth are never added to the provider prompt.
 After the completion, a bounded non-inference OpenRouter generation-metadata poll must confirm the
 model, provider, observed data-region value, standard service tier, and no model router. A newly
 completed generation can briefly return 404, so the poll retries only 404 with fixed 1s, 2s, 4s, 8s,
@@ -161,23 +181,29 @@ independent route evidence is absent or inconsistent; fallback prevention also r
 request and benchmark contract. OpenRouter does not document `data_region` as endpoint geography, so
 Luna's exact request remains `azure/eu` while its separately observed value is pinned to `global`.
 
-The runner enforces a $4 software admission budget. Before each sequential request, reconciled spend
+Each stage enforces its own $10 software admission budget. Before each sequential request, reconciled spend
 plus a conservative reservation derived from the selected endpoint's full context capacity, the
 highest advertised base or override input/cache/image-token rate, 512 output and reasoning tokens,
-and the selected fixture's page count must fit under $4. Unbounded applicable charges, incomplete cost
+and the selected fixture's page count must fit under $10. Unbounded applicable charges, incomplete cost
 evidence, unknown pricing units, or reservation overruns stop the run. Immediately after each request, the runner refreshes
 the key allowance and uses validated provider-reported cost when available, otherwise the observed
 allowance depletion. Delayed allowance changes are not attributed to a later call's reservation; the
-cumulative allowance change and a persistent admission total are independently checked against $4.
+cumulative allowance change and a persistent admission total are independently checked against $10.
 The admission total uses validated provider cost when available and otherwise retains the call's full
 catalog-derived reservation, including for technical failures, so delayed charges cannot create room
 for another request.
-This is a software safeguard, not a provider-level $4 cap: it cannot undo an in-flight provider charge,
+This is a software safeguard, not a provider-level $10 cap: it cannot undo an in-flight provider charge,
 and unrelated use of the same key is conservatively counted against this screen.
-The ignored, private authorization ledger survives command restarts, binds the run to the current key,
-the exact ordered model/fixture matrix, $4 cap, fixture identities, route options, and hashed execution
-dependencies, and records a reservation before dispatch. A completed prefix
-can resume, but an unresolved in-flight call or a fully consumed 12-call authorization cannot be run
+The private authorization ledgers and authentication key live under Git administrative storage, so
+ordinary worktree cleanup and `git clean` do not reset completed authorization. They survive command
+restarts, bind the run to the current key,
+the exact ordered model/fixture/repetition matrix, $10 cap, fixture identities, route options, and hashed execution
+dependencies, and record a reservation before dispatch. Each completed trial also records the SHA-256
+of the scorecard that passed the parent validator. A keyed authentication tag rejects accidental or
+partial ledger editing. This local control trusts the current OS user and Git administrative directory;
+it is not an external append-only authorization service and does not survive a fresh clone.
+A completed prefix
+can resume, but an unresolved in-flight call or a fully consumed stage authorization cannot be run
 again. The selected route and reservation are refreshed from the catalog immediately before every
 request.
 
@@ -217,5 +243,8 @@ models × `single-three-page-document`, `three-single-page-documents`, and
 `non-financial-documents`: 12 unique calls under a $4 software cap, using an ignored v4 ledger with no
 prompt or model-setting change. All 12 passed all nine quality checks. Provider-reported and admission
 spend were $0.051611365; the delayed key-allowance snapshot changed by $0.043508365. The v4 ledger is
-fully consumed and cannot repeat the matrix. Any additional calls or any holdout run require new
-explicit authorization.
+fully consumed and cannot repeat the matrix. The authenticated v5 stage then completed 30/30 all-nine
+development-repeat passes for $0.097322782 of provider-reported spend. The authenticated v6 frozen
+holdout completed 27/27 all-nine passes for $0.068312573. Both stages had zero technical failures,
+remained below their separate $10 caps, and are fully consumed. No additional provider calls are
+authorized by this evaluation plan.

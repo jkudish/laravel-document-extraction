@@ -54,6 +54,21 @@ extensions, the Illuminate Image Imagick driver, and every advertised codec. It 
 provider, upload a document, fetch a URL, or make a network capability probe. A missing capability
 is a failed readiness check, never a skipped-support claim.
 
+## Portable consumer contracts
+
+`composer test:consumer` builds a clean Composer archive from committed `HEAD`, enforces the
+intentional export-ignore policy, and installs the artifact into a disposable Testbench application.
+It proves package discovery and the readiness command from the installed copy before exercising
+three public consumer shapes: jMail direct/partial text and stream custody, ReceiptFox exact-decimal
+schema validation, and a nested shipping-manifest application agent. Laravel AI and HTTP are faked;
+the proof runs in a credential-empty child environment and makes no provider call.
+
+The archive must contain runtime source, configuration, prompts, schemas, workers, license, README,
+and public docs. It must not contain repository-only tests/scripts/agent instructions/quality configs,
+caches, credentials, private eval evidence, or `composer.lock`. The repository lockfile remains
+tracked and authoritative for development checks; excluding a library lockfile from its distribution
+lets each consuming application resolve and lock a compatible dependency graph.
+
 ## Development acceleration
 
 Pest 5 TIA is local-only and uses PCOV installed by `.agents/setup`:

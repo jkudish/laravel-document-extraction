@@ -11,32 +11,54 @@ use Jkudish\PestAiBenchmarks\Configuration;
  */
 final class LiveGroupingModels
 {
-    public const string BENCHMARK = 'live OpenRouter grouping prompt development coverage screen';
+    public const string DEVELOPMENT_STAGE = 'development-repeats';
 
-    public const string CONFIRMATION = 'run-12-prompt-coverage-detector-calls';
+    public const string HOLDOUT_STAGE = 'frozen-holdout';
+
+    public const string BENCHMARK = 'live OpenRouter grouping finalist development repeats';
+
+    public const string CONFIRMATION = 'run-30-finalist-development-repeat-detector-calls';
 
     public const string FIXTURE_ID = 'mixed-document-lengths';
 
     public const string FIXTURE_FILE = 'bundle-03.pdf';
 
-    public const string SCREEN = 'openrouter-live-grouping-prompt-coverage-v1';
+    public const string SCREEN = 'openrouter-live-grouping-development-repeats-v1';
+
+    public const string HOLDOUT_BENCHMARK = 'live OpenRouter grouping frozen holdout';
+
+    public const string HOLDOUT_CONFIRMATION = 'run-27-frozen-holdout-detector-calls';
+
+    public const string HOLDOUT_SCREEN = 'openrouter-live-grouping-frozen-holdout-v1';
 
     /** @var list<string> */
     public const array FIXTURE_IDS = [
         'single-three-page-document',
         'three-single-page-documents',
+        'blank-separator',
+        'mixed-document-lengths',
         'non-financial-documents',
     ];
 
     /** @var list<string> */
+    public const array HOLDOUT_FIXTURE_IDS = [
+        'same-issuer-invoices',
+        'ambiguous-orphan',
+        'scan-like-raster',
+    ];
+
+    /** @var list<string> */
     public const array SURVIVOR_IDS = [
-        'qwen/qwen2.5-vl-72b-instruct',
         'google/gemini-2.5-flash',
         'openai/gpt-5.6-luna',
         'anthropic/claude-haiku-4.5',
     ];
 
-    public const float MAX_SPEND_USD = 4.0;
+    public const float MAX_SPEND_USD = 10.0;
+
+    public const int DEVELOPMENT_REPETITIONS = 2;
+
+    public const int HOLDOUT_REPETITIONS = 3;
 
     public const float MAX_KEY_LIMIT_USD = 50.0;
 
@@ -77,6 +99,51 @@ final class LiveGroupingModels
     public static function fixtureIds(): array
     {
         return self::FIXTURE_IDS;
+    }
+
+    /**
+     * @return array{
+     *     id: string,
+     *     benchmark: string,
+     *     confirmation: string,
+     *     screen: string,
+     *     fixture_ids: list<string>,
+     *     fixture_split: string,
+     *     repetitions: int,
+     *     max_spend_usd: float,
+     *     authorization_file: string,
+     *     prerequisite_authorization_file: ?string
+     * }
+     */
+    public static function stage(string $stage): array
+    {
+        return match ($stage) {
+            self::DEVELOPMENT_STAGE => [
+                'id' => self::DEVELOPMENT_STAGE,
+                'benchmark' => self::BENCHMARK,
+                'confirmation' => self::CONFIRMATION,
+                'screen' => self::SCREEN,
+                'fixture_ids' => self::FIXTURE_IDS,
+                'fixture_split' => 'prompt-example',
+                'repetitions' => self::DEVELOPMENT_REPETITIONS,
+                'max_spend_usd' => self::MAX_SPEND_USD,
+                'authorization_file' => 'live-grouping-screen-v5.json',
+                'prerequisite_authorization_file' => null,
+            ],
+            self::HOLDOUT_STAGE => [
+                'id' => self::HOLDOUT_STAGE,
+                'benchmark' => self::HOLDOUT_BENCHMARK,
+                'confirmation' => self::HOLDOUT_CONFIRMATION,
+                'screen' => self::HOLDOUT_SCREEN,
+                'fixture_ids' => self::HOLDOUT_FIXTURE_IDS,
+                'fixture_split' => 'holdout',
+                'repetitions' => self::HOLDOUT_REPETITIONS,
+                'max_spend_usd' => self::MAX_SPEND_USD,
+                'authorization_file' => 'live-grouping-screen-v6.json',
+                'prerequisite_authorization_file' => 'live-grouping-screen-v5.json',
+            ],
+            default => throw new \InvalidArgumentException("Unknown live grouping stage [{$stage}]."),
+        };
     }
 
     /** @return array<string, Configuration> */

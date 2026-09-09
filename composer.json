@@ -57,6 +57,7 @@
         ],
         "pr:signoff": "@php scripts/pr-workflow signoff",
         "test": "@php vendor/bin/pest --no-tia",
+        "test:consumer": "bash scripts/prove-consumer-contracts",
         "test:safeguards": "@php vendor/bin/pest tests/Unit/PrWorkflowTest.php tests/Unit/FoundationProofSafetyTest.php --no-tia",
         "test:tia": "@php vendor/bin/pest --tia",
         "test:tia:fresh": "@php vendor/bin/pest --tia --fresh",

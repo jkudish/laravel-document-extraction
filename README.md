@@ -38,6 +38,23 @@ See
 [`docs/verification.md`](docs/verification.md) for full, TIA, PAO, and four-cell compatibility
 verification commands, plus the local exact-SHA PR receipt and signoff protocol.
 
+For a clean distribution/consumer proof, run:
+
+```sh
+composer test:consumer
+```
+
+This builds the Composer archive, verifies that runtime code, configuration, prompts, schemas,
+workers, license, and public documentation are present, then installs that archive into a disposable
+Testbench application. The consumer tests cover ReceiptFox-style exact-decimal extraction, jMail-style
+direct and partial text with caller-owned streams, and a third nested shipping-manifest schema through
+an application agent. They use native Laravel AI fakes and make no provider request.
+
+The archive intentionally excludes repository-only tooling and evidence: `.agents`, `.amp`, tests,
+scripts, quality configuration, caches, private evaluation artifacts, and `composer.lock`. The lockfile
+remains tracked in this repository so package development and verification use a reproducible graph;
+library consumers correctly resolve dependencies against their own application lockfile.
+
 ## Pull request verification
 
 `composer pr:check` runs the complete uncached package plan without GitHub/provider credentials and
@@ -55,11 +72,11 @@ method/attribute > Laravel AI default. The pending request snapshots these value
 Laravel's global configuration. A configured provider array is passed to Laravel AI's native
 failover unchanged; models belong in its provider map and cannot be combined with a separate model.
 
-The package intentionally ships without a vendor or model default. The current development evidence
-recommends Gemini 2.5 Flash for document detection, then Luna and Haiku. An application can adopt or
-replace that order entirely through published configuration. Because all three evaluated models use
-OpenRouter, define distinct Laravel AI provider aliases so each attempt keeps its own endpoint
-options:
+The package intentionally ships without a vendor or model default. The completed synthetic development
+and holdout evidence recommends Gemini 2.5 Flash for document detection, then Luna and Haiku. An
+application can adopt or replace that order entirely through published configuration. Because all
+three evaluated models use OpenRouter, define distinct Laravel AI provider aliases so each attempt
+keeps its own endpoint options:
 
 ```php
 // config/ai.php

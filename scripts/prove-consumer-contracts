@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ "${LDE_CONSUMER_PROOF_ISOLATED:-}" != 1 ]]; then
+    isolated_home="$(mktemp -d)"
+    trap 'rm -rf -- "$isolated_home"' EXIT
+    mkdir -p "$isolated_home/.composer/cache" "$isolated_home/.cache" "$isolated_home/tmp"
+
+    exec env -i HOME="$isolated_home" PATH=/usr/local/bin:/usr/bin:/bin \
+        COMPOSER_HOME="$isolated_home/.composer" COMPOSER_CACHE_DIR="$isolated_home/.composer/cache" \
+        XDG_CACHE_HOME="$isolated_home/.cache" TMPDIR="$isolated_home/tmp" \
+        APP_ENV=testing CI=1 PAO_DISABLE=1 LDE_CONSUMER_PROOF_ISOLATED=1 \
+        /bin/bash "$0" "$@"
+fi
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+work="$(mktemp -d "${TMPDIR:-/tmp}/lde-consumer-proof.XXXXXX")"
+archive_dir="$work/archive"
+consumer="$work/consumer"
+mkdir -p "$archive_dir" "$consumer/tests/Fixtures"
+
+cleanup() {
+    rm -rf -- "$work"
+}
+
+trap cleanup EXIT
+
+COMPOSER_ROOT_VERSION=dev-main composer archive \
+    --working-dir="$root" \
+    --format=zip \
+    --dir="$archive_dir" \
+    --file=laravel-document-extraction >/dev/null
+
+archive="$(find "$archive_dir" -maxdepth 1 -type f -name '*.zip' -print -quit)"
+[[ -n "$archive" && -f "$archive" ]] || { echo 'Composer did not create the package archive.' >&2; exit 1; }
+
+entries="$work/archive-entries.txt"
+unzip -Z1 "$archive" | sed '/\/$/d' | sort > "$entries"
+
+for required in \
+    composer.json \
+    LICENSE.md \
+    README.md \
+    config/extraction.php \
+    docs/verification.md \
+    resources/prompts/extraction.txt \
+    resources/schemas/document.json \
+    resources/workers/document-preparation.php \
+    src/DocumentExtraction.php; do
+    grep -Fxq "$required" "$entries" || { echo "Archive is missing required file [$required]." >&2; exit 1; }
+done
+
+if grep -Eq '(^|/)(\.agents|\.amp|\.git|\.pest|\.phpunit\.cache|tests|scripts|vendor|storage)(/|$)|(^|/)(AGENTS\.md|composer\.lock|phpstan\.neon|phpunit\.xml|pint\.json|\.gitignore|\.gitattributes)$|\.(bundle|env)$|(^|/)(replay|scorecard|ledger|receipt)(\.|/)' "$entries"; then
+    echo 'Archive contains an excluded development or private-evidence path.' >&2
+    exit 1
+fi
+
+cp "$root/tests/Fixtures/Consumer/Pest.php.stub" "$consumer/tests/Pest.php"
+cp "$root/tests/Fixtures/Consumer/TestCase.php.stub" "$consumer/tests/TestCase.php"
+cp "$root/tests/Fixtures/Consumer/PortableConsumerTest.php.stub" "$consumer/tests/PortableConsumerTest.php"
+cp "$root/tests/Fixtures/Pdf/mixed.pdf" "$consumer/tests/Fixtures/mixed.pdf"
+
+php -r '
+$package = json_decode(file_get_contents($argv[1]), true, flags: JSON_THROW_ON_ERROR);
+$dist = realpath($argv[2]);
+
+if (! is_array($package) || ! is_string($dist)) {
+    throw new RuntimeException("Unable to describe the package archive.");
+}
+
+$metadata = array_intersect_key($package, array_flip([
+    "name", "description", "type", "license", "require", "autoload", "extra",
+]));
+$metadata["version"] = "1.0.0";
+$metadata["dist"] = ["type" => "zip", "url" => "file://".$dist];
+
+$consumer = [
+    "name" => "jkudish/laravel-document-extraction-consumer-proof",
+    "type" => "project",
+    "repositories" => [["type" => "package", "package" => $metadata]],
+    "require" => [
+        "php" => "^8.4",
+        "jkudish/laravel-document-extraction" => "1.0.0",
+        "laravel/framework" => "^13.23",
+    ],
+    "require-dev" => [
+        "orchestra/testbench" => "^11.2",
+        "pestphp/pest" => "^5.1",
+        "pestphp/pest-plugin-laravel" => "^5.0",
+    ],
+    "autoload-dev" => ["psr-4" => ["PortableConsumer\\Tests\\" => "tests/"]],
+    "config" => [
+        "allow-plugins" => ["pestphp/pest-plugin" => true],
+        "preferred-install" => ["*" => "dist"],
+        "sort-packages" => true,
+    ],
+    "minimum-stability" => "stable",
+    "prefer-stable" => true,
+];
+
+file_put_contents($argv[3], json_encode($consumer, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES).PHP_EOL);
+' "$root/composer.json" "$archive" "$consumer/composer.json"
+
+cat > "$consumer/testbench.yaml" <<'YAML'
+providers:
+  - Laravel\Ai\AiServiceProvider
+  - Jkudish\DocumentExtraction\DocumentExtractionServiceProvider
+env:
+  IMAGE_DRIVER: imagick
+YAML
+
+cat > "$consumer/phpunit.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/13.0/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         cacheDirectory=".phpunit.cache"
+         colors="true"
+         failOnRisky="true"
+         failOnWarning="true">
+    <testsuites>
+        <testsuite name="Portable consumer">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>
+XML
+
+(
+    cd "$consumer"
+    composer install --no-interaction --prefer-dist --no-progress
+
+    install_path="$(composer show --path --no-ansi jkudish/laravel-document-extraction | awk '{print $NF}')"
+    [[ "$(realpath "$install_path")" == "$(realpath "$consumer/vendor/jkudish/laravel-document-extraction")" ]] \
+        || { echo 'Composer did not install the package inside the clean consumer.' >&2; exit 1; }
+    [[ ! -e "$install_path/tests" && ! -e "$install_path/scripts" && ! -e "$install_path/composer.lock" ]] \
+        || { echo 'The installed package contains excluded development files.' >&2; exit 1; }
+
+    php -r '
+    require "vendor/autoload.php";
+    $path = Composer\InstalledVersions::getInstallPath("jkudish/laravel-document-extraction");
+    $composer = json_decode(file_get_contents($path."/composer.json"), true, flags: JSON_THROW_ON_ERROR);
+    $providers = $composer["extra"]["laravel"]["providers"] ?? [];
+    $aliases = $composer["extra"]["laravel"]["aliases"] ?? [];
+    exit(in_array("Jkudish\\DocumentExtraction\\DocumentExtractionServiceProvider", $providers, true)
+        && ($aliases["Extraction"] ?? null) === "Jkudish\\DocumentExtraction\\Facades\\Extraction" ? 0 : 1);
+    '
+    vendor/bin/testbench package:discover --no-interaction >/dev/null
+
+    if ! doctor_output="$(vendor/bin/testbench extraction:doctor --no-interaction 2>&1)"; then
+        printf '%s\n' "$doctor_output" >&2
+        exit 1
+    fi
+
+    grep -q 'Document preparation is ready' <<< "$doctor_output"
+    LDE_SOURCE_ROOT="$root" vendor/bin/pest tests/PortableConsumerTest.php --no-tia --colors=never
+)
+
+printf 'Portable consumer proof passed; archive contains %s files and is %s bytes.\n' \
+    "$(wc -l < "$entries" | tr -d ' ')" \
+    "$(stat -c '%s' "$archive")"
