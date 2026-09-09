@@ -3,6 +3,7 @@ tests/Fixtures/Pdf/**/*.pdf binary
 
 /.agents export-ignore
 /.amp export-ignore
+/.env* export-ignore
 /.git export-ignore
 /.pest export-ignore
 /.phpunit.cache export-ignore
@@ -14,4 +15,6 @@ tests/Fixtures/Pdf/**/*.pdf binary
 /phpunit.xml export-ignore
 /pint.json export-ignore
 /scripts export-ignore
+/storage export-ignore
 /tests export-ignore
+/vendor export-ignore
