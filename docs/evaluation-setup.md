@@ -151,17 +151,21 @@ scripts/live-grouping-screen --stage=frozen-holdout --live \
 ```
 
 The authorized development-repeat stage is Gemini 2.5 Flash, Luna, and Haiku × all five
-`prompt-example` fixtures × two new repetitions: exactly 30 detector calls in a private ignored v5
-ledger. The separately authorized holdout stage freezes those same three model configurations and
-runs `same-issuer-invoices`, `ambiguous-orphan`, and `scan-like-raster` × three repetitions: exactly
-27 detector calls in a private ignored v6 ledger. The holdout refuses before network access unless
-the v5 ledger records the exact completed 30-call matrix for the same key and its development contract
-fingerprint still matches the current prompt, schemas, rendering, routes/options, scorers, fixtures,
-lockfile, and execution owners. Any intervening configuration change therefore requires a new reviewed
-development gate rather than silently retuning on holdout.
+`prompt-example` fixtures × two new repetitions: exactly 30 detector calls in a private authenticated
+v5 ledger under Git administrative storage. The separately authorized holdout stage freezes those same
+three model configurations and runs `same-issuer-invoices`, `ambiguous-orphan`, and `scan-like-raster`
+× three repetitions: exactly 27 detector calls in a separate authenticated v6 ledger. The holdout
+refuses before network access unless the v5 ledger records the exact completed 30-call matrix and
+validated scorecard fingerprints for the same key, its authentication verifies, and its development
+contract fingerprint still matches the current prompt, schemas, rendering, routes/options, scorers,
+fixtures, lockfile, and execution owners. Any intervening configuration change therefore requires a
+new reviewed development gate rather than silently retuning on holdout.
 
 Each model/fixture/repetition runs as one separately validated Pest benchmark trial before the next paid
-request. The public `Extraction::fromPath(...)->detectDocuments()->schema(...)->extract()` path sends
+request. The parent issues a random, single-use child capability only after persisting that trial's
+reservation. The benchmark claims that capability before enabling inference; invoking the Pest file
+directly with its public stage/model/fixture selectors therefore fails before HTTP. The public
+`Extraction::fromPath(...)->detectDocuments()->schema(...)->extract()` path sends
 the detector
 through OpenRouter with the exact model and endpoint, `allow_fallbacks = false`,
 `require_parameters = true`, a 512-token output limit, reasoning disabled where supported, and the
@@ -190,9 +194,15 @@ catalog-derived reservation, including for technical failures, so delayed charge
 for another request.
 This is a software safeguard, not a provider-level $10 cap: it cannot undo an in-flight provider charge,
 and unrelated use of the same key is conservatively counted against this screen.
-The ignored, private authorization ledger survives command restarts, binds the run to the current key,
+The private authorization ledgers and authentication key live under Git administrative storage, so
+ordinary worktree cleanup and `git clean` do not reset completed authorization. They survive command
+restarts, bind the run to the current key,
 the exact ordered model/fixture/repetition matrix, $10 cap, fixture identities, route options, and hashed execution
-dependencies, and records a reservation before dispatch. A completed prefix
+dependencies, and record a reservation before dispatch. Each completed trial also records the SHA-256
+of the scorecard that passed the parent validator. A keyed authentication tag rejects accidental or
+partial ledger editing. This local control trusts the current OS user and Git administrative directory;
+it is not an external append-only authorization service and does not survive a fresh clone.
+A completed prefix
 can resume, but an unresolved in-flight call or a fully consumed stage authorization cannot be run
 again. The selected route and reservation are refreshed from the catalog immediately before every
 request.
@@ -234,5 +244,6 @@ models × `single-three-page-document`, `three-single-page-documents`, and
 prompt or model-setting change. All 12 passed all nine quality checks. Provider-reported and admission
 spend were $0.051611365; the delayed key-allowance snapshot changed by $0.043508365. The v4 ledger is
 fully consumed and cannot repeat the matrix. The 30-call development-repeat v5 stage and contingent
-27-call frozen-holdout v6 stage are now explicitly authorized under separate $10 caps. They remain
+27-call frozen-holdout v6 stage use the new authenticated Git-admin ledger boundary and are explicitly
+authorized under separate $10 caps. They remain
 unexecuted until their reviewed offline/preflight gates pass; no other provider calls are authorized.

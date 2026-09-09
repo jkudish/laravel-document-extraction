@@ -127,7 +127,7 @@ final class LiveGroupingModels
                 'fixture_split' => 'prompt-example',
                 'repetitions' => self::DEVELOPMENT_REPETITIONS,
                 'max_spend_usd' => self::MAX_SPEND_USD,
-                'authorization_file' => 'storage/app/ai-evals/live-grouping-screen-v5.json',
+                'authorization_file' => 'live-grouping-screen-v5.json',
                 'prerequisite_authorization_file' => null,
             ],
             self::HOLDOUT_STAGE => [
@@ -139,8 +139,8 @@ final class LiveGroupingModels
                 'fixture_split' => 'holdout',
                 'repetitions' => self::HOLDOUT_REPETITIONS,
                 'max_spend_usd' => self::MAX_SPEND_USD,
-                'authorization_file' => 'storage/app/ai-evals/live-grouping-screen-v6.json',
-                'prerequisite_authorization_file' => 'storage/app/ai-evals/live-grouping-screen-v5.json',
+                'authorization_file' => 'live-grouping-screen-v6.json',
+                'prerequisite_authorization_file' => 'live-grouping-screen-v5.json',
             ],
             default => throw new \InvalidArgumentException("Unknown live grouping stage [{$stage}]."),
         };

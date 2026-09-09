@@ -217,6 +217,7 @@ final class GroupingBenchmarkCorpus
             'tests/Fixtures/Grouping/bundle-07.pdf',
             'tests/Fixtures/Grouping/bundle-08.pdf',
             'config/extraction.php',
+            'resources/workers/document-preparation.php',
             'composer.lock',
             'docs/evaluation-setup.md',
             ...self::packageSources(),

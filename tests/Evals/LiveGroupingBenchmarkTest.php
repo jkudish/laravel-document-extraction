@@ -8,6 +8,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Jkudish\DocumentExtraction\AI\InlineSchemaAgent;
+use Jkudish\DocumentExtraction\Dev\LiveGroupingAuthorization;
 use Jkudish\DocumentExtraction\Facades\Extraction;
 use Jkudish\DocumentExtraction\Results\CallRecord;
 use Jkudish\DocumentExtraction\Results\EvidenceOrigin;
@@ -34,6 +35,10 @@ $liveGroupingStage = LiveGroupingModels::stage(
 );
 
 beforeEach(function (): void {
+    if (getenv('LDE_LIVE_GROUPING_CONFIRM') === liveGroupingStage()['confirmation']) {
+        LiveGroupingAuthorization::claim(dirname(__DIR__, 2));
+    }
+
     $generationLookups = 0;
 
     config()->set([
@@ -265,6 +270,7 @@ benchmark($liveGroupingStage['benchmark'], function (): array {
         );
     })->dependsOn([
         ...GroupingBenchmarkCorpus::dependencies(),
+        'scripts/LiveGroupingAuthorization.php',
         'tests/Evals/LiveGroupingBenchmarkTest.php',
         'tests/Support/LiveGroupingAttemptScorer.php',
         'tests/Support/LiveGroupingModels.php',

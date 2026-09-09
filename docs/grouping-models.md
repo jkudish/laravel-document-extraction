@@ -221,13 +221,14 @@ The next two detector-only stages are authorized but not yet executed. The devel
 keeps the clarified prompt, schemas, rendering, routes/options, reasoning controls, 512-token cap,
 120-second timeout, and deterministic scorers fixed. Gemini 2.5 Flash, Luna, and Haiku each run two
 new repetitions over all five `prompt-example` fixtures: 3 models × 5 fixtures × 2 = 30 calls under a
-separate $10 software cap and ignored v5 ledger. These calls bring each finalist/development pair to
-three same-contract observations when combined with the existing one.
+separate $10 software cap and authenticated v5 Git-admin ledger. These calls bring each
+finalist/development pair to three same-contract observations when combined with the existing one.
 
 Only after that exact ledger is complete may the frozen holdout stage run. It uses the same three
 configurations over `same-issuer-invoices`, `ambiguous-orphan`, and `scan-like-raster`, three times
-each: 3 × 3 × 3 = 27 calls under a separate $10 cap and ignored v6 ledger. The runner checks the
-completed development ledger and recomputes its contract fingerprint before any holdout network
+each: 3 × 3 × 3 = 27 calls under a separate $10 cap and authenticated v6 ledger in Git administrative
+storage. The runner checks the authenticated completed development ledger, its 30 validated scorecard
+fingerprints, and the recomputed contract fingerprint before any holdout network
 access. Any change to the prompt, schemas, rendering, model/endpoint/options, scorers, fixture corpus,
 lockfile, or execution owners invalidates that prerequisite. Holdout results will be recorded without
 tuning the frozen configuration or pooling different prompt contracts. Grouped extraction and OCR

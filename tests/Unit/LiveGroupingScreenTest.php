@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Brick\Math\BigDecimal;
+use Illuminate\Filesystem\Filesystem;
+use Jkudish\DocumentExtraction\Dev\LiveGroupingAuthorization;
 use Jkudish\DocumentExtraction\Dev\LiveGroupingScreen;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\CommandResult;
 use Jkudish\DocumentExtraction\Dev\PrWorkflow\CommandRunner;
@@ -130,6 +132,21 @@ function liveGroupingStageTrialIds(string $stageId): array
     }
 
     return $trialIds;
+}
+
+/**
+ * @param  list<string>  $completed
+ * @return list<array{trial: string, scorecard_sha256: string}>
+ */
+function liveGroupingEvidence(array $completed): array
+{
+    return array_map(
+        static fn (string $trial): array => [
+            'trial' => $trial,
+            'scorecard_sha256' => hash('sha256', $trial),
+        ],
+        $completed,
+    );
 }
 
 /** @param array{id: string, canonical: string, endpoint: string, route: array{provider_name: string, data_region: string, service_tier: ?string}, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}} $model
@@ -471,7 +488,7 @@ it('refuses the frozen holdout before network access without a completed develop
         ->and($fetches)->toBe(0);
 });
 
-it('requires the exact completed development matrix and frozen contract before holdout network access', function (string $fingerprint, bool $complete): void {
+it('requires the exact completed development matrix evidence and frozen contract before holdout network access', function (string $fingerprint, bool $complete, bool $includeEvidence): void {
     $root = dirname(__DIR__, 2);
     $prerequisite = sys_get_temp_dir().'/lde-development-ledger-'.getmypid().'.json';
     $development = new LiveGroupingScreen(
@@ -481,8 +498,9 @@ it('requires the exact completed development matrix and frozen contract before h
         stage: LiveGroupingModels::DEVELOPMENT_STAGE,
     );
     $trialIds = liveGroupingStageTrialIds(LiveGroupingModels::DEVELOPMENT_STAGE);
+    $completedTrials = $complete ? $trialIds : array_slice($trialIds, 0, -1);
     file_put_contents($prerequisite, json_encode([
-        'schema_version' => 3,
+        'schema_version' => 4,
         'confirmation' => LiveGroupingModels::CONFIRMATION,
         'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
         'contract_fingerprint' => $fingerprint === 'current'
@@ -492,7 +510,8 @@ it('requires the exact completed development matrix and frozen contract before h
         'initial_remaining' => '50',
         'recorded_spend' => '0.1',
         'admission_spend' => '0.1',
-        'completed_trials' => $complete ? $trialIds : array_slice($trialIds, 0, -1),
+        'completed_trials' => $completedTrials,
+        'completed_evidence' => $includeEvidence ? liveGroupingEvidence($completedTrials) : [],
         'pending' => null,
     ], JSON_THROW_ON_ERROR));
     $fetches = 0;
@@ -520,8 +539,9 @@ it('requires the exact completed development matrix and frozen contract before h
         unlink($prerequisite);
     }
 })->with([
-    'incomplete matrix' => ['current', false],
-    'stale contract' => ['stale', true],
+    'incomplete matrix' => ['current', false, true],
+    'stale contract' => ['stale', true, true],
+    'missing scorecard evidence' => ['current', true, false],
 ]);
 
 it('accepts an exact completed frozen development ledger before holdout preflight', function (): void {
@@ -535,7 +555,7 @@ it('accepts an exact completed frozen development ledger before holdout prefligh
     );
     $trialIds = liveGroupingStageTrialIds(LiveGroupingModels::DEVELOPMENT_STAGE);
     file_put_contents($prerequisite, json_encode([
-        'schema_version' => 3,
+        'schema_version' => 4,
         'confirmation' => LiveGroupingModels::CONFIRMATION,
         'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
         'contract_fingerprint' => $development->contractFingerprint(),
@@ -544,6 +564,7 @@ it('accepts an exact completed frozen development ledger before holdout prefligh
         'recorded_spend' => '0.1',
         'admission_spend' => '0.1',
         'completed_trials' => $trialIds,
+        'completed_evidence' => liveGroupingEvidence($trialIds),
         'pending' => null,
     ], JSON_THROW_ON_ERROR));
     $fetches = 0;
@@ -602,6 +623,177 @@ it('refuses live execution without the exact confirmation or key', function (arr
         '--confirm='.LiveGroupingModels::CONFIRMATION,
     ], []],
 ]);
+
+it('rejects direct benchmark invocation with every public selector before inference', function (): void {
+    $root = dirname(__DIR__, 2);
+    $fixture = GroupingBenchmarkCorpus::manifest()['fixtures'][0];
+    $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
+    $home = sys_get_temp_dir().'/lde-direct-live-grouping-'.bin2hex(random_bytes(8));
+
+    mkdir($home, 0700, true);
+    mkdir($home.'/tmp', 0700, true);
+
+    try {
+        $result = (new NativeCommandRunner($root))->run([
+            PHP_BINARY,
+            'vendor/bin/pest',
+            'tests/Evals/LiveGroupingBenchmarkTest.php',
+            '--no-tia',
+            '--evals',
+            '--colors=never',
+        ], [
+            'HOME' => $home,
+            'TMPDIR' => $home.'/tmp',
+            'PATH' => '/usr/local/bin:/usr/bin:/bin',
+            'PAO_DISABLE' => '1',
+            'OPENROUTER_API_KEY' => 'synthetic-openrouter-canary',
+            'LDE_LIVE_GROUPING_CONFIRM' => LiveGroupingModels::CONFIRMATION,
+            'LDE_LIVE_GROUPING_STAGE' => LiveGroupingModels::DEVELOPMENT_STAGE,
+            'LDE_LIVE_GROUPING_MODEL' => LiveGroupingModels::SURVIVOR_IDS[0],
+            'LDE_LIVE_GROUPING_FIXTURE' => $fixture['id'],
+            'LDE_LIVE_GROUPING_REPETITION' => '1',
+            'LDE_LIVE_GROUPING_FIXTURE_SHA256' => $fixture['sha256'],
+            'LDE_LIVE_GROUPING_FIXTURE_SIZE' => (string) $fixture['size'],
+            'LDE_LIVE_GROUPING_OFFLINE' => '1',
+        ]);
+
+        expect($result->exitCode)->not->toBe(0)
+            ->and($result->stdout.$result->stderr)->toContain('lacks a private parent capability')
+            ->and(glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [])->toBe($before);
+    } finally {
+        (new Filesystem)->deleteDirectory($home);
+    }
+});
+
+it('authenticates durable authorization state and rejects altered completion evidence', function (): void {
+    $key = str_repeat('a', 64);
+    $root = dirname(__DIR__, 2);
+    $ledgerPath = LiveGroupingAuthorization::path(
+        $root,
+        new NativeCommandRunner($root),
+        LiveGroupingModels::DEVELOPMENT_STAGE,
+    );
+    $authorization = LiveGroupingAuthorization::signed([
+        'schema_version' => 4,
+        'completed_trials' => ['trial-1'],
+        'completed_evidence' => liveGroupingEvidence(['trial-1']),
+    ], $key);
+
+    expect($ledgerPath)->not->toStartWith($root.'/storage/')
+        ->and($ledgerPath)->toContain('/laravel-document-extraction/live-grouping/');
+
+    LiveGroupingAuthorization::assertAuthentic($authorization, $key);
+    $altered = $authorization;
+    $altered['completed_trials'] = ['trial-1', 'trial-2'];
+
+    expect(fn () => LiveGroupingAuthorization::assertAuthentic($altered, $key))
+        ->toThrow(RuntimeException::class, 'is not authentic');
+});
+
+it('consumes an authenticated parent capability exactly once', function (): void {
+    $directory = sys_get_temp_dir().'/lde-live-capability-'.bin2hex(random_bytes(8));
+    $ledger = $directory.'/authorization.json';
+    $capability = bin2hex(random_bytes(32));
+    $model = LiveGroupingModels::SURVIVOR_IDS[0];
+    $fixture = LiveGroupingModels::FIXTURE_IDS[0];
+    $trial = $model.'|'.$fixture.'|repeat-1';
+    $environment = [
+        'LDE_LIVE_GROUPING_STAGE' => LiveGroupingModels::DEVELOPMENT_STAGE,
+        'LDE_LIVE_GROUPING_MODEL' => $model,
+        'LDE_LIVE_GROUPING_FIXTURE' => $fixture,
+        'LDE_LIVE_GROUPING_REPETITION' => '1',
+        'LDE_LIVE_GROUPING_TRIAL' => $trial,
+        'OPENROUTER_API_KEY' => 'synthetic-openrouter-canary',
+        LiveGroupingAuthorization::CAPABILITY_ENV => $capability,
+        LiveGroupingAuthorization::LEDGER_ENV => $ledger,
+        LiveGroupingAuthorization::AUTHENTICATED_ENV => '1',
+        'LDE_LIVE_GROUPING_OFFLINE' => '1',
+    ];
+    $original = [];
+
+    foreach ($environment as $name => $value) {
+        $original[$name] = getenv($name);
+        putenv($name.'='.$value);
+    }
+
+    try {
+        $key = LiveGroupingAuthorization::key($ledger, create: true);
+        LiveGroupingAuthorization::write($ledger, LiveGroupingAuthorization::signed([
+            'schema_version' => 4,
+            'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
+            'pending' => [
+                'trial' => $trial,
+                'reservation' => '1',
+                'capability_hash' => hash('sha256', $capability),
+                'claimed' => false,
+            ],
+        ], $key));
+
+        LiveGroupingAuthorization::claim(dirname(__DIR__, 2));
+        $claimed = LiveGroupingAuthorization::read($ledger);
+        LiveGroupingAuthorization::assertAuthentic($claimed, $key);
+        $pending = $claimed['pending'] ?? null;
+
+        expect($pending)->toBeArray();
+
+        if (! is_array($pending)) {
+            throw new RuntimeException('Expected a pending authorization record.');
+        }
+
+        expect($pending['claimed'] ?? null)->toBeTrue()
+            ->and(fn () => LiveGroupingAuthorization::claim(dirname(__DIR__, 2)))
+            ->toThrow(RuntimeException::class, 'invalid or already consumed');
+    } finally {
+        foreach ($original as $name => $value) {
+            putenv($value === false ? $name : $name.'='.$value);
+        }
+
+        (new Filesystem)->deleteDirectory($directory);
+    }
+});
+
+it('binds the active document preparation worker into the frozen contract fingerprint', function (): void {
+    $root = dirname(__DIR__, 2);
+    $copy = sys_get_temp_dir().'/lde-grouping-contract-'.bin2hex(random_bytes(8));
+    $paths = array_values(array_unique([
+        ...GroupingBenchmarkCorpus::dependencies(),
+        'scripts/LiveGroupingAuthorization.php',
+        'scripts/LiveGroupingScreen.php',
+        'scripts/live-grouping-screen',
+        'tests/Evals/LiveGroupingBenchmarkTest.php',
+        'tests/Support/LiveGroupingAttemptScorer.php',
+        'tests/Support/LiveGroupingModels.php',
+        'tests/Support/OpenRouterGenerationMetadata.php',
+    ]));
+
+    try {
+        foreach ($paths as $path) {
+            $target = $copy.'/'.$path;
+            if (! is_dir(dirname($target))) {
+                mkdir(dirname($target), 0700, true);
+            }
+
+            copy($root.'/'.$path, $target);
+        }
+
+        $screen = new LiveGroupingScreen(
+            $copy,
+            new InertLiveGroupingRunner,
+            authorizationPath: $copy.'/authorization.json',
+            stage: LiveGroupingModels::DEVELOPMENT_STAGE,
+        );
+        $before = $screen->contractFingerprint();
+        file_put_contents(
+            $copy.'/resources/workers/document-preparation.php',
+            "\n// Simulated worker drift.\n",
+            FILE_APPEND,
+        );
+
+        expect($screen->contractFingerprint())->not->toBe($before);
+    } finally {
+        (new Filesystem)->deleteDirectory($copy);
+    }
+});
 
 it('rejects unsafe key limits before the inference runner', function (array $keyOverrides): void {
     /** @var array<string, mixed> $keyOverrides */
@@ -1059,8 +1251,9 @@ it('preserves admission reservations across a resumed run', function (): void {
         offlineInference: true,
         authorizationPath: liveGroupingAuthorizationPath(),
     );
+    $completed = array_slice($trialIds, 0, 2);
     file_put_contents(liveGroupingAuthorizationPath(), json_encode([
-        'schema_version' => 3,
+        'schema_version' => 4,
         'confirmation' => LiveGroupingModels::CONFIRMATION,
         'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
         'contract_fingerprint' => $screen->contractFingerprint(),
@@ -1068,7 +1261,8 @@ it('preserves admission reservations across a resumed run', function (): void {
         'initial_remaining' => '50',
         'recorded_spend' => '0.001',
         'admission_spend' => '9.800425984',
-        'completed_trials' => array_slice($trialIds, 0, 2),
+        'completed_trials' => $completed,
+        'completed_evidence' => liveGroupingEvidence($completed),
         'pending' => null,
     ], JSON_THROW_ON_ERROR));
 
@@ -1130,8 +1324,9 @@ it('resumes a clean completed prefix against the original allowance baseline', f
         authorizationPath: liveGroupingAuthorizationPath(),
         fixtureIds: [LiveGroupingModels::fixtureIds()[0]],
     );
+    $completed = [$first['id'].'|'.LiveGroupingModels::fixtureIds()[0]];
     $authorization = [
-        'schema_version' => 3,
+        'schema_version' => 4,
         'confirmation' => LiveGroupingModels::CONFIRMATION,
         'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
         'contract_fingerprint' => $screen->contractFingerprint(),
@@ -1142,7 +1337,8 @@ it('resumes a clean completed prefix against the original allowance baseline', f
         'initial_remaining' => '50',
         'recorded_spend' => '0.012345',
         'admission_spend' => '0.012345',
-        'completed_trials' => [$first['id'].'|'.LiveGroupingModels::fixtureIds()[0]],
+        'completed_trials' => $completed,
+        'completed_evidence' => liveGroupingEvidence($completed),
         'pending' => null,
     ];
     file_put_contents(
@@ -1174,7 +1370,9 @@ it('resumes a clean completed prefix against the original allowance baseline', f
     }
 });
 
+/** @param list<string> $completed */
 it('rejects duplicate or reordered completed trial identities when resuming', function (array $completed): void {
+    /** @var list<string> $completed */
     [$first, $second] = array_slice(LiveGroupingModels::survivors(), 0, 2);
     $fixture = LiveGroupingModels::fixtureIds()[0];
     $trialIds = [$first['id'].'|'.$fixture, $second['id'].'|'.$fixture];
@@ -1190,7 +1388,7 @@ it('rejects duplicate or reordered completed trial identities when resuming', fu
     );
 
     file_put_contents(liveGroupingAuthorizationPath(), json_encode([
-        'schema_version' => 3,
+        'schema_version' => 4,
         'confirmation' => LiveGroupingModels::CONFIRMATION,
         'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
         'contract_fingerprint' => $screen->contractFingerprint(),
@@ -1199,6 +1397,7 @@ it('rejects duplicate or reordered completed trial identities when resuming', fu
         'recorded_spend' => '0.001',
         'admission_spend' => '0.001',
         'completed_trials' => $completed,
+        'completed_evidence' => liveGroupingEvidence($completed),
         'pending' => null,
     ], JSON_THROW_ON_ERROR));
 
@@ -1233,7 +1432,7 @@ it('rejects a resumed ledger whose bound screen contract changed', function (): 
     );
 
     file_put_contents(liveGroupingAuthorizationPath(), json_encode([
-        'schema_version' => 3,
+        'schema_version' => 4,
         'confirmation' => LiveGroupingModels::CONFIRMATION,
         'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
         'contract_fingerprint' => 'sha256:'.str_repeat('0', 64),
@@ -1242,6 +1441,7 @@ it('rejects a resumed ledger whose bound screen contract changed', function (): 
         'recorded_spend' => '0.001',
         'admission_spend' => '0.001',
         'completed_trials' => [],
+        'completed_evidence' => [],
         'pending' => null,
     ], JSON_THROW_ON_ERROR));
 
