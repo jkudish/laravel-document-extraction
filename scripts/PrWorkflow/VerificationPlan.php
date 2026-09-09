@@ -20,6 +20,7 @@ final readonly class VerificationPlan
             ['id' => 'composer-validate', 'command' => ['composer', 'validate', '--strict']],
             ['id' => 'composer-platform', 'command' => ['composer', 'check-platform-reqs']],
             ['id' => 'composer-audit', 'command' => ['composer', 'audit', '--locked', '--no-interaction']],
+            ['id' => 'portable-consumer', 'command' => ['bash', 'scripts/prove-consumer-contracts']],
             ['id' => 'pint', 'command' => ['{php}', 'vendor/bin/pint', '--test']],
             ['id' => 'larastan', 'command' => ['{php}', 'vendor/bin/phpstan', 'analyse', '--level=10', '--memory-limit=1G', '--no-progress']],
             ['id' => 'pest-full', 'command' => ['{php}', 'vendor/bin/pest', '--no-tia', '--colors=never']],
@@ -27,7 +28,7 @@ final readonly class VerificationPlan
             ['id' => 'pao-proof', 'command' => ['bash', 'scripts/prove-pao']],
             ['id' => 'compatibility-matrix', 'command' => ['bash', 'scripts/test-matrix']],
             ['id' => 'safeguards', 'command' => ['{php}', 'vendor/bin/pest', 'tests/Unit/PrWorkflowTest.php', 'tests/Unit/FoundationProofSafetyTest.php', '--no-tia', '--colors=never']],
-            ['id' => 'shell-syntax', 'command' => ['bash', '-n', '.agents/setup', '.agents/resume', 'scripts/prove-tia', 'scripts/prove-pao', 'scripts/test-matrix']],
+            ['id' => 'shell-syntax', 'command' => ['bash', '-n', '.agents/setup', '.agents/resume', 'scripts/prove-consumer-contracts', 'scripts/prove-tia', 'scripts/prove-pao', 'scripts/test-matrix']],
         ];
     }
 

@@ -41,8 +41,8 @@ for php_version in 8.4 8.5; do
 
     for laravel in minimum current; do
         target="$work/php-${php_version}-laravel-${laravel}"
-        mkdir -p "$target"
-        git -C "$root" archive HEAD | tar -x -C "$target"
+        git clone --quiet --shared --no-hardlinks "$root" "$target"
+        git -C "$target" checkout --quiet --detach HEAD
 
         if [[ "$laravel" == minimum ]]; then
             framework_constraint='13.23.0'
