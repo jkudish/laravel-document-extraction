@@ -11,22 +11,38 @@ $root = dirname(__DIR__);
 require $root.'/vendor/autoload.php';
 
 try {
+    $arguments = array_slice($argv, 1);
+    $stageArguments = array_values(array_filter(
+        $arguments,
+        static fn (string $argument): bool => str_starts_with($argument, '--stage='),
+    ));
+
+    if (count($stageArguments) !== 1) {
+        throw new RuntimeException('Select exactly one approved stage with --stage=development-repeats or --stage=frozen-holdout.');
+    }
+
+    $stage = substr($stageArguments[0], strlen('--stage='));
+    LiveGroupingModels::stage($stage);
+    $arguments = array_values(array_filter(
+        $arguments,
+        static fn (string $argument): bool => ! str_starts_with($argument, '--stage='),
+    ));
     $environment = getenv();
     $environment = is_array($environment) ? $environment : [];
     $screen = new LiveGroupingScreen(
         $root,
         new NativeCommandRunner($root),
-        models: LiveGroupingModels::survivors(),
-        fixtureIds: LiveGroupingModels::fixtureIds(),
+        stage: $stage,
     );
-    $result = $screen->execute(array_slice($argv, 1), $environment);
+    $result = $screen->execute($arguments, $environment);
     fwrite(STDOUT, $result['output'].PHP_EOL);
 
     foreach ($result['runs'] as $run) {
         fwrite(STDOUT, sprintf(
-            "%s on %s @ %s: %s, $%s (%s); scorecard %s\n",
+            "%s on %s (repeat %d) @ %s: %s, $%s (%s); scorecard %s\n",
             $run['model'],
             $run['fixture'],
+            $run['repetition'],
             $run['endpoint'],
             $run['status'],
             $run['cost_usd'],

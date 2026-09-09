@@ -215,6 +215,24 @@ and Haiku second. Package defaults remain vendor-neutral and consumers own this 
 published configuration. These are single samples per model/fixture, so repeats remain necessary
 before a holdout or production-default decision.
 
+## Authorized finalist repeats and frozen holdout
+
+The next two detector-only stages are authorized but not yet executed. The development-repeat stage
+keeps the clarified prompt, schemas, rendering, routes/options, reasoning controls, 512-token cap,
+120-second timeout, and deterministic scorers fixed. Gemini 2.5 Flash, Luna, and Haiku each run two
+new repetitions over all five `prompt-example` fixtures: 3 models × 5 fixtures × 2 = 30 calls under a
+separate $10 software cap and ignored v5 ledger. These calls bring each finalist/development pair to
+three same-contract observations when combined with the existing one.
+
+Only after that exact ledger is complete may the frozen holdout stage run. It uses the same three
+configurations over `same-issuer-invoices`, `ambiguous-orphan`, and `scan-like-raster`, three times
+each: 3 × 3 × 3 = 27 calls under a separate $10 cap and ignored v6 ledger. The runner checks the
+completed development ledger and recomputes its contract fingerprint before any holdout network
+access. Any change to the prompt, schemas, rendering, model/endpoint/options, scorers, fixture corpus,
+lockfile, or execution owners invalidates that prerequisite. Holdout results will be recorded without
+tuning the frozen configuration or pooling different prompt contracts. Grouped extraction and OCR
+remain simulated in both stages. No other paid calls are authorized by this plan.
+
 ### Requested-name disposition
 
 - **GPT-5.6 Luna:** exact `openai/gpt-5.6-luna` is present and retained. The former Sol row is removed.
@@ -233,8 +251,9 @@ before a holdout or production-default decision.
 ## Cost-controlled evaluation design
 
 The 15-call compatibility canary, 28-call broad development screen, eight-call prompt clarification
-canary, and 12-call prompt development coverage screen are complete. Further repeats and holdout remain
-gated.
+canary, and 12-call prompt development coverage screen are complete. The exact 30-call finalist-repeat
+stage and contingent 27-call frozen holdout are authorized, subject to their offline and exact-target
+review gates.
 Use the installed native package path and published evaluation dependencies:
 
 - Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
@@ -268,10 +287,11 @@ Run the evaluation in gates:
 5. **Prompt development coverage (complete):** the same four finalists ran once across the three
    remaining development fixtures with every setting fixed: 12 exact scorecards, no holdout, and no
    same-contract repeats.
-6. **Development finalists:** use the coverage outcome to add separately authorized repeats and reach
-   at least three trials per finalist/development bundle.
-7. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
-   and scoring before at least three repeats on each held-out bundle. Never tune on holdout outcomes.
+6. **Development finalists (authorized):** run two new repetitions for Gemini 2.5 Flash, Luna, and
+   Haiku over all five development bundles—30 calls—to reach three same-contract observations per
+   finalist/bundle.
+7. **Frozen holdout (authorized after stage 6):** preserve the stage-6 contract and run three repeats
+   per finalist across all three held-out bundles—27 calls. Never tune on holdout outcomes.
 
 The compatibility canary removed technical and clearly unusable candidates, and the broad and
 clarified-prompt screens supply the development evidence above. Gemini 2.5 Flash is the leading default
@@ -283,8 +303,8 @@ additional calls remain separately gated.
 
 The executable screen is deliberately smaller than a manifest system: the test-owned model and
 fixture lists in `tests/Support/LiveGroupingModels.php`, one Pest benchmark, and
-`scripts/live-grouping-screen`. Run the command without arguments to inspect the exact current
-proposal without network access. Live mode preflights the current catalog and key allowance, then
+`scripts/live-grouping-screen`. Select `--stage=development-repeats` or `--stage=frozen-holdout` to
+inspect that exact proposal without network access. Live mode preflights the current catalog and key allowance, then
 runs and validates one model/fixture trial at a time; it never silently changes the documented matrix.
 Each trial verifies the synthetic PDF identity before egress and audits OpenRouter's generation
 metadata after inference for the expected model, provider, observed data-region value, standard

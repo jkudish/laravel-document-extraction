@@ -115,6 +115,23 @@ function liveGroupingAuthorizationPath(): string
     return sys_get_temp_dir().'/lde-live-grouping-screen-test-'.getmypid().'.json';
 }
 
+/** @return list<string> */
+function liveGroupingStageTrialIds(string $stageId): array
+{
+    $stage = LiveGroupingModels::stage($stageId);
+    $trialIds = [];
+
+    foreach (LiveGroupingModels::survivors() as $model) {
+        foreach ($stage['fixture_ids'] as $fixtureId) {
+            foreach (range(1, $stage['repetitions']) as $repetition) {
+                $trialIds[] = $model['id'].'|'.$fixtureId.'|repeat-'.$repetition;
+            }
+        }
+    }
+
+    return $trialIds;
+}
+
 /** @param array{id: string, canonical: string, endpoint: string, route: array{provider_name: string, data_region: string, service_tier: ?string}, zdr: bool, reasoning: bool, output_parameter: string, max_price: array{prompt: float, completion: float, image?: float}} $model
  * @param  array<string, mixed>  $keyOverrides
  * @param  array<string, mixed>  $endpointOverrides
@@ -268,7 +285,7 @@ function liveGroupingApis(array $models, Closure $remaining, array $endpointOver
     };
 }
 
-it('freezes the canary history and the four-model three-fixture prompt coverage screen', function (): void {
+it('freezes the three-finalist development-repeat and holdout matrices', function (): void {
     $models = LiveGroupingModels::all();
     $ids = array_column($models, 'id');
     $luna = LiveGroupingModels::find('openai/gpt-5.6-luna');
@@ -281,21 +298,33 @@ it('freezes the canary history and the four-model three-fixture prompt coverage 
         )
         ->and(array_column(LiveGroupingModels::survivors(), 'id'))->toBe(LiveGroupingModels::SURVIVOR_IDS)
         ->and(LiveGroupingModels::SURVIVOR_IDS)->toBe([
-            'qwen/qwen2.5-vl-72b-instruct',
             'google/gemini-2.5-flash',
             'openai/gpt-5.6-luna',
             'anthropic/claude-haiku-4.5',
         ])
-        ->and(LiveGroupingModels::configurations())->toHaveCount(4)
+        ->and(LiveGroupingModels::configurations())->toHaveCount(3)
         ->and($luna['endpoint'])->toBe('azure/eu')
         ->and($luna['route']['data_region'])->toBe('global')
         ->and(LiveGroupingModels::fixtureIds())->toBe([
             'single-three-page-document',
             'three-single-page-documents',
+            'blank-separator',
+            'mixed-document-lengths',
             'non-financial-documents',
         ])
         ->not->toContain('same-issuer-invoices', 'ambiguous-orphan', 'scan-like-raster')
-        ->and(LiveGroupingModels::MAX_SPEND_USD)->toBe(4.0);
+        ->and(LiveGroupingModels::stage(LiveGroupingModels::DEVELOPMENT_STAGE))->toMatchArray([
+            'fixture_ids' => LiveGroupingModels::FIXTURE_IDS,
+            'fixture_split' => 'prompt-example',
+            'repetitions' => 2,
+            'max_spend_usd' => 10.0,
+        ])
+        ->and(LiveGroupingModels::stage(LiveGroupingModels::HOLDOUT_STAGE))->toMatchArray([
+            'fixture_ids' => LiveGroupingModels::HOLDOUT_FIXTURE_IDS,
+            'fixture_split' => 'holdout',
+            'repetitions' => 3,
+            'max_spend_usd' => 10.0,
+        ]);
 
     foreach ($models as $model) {
         $options = LiveGroupingModels::options($model)['openrouter'];
@@ -378,6 +407,7 @@ it('defaults to a network-free dry run', function (): void {
             throw new RuntimeException('Dry-run should not fetch.');
         },
         authorizationPath: liveGroupingAuthorizationPath(),
+        stage: LiveGroupingModels::DEVELOPMENT_STAGE,
     );
     $result = $screen->execute([], []);
 
@@ -385,10 +415,161 @@ it('defaults to a network-free dry run', function (): void {
         ->and($result['runs'])->toBe([])
         ->and($result['output'])->toContain(
             'DRY RUN — no provider calls made',
-            'Calls: 12 paid detector calls',
-            'Logical spend cap: $4.00 USD',
+            'Stage: development-repeats',
+            'Repetitions: 2 per model/fixture pair',
+            'Calls: 30 paid detector calls',
+            'Logical spend cap: $10.00 USD',
         )
         ->and($fetches)->toBe(0);
+});
+
+it('renders the frozen holdout as exactly twenty-seven network-free calls', function (): void {
+    $fetches = 0;
+    $screen = new LiveGroupingScreen(
+        dirname(__DIR__, 2),
+        new InertLiveGroupingRunner,
+        function () use (&$fetches): array {
+            $fetches++;
+
+            throw new RuntimeException('Dry-run should not fetch.');
+        },
+        authorizationPath: liveGroupingAuthorizationPath(),
+        stage: LiveGroupingModels::HOLDOUT_STAGE,
+    );
+
+    expect($screen->execute([], [])['output'])->toContain(
+        'Stage: frozen-holdout',
+        'Repetitions: 3 per model/fixture pair',
+        'Calls: 27 paid detector calls',
+        'same-issuer-invoices',
+        'ambiguous-orphan',
+        'scan-like-raster',
+    )->and($fetches)->toBe(0);
+});
+
+it('refuses the frozen holdout before network access without a completed development ledger', function (): void {
+    $fetches = 0;
+    $missingPrerequisite = sys_get_temp_dir().'/lde-missing-development-ledger-'.getmypid().'.json';
+    $screen = new LiveGroupingScreen(
+        dirname(__DIR__, 2),
+        new InertLiveGroupingRunner,
+        function () use (&$fetches): array {
+            $fetches++;
+
+            return [];
+        },
+        authorizationPath: liveGroupingAuthorizationPath(),
+        stage: LiveGroupingModels::HOLDOUT_STAGE,
+        prerequisiteAuthorizationPath: $missingPrerequisite,
+    );
+
+    expect(fn () => $screen->execute([
+        '--live',
+        '--confirm='.LiveGroupingModels::HOLDOUT_CONFIRMATION,
+    ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+        ->toThrow(RuntimeException::class, 'requires a completed development-repeat authorization ledger')
+        ->and($fetches)->toBe(0);
+});
+
+it('requires the exact completed development matrix and frozen contract before holdout network access', function (string $fingerprint, bool $complete): void {
+    $root = dirname(__DIR__, 2);
+    $prerequisite = sys_get_temp_dir().'/lde-development-ledger-'.getmypid().'.json';
+    $development = new LiveGroupingScreen(
+        $root,
+        new InertLiveGroupingRunner,
+        authorizationPath: $prerequisite,
+        stage: LiveGroupingModels::DEVELOPMENT_STAGE,
+    );
+    $trialIds = liveGroupingStageTrialIds(LiveGroupingModels::DEVELOPMENT_STAGE);
+    file_put_contents($prerequisite, json_encode([
+        'schema_version' => 3,
+        'confirmation' => LiveGroupingModels::CONFIRMATION,
+        'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
+        'contract_fingerprint' => $fingerprint === 'current'
+            ? $development->contractFingerprint()
+            : 'sha256:'.str_repeat('0', 64),
+        'trial_ids' => $trialIds,
+        'initial_remaining' => '50',
+        'recorded_spend' => '0.1',
+        'admission_spend' => '0.1',
+        'completed_trials' => $complete ? $trialIds : array_slice($trialIds, 0, -1),
+        'pending' => null,
+    ], JSON_THROW_ON_ERROR));
+    $fetches = 0;
+    $holdout = new LiveGroupingScreen(
+        $root,
+        new InertLiveGroupingRunner,
+        function () use (&$fetches): array {
+            $fetches++;
+
+            return [];
+        },
+        authorizationPath: liveGroupingAuthorizationPath(),
+        stage: LiveGroupingModels::HOLDOUT_STAGE,
+        prerequisiteAuthorizationPath: $prerequisite,
+    );
+
+    try {
+        expect(fn () => $holdout->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::HOLDOUT_CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+            ->toThrow(RuntimeException::class, 'prerequisite is incomplete or its configuration is no longer frozen')
+            ->and($fetches)->toBe(0);
+    } finally {
+        unlink($prerequisite);
+    }
+})->with([
+    'incomplete matrix' => ['current', false],
+    'stale contract' => ['stale', true],
+]);
+
+it('accepts an exact completed frozen development ledger before holdout preflight', function (): void {
+    $root = dirname(__DIR__, 2);
+    $prerequisite = sys_get_temp_dir().'/lde-development-ledger-'.getmypid().'.json';
+    $development = new LiveGroupingScreen(
+        $root,
+        new InertLiveGroupingRunner,
+        authorizationPath: $prerequisite,
+        stage: LiveGroupingModels::DEVELOPMENT_STAGE,
+    );
+    $trialIds = liveGroupingStageTrialIds(LiveGroupingModels::DEVELOPMENT_STAGE);
+    file_put_contents($prerequisite, json_encode([
+        'schema_version' => 3,
+        'confirmation' => LiveGroupingModels::CONFIRMATION,
+        'key_fingerprint' => hash('sha256', 'synthetic-openrouter-canary'),
+        'contract_fingerprint' => $development->contractFingerprint(),
+        'trial_ids' => $trialIds,
+        'initial_remaining' => '50',
+        'recorded_spend' => '0.1',
+        'admission_spend' => '0.1',
+        'completed_trials' => $trialIds,
+        'pending' => null,
+    ], JSON_THROW_ON_ERROR));
+    $fetches = 0;
+    $holdout = new LiveGroupingScreen(
+        $root,
+        new InertLiveGroupingRunner,
+        function () use (&$fetches): array {
+            $fetches++;
+
+            return [];
+        },
+        authorizationPath: liveGroupingAuthorizationPath(),
+        stage: LiveGroupingModels::HOLDOUT_STAGE,
+        prerequisiteAuthorizationPath: $prerequisite,
+    );
+
+    try {
+        expect(fn () => $holdout->execute([
+            '--live',
+            '--confirm='.LiveGroupingModels::HOLDOUT_CONFIRMATION,
+        ], ['OPENROUTER_API_KEY' => 'synthetic-openrouter-canary']))
+            ->toThrow(RuntimeException::class, 'OpenRouter key data must be an object')
+            ->and($fetches)->toBe(1);
+    } finally {
+        unlink($prerequisite);
+    }
 });
 
 it('refuses live execution without the exact confirmation or key', function (array $arguments, array $environment): void {
@@ -498,7 +679,8 @@ it('refuses a call whose catalog-derived reservation cannot fit the software bud
         liveGroupingApi($model, endpointOverrides: ['pricing' => [
             'prompt' => '0.000000104',
             'completion' => '0.000000416',
-            'input_cache_write_1h' => '0.000006',
+            'image' => '0.0000003',
+            'input_cache_write_1h' => '0.000011',
         ]]),
         [$model],
         offlineInference: true,
@@ -514,7 +696,7 @@ it('refuses a call whose catalog-derived reservation cannot fit the software bud
 });
 
 it('rejects a route that is no longer ZDR before the inference runner', function (): void {
-    $model = LiveGroupingModels::find('qwen/qwen2.5-vl-72b-instruct');
+    $model = LiveGroupingModels::find('openai/gpt-5.6-luna');
     $runner = new InertLiveGroupingRunner;
     $screen = new LiveGroupingScreen(
         dirname(__DIR__, 2),
@@ -734,7 +916,7 @@ it("does not attribute a delayed allowance change to a later call's reservation"
 it('retains the full reservation when a successful call has no authoritative cost', function (): void {
     $root = dirname(__DIR__, 2);
     $models = LiveGroupingModels::survivors();
-    [$first, $second] = [$models[0], $models[2]];
+    [$first, $second] = [$models[1], $models[2]];
     $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
     $runner = new UnavailableLiveCostRunner($root);
     $screen = new LiveGroupingScreen(
@@ -747,7 +929,7 @@ it('retains the full reservation when a successful call has no authoritative cos
             ['pricing' => [
                 'prompt' => '0.000000104',
                 'completion' => '0.000000416',
-                'input_cache_write_1h' => '0.0000018',
+                'input_cache_write_1h' => '0.0000049',
             ]],
         ),
         [$first, $second],
@@ -773,7 +955,7 @@ it('retains the full reservation when a successful call has no authoritative cos
             throw new RuntimeException('The authorization ledger did not decode to an object.');
         }
 
-        expect(BigDecimal::of($authorization['admission_spend'])->isEqualTo('3.600425984'))->toBeTrue()
+        expect(BigDecimal::of($authorization['admission_spend'])->isEqualTo('9.800425984'))->toBeTrue()
             ->and($authorization['completed_trials'] ?? null)->toBe([
                 $first['id'].'|'.LiveGroupingModels::fixtureIds()[0],
                 $first['id'].'|'.LiveGroupingModels::fixtureIds()[1],
@@ -796,7 +978,7 @@ it('retains the full reservation when a successful call has no authoritative cos
 it('retains the full reservation for a technical failure with no observed charge', function (): void {
     $root = dirname(__DIR__, 2);
     $models = LiveGroupingModels::survivors();
-    [$first, $second] = [$models[0], $models[2]];
+    [$first, $second] = [$models[1], $models[2]];
     $before = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
     $runner = new UnavailableLiveCostRunner($root, technicalFailure: true);
     $screen = new LiveGroupingScreen(
@@ -808,7 +990,7 @@ it('retains the full reservation for a technical failure with no observed charge
             ['pricing' => [
                 'prompt' => '0.000000104',
                 'completion' => '0.000000416',
-                'input_cache_write_1h' => '0.0000018',
+                'input_cache_write_1h' => '0.0000049',
             ]],
         ),
         [$first, $second],
@@ -835,7 +1017,7 @@ it('retains the full reservation for a technical failure with no observed charge
         }
 
         expect($authorization['recorded_spend'] ?? null)->toBe('0')
-            ->and(BigDecimal::of($authorization['admission_spend'])->isEqualTo('3.600425984'))->toBeTrue();
+            ->and(BigDecimal::of($authorization['admission_spend'])->isEqualTo('9.800425984'))->toBeTrue();
     } finally {
         $after = glob($root.'/storage/app/ai-evals/runs/*', GLOB_ONLYDIR) ?: [];
 
@@ -852,7 +1034,7 @@ it('retains the full reservation for a technical failure with no observed charge
 it('preserves admission reservations across a resumed run', function (): void {
     $root = dirname(__DIR__, 2);
     $models = LiveGroupingModels::survivors();
-    [$first, $second] = [$models[0], $models[2]];
+    [$first, $second] = [$models[1], $models[2]];
     $trialIds = collect([$first, $second])
         ->flatMap(static fn (array $model): array => array_map(
             static fn (string $fixture): string => $model['id'].'|'.$fixture,
@@ -870,7 +1052,7 @@ it('preserves admission reservations across a resumed run', function (): void {
             ['pricing' => [
                 'prompt' => '0.000000104',
                 'completion' => '0.000000416',
-                'input_cache_write_1h' => '0.0000018',
+                'input_cache_write_1h' => '0.0000049',
             ]],
         ),
         [$first, $second],
@@ -885,7 +1067,7 @@ it('preserves admission reservations across a resumed run', function (): void {
         'trial_ids' => $trialIds,
         'initial_remaining' => '50',
         'recorded_spend' => '0.001',
-        'admission_spend' => '3.600425984',
+        'admission_spend' => '9.800425984',
         'completed_trials' => array_slice($trialIds, 0, 2),
         'pending' => null,
     ], JSON_THROW_ON_ERROR));

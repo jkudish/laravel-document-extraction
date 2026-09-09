@@ -27,6 +27,12 @@ use Laravel\Ai\Responses\StructuredTextResponse;
 
 uses(TestCase::class);
 
+$liveGroupingStage = LiveGroupingModels::stage(
+    (($stage = getenv('LDE_LIVE_GROUPING_STAGE')) !== false && $stage !== '')
+        ? $stage
+        : LiveGroupingModels::DEVELOPMENT_STAGE,
+);
+
 beforeEach(function (): void {
     $generationLookups = 0;
 
@@ -174,7 +180,9 @@ afterEach(function (): void {
         ->and(config('extraction.detection.timeout'))->toBe(32)
         ->and(config('extraction.detection.options'))->toBe(['openai' => ['temperature' => 0.1]]);
 
-    if (getenv('LDE_LIVE_GROUPING_CONFIRM') === LiveGroupingModels::CONFIRMATION) {
+    $stage = liveGroupingStage();
+
+    if (getenv('LDE_LIVE_GROUPING_CONFIRM') === $stage['confirmation']) {
         $completions = Http::recorded(
             static fn (Request $request): bool => $request->url() === 'https://openrouter.ai/api/v1/chat/completions',
         );
@@ -194,8 +202,10 @@ afterEach(function (): void {
     }
 });
 
-benchmark(LiveGroupingModels::BENCHMARK, function (): array {
-    expect(getenv('LDE_LIVE_GROUPING_CONFIRM'))->toBe(LiveGroupingModels::CONFIRMATION);
+benchmark($liveGroupingStage['benchmark'], function (): array {
+    $stage = liveGroupingStage();
+
+    expect(getenv('LDE_LIVE_GROUPING_CONFIRM'))->toBe($stage['confirmation']);
 
     $fixture = liveGroupingFixture();
     $path = GroupingBenchmarkCorpus::verifiedFixturePath($fixture);
@@ -204,8 +214,8 @@ benchmark(LiveGroupingModels::BENCHMARK, function (): array {
         ->schema(fn (JsonSchema $schema): array => ['value' => $schema->string()->required()]);
     $configuration = $pending->configuration();
 
-    expect($fixture['split'])->toBe('prompt-example')
-        ->and(LiveGroupingModels::fixtureIds())->toContain($fixture['id'])
+    expect($fixture['split'])->toBe($stage['fixture_split'])
+        ->and($stage['fixture_ids'])->toContain($fixture['id'])
         ->and($configuration['provider'])->toBe('openrouter')
         ->and($configuration['detection']['provider'])->toBe('openrouter');
 
@@ -227,10 +237,12 @@ benchmark(LiveGroupingModels::BENCHMARK, function (): array {
 ))
     ->context([
         ...GroupingBenchmarkCorpus::scorecardContext(),
-        'screen' => LiveGroupingModels::SCREEN,
+        'stage' => $liveGroupingStage['id'],
+        'screen' => $liveGroupingStage['screen'],
         'fixture' => (($fixtureId = getenv('LDE_LIVE_GROUPING_FIXTURE')) !== false && $fixtureId !== '') ? $fixtureId : null,
-        'paid_detector_calls' => count(LiveGroupingModels::survivors()) * count(LiveGroupingModels::fixtureIds()),
-        'max_spend_usd' => LiveGroupingModels::MAX_SPEND_USD,
+        'repetition' => (($repetition = getenv('LDE_LIVE_GROUPING_REPETITION')) !== false && ctype_digit($repetition)) ? (int) $repetition : null,
+        'paid_detector_calls' => count(LiveGroupingModels::survivors()) * count($liveGroupingStage['fixture_ids']) * $liveGroupingStage['repetitions'],
+        'max_spend_usd' => $liveGroupingStage['max_spend_usd'],
     ])
     ->evaluate(function (mixed $output): void {
         $fixture = liveGroupingFixture();
@@ -262,14 +274,21 @@ benchmark(LiveGroupingModels::BENCHMARK, function (): array {
 /** @return array{id: string, file: string, split: string, description: string, page_count: int, sha256: string, size: int, content: string, expected: array{groups: list<list<int>>, unassigned_pages: list<int>, ambiguous_pages: list<int>, unassigned_reasons: array<int, string>}, runtime: array<string, string>} */
 function liveGroupingFixture(): array
 {
+    $stage = liveGroupingStage();
     $fixtureId = getenv('LDE_LIVE_GROUPING_FIXTURE');
+    $repetition = getenv('LDE_LIVE_GROUPING_REPETITION');
 
-    if (! is_string($fixtureId) || ! in_array($fixtureId, LiveGroupingModels::fixtureIds(), true)) {
+    if (! is_string($fixtureId)
+        || ! in_array($fixtureId, $stage['fixture_ids'], true)
+        || ! is_string($repetition)
+        || ! ctype_digit($repetition)
+        || (int) $repetition < 1
+        || (int) $repetition > $stage['repetitions']) {
         throw new RuntimeException('The approved live grouping fixture was not selected.');
     }
 
     foreach (GroupingBenchmarkCorpus::fixtures() as [$fixture]) {
-        if ($fixture['id'] === $fixtureId && $fixture['split'] === 'prompt-example') {
+        if ($fixture['id'] === $fixtureId && $fixture['split'] === $stage['fixture_split']) {
             $expectedHash = getenv('LDE_LIVE_GROUPING_FIXTURE_SHA256');
             $expectedSize = getenv('LDE_LIVE_GROUPING_FIXTURE_SIZE');
 
@@ -288,6 +307,31 @@ function liveGroupingFixture(): array
     }
 
     throw new RuntimeException('The approved live grouping fixture was not found.');
+}
+
+/**
+ * @return array{
+ *     id: string,
+ *     benchmark: string,
+ *     confirmation: string,
+ *     screen: string,
+ *     fixture_ids: list<string>,
+ *     fixture_split: string,
+ *     repetitions: int,
+ *     max_spend_usd: float,
+ *     authorization_file: string,
+ *     prerequisite_authorization_file: ?string
+ * }
+ */
+function liveGroupingStage(): array
+{
+    $stage = getenv('LDE_LIVE_GROUPING_STAGE');
+
+    if ($stage === false || $stage === '') {
+        return LiveGroupingModels::stage(LiveGroupingModels::DEVELOPMENT_STAGE);
+    }
+
+    return LiveGroupingModels::stage($stage);
 }
 
 /** @return array{model: string, provider_name: string, data_region: string, service_tier: ?string, provider_attempts: ?int, fallbacks_disabled: true} */
