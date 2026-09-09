@@ -82,7 +82,7 @@ final readonly class ScopedTextGateway implements StepTextGateway
         );
         $options = $options === null ? null : new FrozenGenerationOptions(
             $options,
-            $options->providerOptions($provider->driver() === 'openai-compatible' ? $provider->name() : $provider->driver()) ?? [],
+            $options->providerOptions($provider->name()) ?? [],
         );
         $compiled = $schema === null ? null : CompiledSchema::fromNative($schema);
         $attempt = $scope->session->beginAttempt();

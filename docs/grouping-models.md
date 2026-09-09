@@ -209,8 +209,11 @@ its `mixed-document-lengths` call remains a technical failure excluded from qual
 the development leader: it ties the other fully scored routes on observed deterministic quality while
 averaging 1.615s and costing $0.002535600 across five calls, versus Luna at 2.199s/$0.015603555 and
 Haiku at 3.009s/$0.035994000. Qwen averaged 3.758s across five attempted calls; its four
-provider-reported costs sum to $0.035293400. These are single samples per model/fixture, so repeats
-remain necessary before a holdout or production-default decision.
+provider-reported costs sum to $0.035293400. The two gates cost $0.089426555 in total. The maintained
+development recommendation is Gemini 2.5 Flash first, Luna as its first native-failover alternative,
+and Haiku second. Package defaults remain vendor-neutral and consumers own this order through
+published configuration. These are single samples per model/fixture, so repeats remain necessary
+before a holdout or production-default decision.
 
 ### Requested-name disposition
 
@@ -272,10 +275,11 @@ Run the evaluation in gates:
 
 The compatibility canary removed technical and clearly unusable candidates, and the broad and
 clarified-prompt screens supply the development evidence above. Gemini 2.5 Flash is the leading default
-candidate on measured development quality, latency, and cost. Retain Luna and Haiku as finalist
-alternatives for provider diversity; demote Qwen2.5 VL unless its older-vision diversity justifies its
-incomplete control coverage and higher cost. Llama remains the first reserve. Any additional calls
-remain separately gated.
+candidate on measured development quality, latency, and cost. The maintained development order is
+Gemini first, Luna as the first native-failover alternative, and Haiku second; package defaults remain
+vendor-neutral and consumers configure that order. Demote Qwen2.5 VL unless its older-vision diversity
+justifies its incomplete control coverage and higher cost. Llama remains the first reserve. Any
+additional calls remain separately gated.
 
 The executable screen is deliberately smaller than a manifest system: the test-owned model and
 fixture lists in `tests/Support/LiveGroupingModels.php`, one Pest benchmark, and

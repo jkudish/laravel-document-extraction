@@ -491,6 +491,63 @@ it('uses only native failover for failoverable provider exceptions', function ()
         ->and($result->calls->pluck('outcome')->all())->toBe(['failed', 'succeeded']);
 });
 
+it('keeps options distinct for failover aliases that share a provider driver', function (): void {
+    config()->set('ai.providers.grouping-gemini', [
+        'driver' => 'openrouter',
+        'key' => 'offline-test-key',
+    ]);
+    config()->set('ai.providers.grouping-luna', [
+        'driver' => 'openrouter',
+        'key' => 'offline-test-key',
+    ]);
+    config()->set('ai.providers.grouping-haiku', [
+        'driver' => 'openrouter',
+        'key' => 'offline-test-key',
+    ]);
+    config()->set('extraction.model', null);
+    config()->set('extraction.options', [
+        'grouping-gemini' => ['provider' => ['only' => ['google-vertex/global']]],
+        'grouping-luna' => ['provider' => ['only' => ['azure/eu']]],
+        'grouping-haiku' => ['provider' => ['only' => ['amazon-bedrock/global']]],
+    ]);
+    $capture = captureNativeGateway();
+    $attempt = 0;
+    InlineSchemaAgent::fake(function () use (&$attempt): array {
+        $provider = match ($attempt++) {
+            0 => 'grouping-gemini',
+            1 => 'grouping-luna',
+            default => null,
+        };
+
+        if ($provider !== null) {
+            throw ProviderConnectionException::forProvider($provider);
+        }
+
+        return ['value' => 'fallback'];
+    })->preventStrayPrompts();
+
+    $result = app(DocumentExtraction::class)
+        ->fromString('source', 'text/plain')
+        ->schema(fn (JsonSchema $schema): array => ['value' => $schema->string()->required()])
+        ->extract([
+            'grouping-gemini' => 'google/gemini-2.5-flash',
+            'grouping-luna' => 'openai/gpt-5.6-luna',
+            'grouping-haiku' => 'anthropic/claude-haiku-4.5',
+        ]);
+
+    expect($result->data)->toBe(['value' => 'fallback'])
+        ->and(array_column($capture->requests, 'provider'))->toBe([
+            'grouping-gemini',
+            'grouping-luna',
+            'grouping-haiku',
+        ])
+        ->and(array_column($capture->requests, 'provider_options'))->toBe([
+            ['provider' => ['only' => ['google-vertex/global']]],
+            ['provider' => ['only' => ['azure/eu']]],
+            ['provider' => ['only' => ['amazon-bedrock/global']]],
+        ]);
+});
+
 it('reuses each dynamically generated dispatch schema for that attempt validation', function (): void {
     config()->set('extraction.model', null);
     $schemaCalls = 0;
