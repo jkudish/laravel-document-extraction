@@ -181,13 +181,36 @@ routes rather than turning its technical failure into a quality loss.
 
 ## Prompt development coverage screen
 
-The next authorized gate keeps the clarified prompt and all other runtime/model settings fixed while
+The completed coverage gate kept the clarified prompt and all other runtime/model settings fixed while
 covering the three development fixtures not used by the prompt canary:
 `single-three-page-document`, `three-single-page-documents`, and `non-financial-documents`. The same
-four models each run once, for 12 unique detector calls under a fresh $4 software cap and ignored v4
-ledger. Grouped extraction and OCR remain simulated. These fixtures were evaluated under the prior
+four models each ran once, for 12 unique detector calls under a fresh $4 software cap and ignored v4
+ledger. Grouped extraction and OCR remained simulated. These fixtures were evaluated under the prior
 prompt, but they are new pairs for this prompt fingerprint and are not pooled with prior-contract
-results. No holdout or same-contract repeat is included.
+results. No holdout or same-contract repeat was included.
+
+Every call produced a validated quality scorecard and passed all nine grouping checks. The runner
+reconciled $0.051611365 of provider-reported cost; the key allowance changed by $0.043508365 because
+the $0.008103 difference exactly matched the final Haiku charge, consistent with that charge not yet
+appearing in the allowance snapshot. Since every call had authoritative provider cost, recorded and
+admission spend both remain $0.051611365 rather than substituting the delayed allowance value.
+
+| Model @ pinned endpoint | All-nine passes / scored | Average detector latency across three calls | Provider-reported cost |
+| --- | ---: | ---: | ---: |
+| `qwen/qwen2.5-vl-72b-instruct @ parasail/fp8` | 3 / 3 | 4.152s | $0.024283400 |
+| `google/gemini-2.5-flash @ google-vertex/global` | 3 / 3 | 1.536s | $0.001247100 |
+| `openai/gpt-5.6-luna @ azure/eu` | 3 / 3 | 2.179s | $0.007839865 |
+| `anthropic/claude-haiku-4.5 @ amazon-bedrock/global` | 3 / 3 | 3.000s | $0.018241000 |
+| **Total** | **12 / 12** | — | **$0.051611365** |
+
+Across both clarified-prompt gates, Gemini 2.5 Flash, Luna, and Haiku each passed all nine checks on
+all five development fixtures. Qwen2.5 VL passed all four fixtures for which quality evidence exists;
+its `mixed-document-lengths` call remains a technical failure excluded from quality claims. Gemini is
+the development leader: it ties the other fully scored routes on observed deterministic quality while
+averaging 1.615s and costing $0.002535600 across five calls, versus Luna at 2.199s/$0.015603555 and
+Haiku at 3.009s/$0.035994000. Qwen averaged 3.758s across five attempted calls; its four
+provider-reported costs sum to $0.035293400. These are single samples per model/fixture, so repeats
+remain necessary before a holdout or production-default decision.
 
 ### Requested-name disposition
 
@@ -206,9 +229,9 @@ results. No holdout or same-contract repeat is included.
 
 ## Cost-controlled evaluation design
 
-The 15-call compatibility canary, 28-call broad development screen, and eight-call prompt clarification
-canary are complete. The 12-call prompt development coverage screen is separately authorized; further
-repeats and holdout remain gated.
+The 15-call compatibility canary, 28-call broad development screen, eight-call prompt clarification
+canary, and 12-call prompt development coverage screen are complete. Further repeats and holdout remain
+gated.
 Use the installed native package path and published evaluation dependencies:
 
 - Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
@@ -239,19 +262,20 @@ Run the evaluation in gates:
 4. **Prompt clarification canary (complete):** four finalists ran once on `blank-separator` and one
    previously clean development control after the generic blank-page instruction change: eight calls,
    seven exact scorecards, one technical failure, no holdout, and no pooling with prior-prompt trials.
-5. **Prompt development coverage (authorized):** run the same four finalists once across the three
-   remaining development fixtures with every setting fixed: 12 calls, no holdout, and no same-contract
-   repeats.
+5. **Prompt development coverage (complete):** the same four finalists ran once across the three
+   remaining development fixtures with every setting fixed: 12 exact scorecards, no holdout, and no
+   same-contract repeats.
 6. **Development finalists:** use the coverage outcome to add separately authorized repeats and reach
    at least three trials per finalist/development bundle.
 7. **Frozen holdout:** freeze prompt, schema, rendering, model, full endpoint slug, routing, reasoning,
    and scoring before at least three repeats on each held-out bundle. Never tune on holdout outcomes.
 
-The compatibility canary removed technical and clearly unusable candidates, and the broad screen
-supplies the development evidence above. The prompt canary supports retaining Haiku, Luna, Gemini 2.5
-Flash, and Qwen2.5 VL while ranking the three fully scored routes ahead of Qwen's incomplete control
-coverage. Llama is the first reserve; Qwen3 VL needs fresh quality evidence before promotion. Any
-calls beyond the authorized 12 remain separately gated.
+The compatibility canary removed technical and clearly unusable candidates, and the broad and
+clarified-prompt screens supply the development evidence above. Gemini 2.5 Flash is the leading default
+candidate on measured development quality, latency, and cost. Retain Luna and Haiku as finalist
+alternatives for provider diversity; demote Qwen2.5 VL unless its older-vision diversity justifies its
+incomplete control coverage and higher cost. Llama remains the first reserve. Any additional calls
+remain separately gated.
 
 The executable screen is deliberately smaller than a manifest system: the test-owned model and
 fixture lists in `tests/Support/LiveGroupingModels.php`, one Pest benchmark, and

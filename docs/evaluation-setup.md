@@ -212,8 +212,10 @@ four finalists × `blank-separator` and `mixed-document-lengths`, used an ignore
 only the detector instructions. It completed all eight calls with seven all-nine quality scorecards,
 one bounded technical failure, $0.037815190 of provider-reported spend, and a $0.140727190 conservative
 admission total. The v3 ledger is fully consumed and cannot repeat the matrix. Results and their limits
-are summarized in [`grouping-models.md`](grouping-models.md). The current coverage screen has fresh
-authorization for the same four models × `single-three-page-document`,
-`three-single-page-documents`, and `non-financial-documents`: 12 unique calls under a $4 software cap,
-using an ignored v4 ledger with no prompt or model-setting change. Any calls beyond this matrix or any
-holdout run require new explicit authorization.
+are summarized in [`grouping-models.md`](grouping-models.md). The coverage screen then ran the same four
+models × `single-three-page-document`, `three-single-page-documents`, and
+`non-financial-documents`: 12 unique calls under a $4 software cap, using an ignored v4 ledger with no
+prompt or model-setting change. All 12 passed all nine quality checks. Provider-reported and admission
+spend were $0.051611365; the delayed key-allowance snapshot changed by $0.043508365. The v4 ledger is
+fully consumed and cannot repeat the matrix. Any additional calls or any holdout run require new
+explicit authorization.
