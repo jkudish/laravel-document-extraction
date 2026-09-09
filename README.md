@@ -72,11 +72,11 @@ method/attribute > Laravel AI default. The pending request snapshots these value
 Laravel's global configuration. A configured provider array is passed to Laravel AI's native
 failover unchanged; models belong in its provider map and cannot be combined with a separate model.
 
-The package intentionally ships without a vendor or model default. The current development evidence
-recommends Gemini 2.5 Flash for document detection, then Luna and Haiku. An application can adopt or
-replace that order entirely through published configuration. Because all three evaluated models use
-OpenRouter, define distinct Laravel AI provider aliases so each attempt keeps its own endpoint
-options:
+The package intentionally ships without a vendor or model default. The completed synthetic development
+and holdout evidence recommends Gemini 2.5 Flash for document detection, then Luna and Haiku. An
+application can adopt or replace that order entirely through published configuration. Because all
+three evaluated models use OpenRouter, define distinct Laravel AI provider aliases so each attempt
+keeps its own endpoint options:
 
 ```php
 // config/ai.php

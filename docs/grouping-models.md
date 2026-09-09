@@ -241,16 +241,35 @@ $0.107982000 and averaged 2.841s. Gemini therefore remains the development leade
 and then Haiku for provider-diverse native fallback. This is repeated development evidence, not a
 production recommendation; the package default remains vendor-neutral.
 
-The completed authenticated development ledger now permits the separately authorized frozen holdout
-after exact-target review. It uses the same three
-configurations over `same-issuer-invoices`, `ambiguous-orphan`, and `scan-like-raster`, three times
-each: 3 × 3 × 3 = 27 calls under a separate $10 cap and authenticated v6 ledger in Git administrative
-storage. The runner checks the authenticated completed development ledger, its 30 validated scorecard
-fingerprints, and the recomputed contract fingerprint before any holdout network
-access. Any change to the prompt, schemas, rendering, model/endpoint/options, scorers, fixture corpus,
-lockfile, or execution owners invalidates that prerequisite. Holdout results will be recorded without
-tuning the frozen configuration or pooling different prompt contracts. Grouped extraction and OCR
-remain simulated in both stages. No other paid calls are authorized by this plan.
+The frozen holdout then ran the same three configurations over the untouched
+`same-issuer-invoices`, `ambiguous-orphan`, and `scan-like-raster` fixtures three times each: 3 × 3 × 3
+= 27 calls under a separate $10 cap and authenticated v6 ledger in Git administrative storage. The
+runner verified the authenticated completed development ledger, its 30 validated scorecard
+fingerprints, and the unchanged development contract before network access. No prompt, schema,
+rendering, model/endpoint/options, scorer, fixture, lockfile, or execution-owner tuning occurred.
+
+All 27 holdout calls produced validated quality scorecards and passed all nine grouping checks, with
+no technical failure. Each fixture passed 9/9 across the three models and three repetitions. Every
+scorecard SHA-256 matches the completed authenticated v6 ledger evidence. Provider-reported and
+admission spend were $0.068312573. The immediate key-allowance change was $0.061726573; the
+$0.006586000 difference exactly matches the final Haiku charge and is treated as timing, not
+replacement cost evidence.
+
+| Model @ pinned endpoint | All-nine passes / scored | Average / median detector latency | Provider-reported cost |
+| --- | ---: | ---: | ---: |
+| `google/gemini-2.5-flash @ google-vertex/global` | 9 / 9 | 1.869s / 1.558s | $0.004078800 |
+| `openai/gpt-5.6-luna @ azure/eu` | 9 / 9 | 3.077s / 2.575s | $0.009375773 |
+| `anthropic/claude-haiku-4.5 @ amazon-bedrock/global` | 9 / 9 | 2.664s / 2.813s | $0.054858000 |
+| **Total** | **27 / 27** | — | **$0.068312573** |
+
+Across the full frozen finalist contract, each model passed all 24 development and holdout calls:
+three observations of each of eight fixtures. Gemini cost $0.011665600 and averaged 1.880s, Luna cost
+$0.045262910 and averaged 2.899s, and Haiku cost $0.162840000 and averaged 2.775s. Gemini therefore
+remains the leading documented detector configuration, followed by Luna and then Haiku for
+provider-diverse native fallback. Package defaults remain vendor-neutral and user-configurable. This
+synthetic result supports that configuration order; it does not establish factual accuracy on private
+production documents or remove the need for consumer-specific acceptance monitoring. Grouped
+extraction and OCR remained simulated. No additional paid calls are authorized by this plan.
 
 ### Requested-name disposition
 
@@ -270,8 +289,8 @@ remain simulated in both stages. No other paid calls are authorized by this plan
 ## Cost-controlled evaluation design
 
 The 15-call compatibility canary, 28-call broad development screen, eight-call prompt clarification
-canary, 12-call prompt development coverage screen, and exact 30-call finalist-repeat stage are
-complete. The contingent 27-call frozen holdout is authorized, subject to its exact-target review gate.
+canary, 12-call prompt development coverage screen, exact 30-call finalist-repeat stage, and 27-call
+frozen holdout are complete.
 Use the installed native package path and published evaluation dependencies:
 
 - Pest Evals (`pestphp/pest-plugin-evals`) for deterministic grouping scorers;
@@ -308,16 +327,16 @@ Run the evaluation in gates:
 6. **Development finalists (complete):** two new repetitions for Gemini 2.5 Flash, Luna, and Haiku
    over all five development bundles completed 30/30 all-nine passes, reaching three same-contract
    observations per finalist/bundle.
-7. **Frozen holdout (authorized after exact-target review):** preserve the stage-6 contract and run three repeats
-   per finalist across all three held-out bundles—27 calls. Never tune on holdout outcomes.
+7. **Frozen holdout (complete):** the unchanged stage-6 contract ran three repetitions per finalist
+   across all three held-out bundles—27/27 all-nine passes without holdout tuning.
 
 The compatibility canary removed technical and clearly unusable candidates, and the broad and
-clarified-prompt screens supply the development evidence above. Gemini 2.5 Flash is the leading default
-candidate on measured development quality, latency, and cost. The maintained development order is
-Gemini first, Luna as the first native-failover alternative, and Haiku second; package defaults remain
-vendor-neutral and consumers configure that order. Demote Qwen2.5 VL unless its older-vision diversity
-justifies its incomplete control coverage and higher cost. Llama remains the first reserve. Any
-additional calls remain separately gated.
+clarified-prompt, repeat, and holdout screens supply the synthetic evidence above. Gemini 2.5 Flash is
+the leading documented detector configuration on measured quality, latency, and cost. The maintained
+order is Gemini first, Luna as the first native-failover alternative, and Haiku second; package defaults
+remain vendor-neutral and consumers configure that order. Demote Qwen2.5 VL unless its older-vision
+diversity justifies its incomplete control coverage and higher cost. Llama remains the first reserve.
+Any additional calls require separate authorization.
 
 The executable screen is deliberately smaller than a manifest system: the test-owned model and
 fixture lists in `tests/Support/LiveGroupingModels.php`, one Pest benchmark, and

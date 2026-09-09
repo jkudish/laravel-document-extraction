@@ -150,14 +150,14 @@ scripts/live-grouping-screen --stage=frozen-holdout --live \
   --confirm=run-27-frozen-holdout-detector-calls
 ```
 
-The authorized development-repeat stage is Gemini 2.5 Flash, Luna, and Haiku × all five
+The completed development-repeat stage was Gemini 2.5 Flash, Luna, and Haiku × all five
 `prompt-example` fixtures × two new repetitions: exactly 30 detector calls in a private authenticated
-v5 ledger under Git administrative storage. The separately authorized holdout stage freezes those same
-three model configurations and runs `same-issuer-invoices`, `ambiguous-orphan`, and `scan-like-raster`
-× three repetitions: exactly 27 detector calls in a separate authenticated v6 ledger. The holdout
-refuses before network access unless the v5 ledger records the exact completed 30-call matrix and
-validated scorecard fingerprints for the same key, its authentication verifies, and its development
-contract fingerprint still matches the current prompt, schemas, rendering, routes/options, scorers,
+v5 ledger under Git administrative storage. The completed holdout stage froze those same three model
+configurations and ran `same-issuer-invoices`, `ambiguous-orphan`, and `scan-like-raster` × three
+repetitions: exactly 27 detector calls in a separate authenticated v6 ledger. The holdout refused
+before network access unless the v5 ledger recorded the exact completed 30-call matrix and
+validated scorecard fingerprints for the same key, its authentication verified, and its development
+contract fingerprint still matched the prompt, schemas, rendering, routes/options, scorers,
 fixtures, lockfile, and execution owners. Any intervening configuration change therefore requires a
 new reviewed development gate rather than silently retuning on holdout.
 
@@ -243,7 +243,8 @@ models × `single-three-page-document`, `three-single-page-documents`, and
 `non-financial-documents`: 12 unique calls under a $4 software cap, using an ignored v4 ledger with no
 prompt or model-setting change. All 12 passed all nine quality checks. Provider-reported and admission
 spend were $0.051611365; the delayed key-allowance snapshot changed by $0.043508365. The v4 ledger is
-fully consumed and cannot repeat the matrix. The 30-call development-repeat v5 stage and contingent
-27-call frozen-holdout v6 stage use the new authenticated Git-admin ledger boundary and are explicitly
-authorized under separate $10 caps. They remain
-unexecuted until their reviewed offline/preflight gates pass; no other provider calls are authorized.
+fully consumed and cannot repeat the matrix. The authenticated v5 stage then completed 30/30 all-nine
+development-repeat passes for $0.097322782 of provider-reported spend. The authenticated v6 frozen
+holdout completed 27/27 all-nine passes for $0.068312573. Both stages had zero technical failures,
+remained below their separate $10 caps, and are fully consumed. No additional provider calls are
+authorized by this evaluation plan.
