@@ -5,8 +5,9 @@ Laravel-native document text and schema extraction with provenance and AI cost t
 > [!IMPORTANT]
 > Bounded direct-text, PDF, and image preparation, native OCR, and schema-model execution are
 > implemented with per-attempt Laravel AI Pricing evidence. Opt-in page grouping is implemented;
-> benchmark integration and production hardening remain later package stages. Unavailable usage or pricing stays explicitly
-> unpriced rather than being reported as zero-cost.
+> benchmark integration and frozen synthetic grouping evaluation are complete. The 0.1 beta line is
+> intended for controlled consumer integration while production hardening continues. Unavailable
+> usage or pricing stays explicitly unpriced rather than being reported as zero-cost.
 
 ## Foundation
 
@@ -16,6 +17,24 @@ Laravel-native document text and schema extraction with provenance and AI cost t
 - Spatie PDF-to-text, Poppler, util-linux `prlimit`, and Opis JSON Schema 2
 - Orchestra Testbench, native Pest 5 with local TIA, PAO, Pint, and Larastan level 10
 - no database, queues, frontend, hosted CI, provider credentials, or live data
+
+## Installation
+
+During the private beta, configure the GitHub repository as a Composer VCS source and require the
+exact prerelease:
+
+```sh
+composer config repositories.laravel-document-extraction vcs \
+  https://github.com/jkudish/laravel-document-extraction.git
+composer require jkudish/laravel-document-extraction:0.1.0-beta.1
+php artisan vendor:publish --tag=document-extraction-config
+php artisan extraction:doctor
+```
+
+Authenticate Composer through the consuming application's normal private-GitHub mechanism; never
+commit tokens to `composer.json`. The application owns the resolved dependency graph in its own
+`composer.lock`. See [`CHANGELOG.md`](CHANGELOG.md) for beta capabilities and limits and
+[`docs/releasing.md`](docs/releasing.md) for the maintainer release procedure.
 
 ## Setup
 

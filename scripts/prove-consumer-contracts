@@ -39,10 +39,12 @@ entries="$work/archive-entries.txt"
 unzip -Z1 "$archive" | sed '/\/$/d' | sort > "$entries"
 
 for required in \
+    CHANGELOG.md \
     composer.json \
     LICENSE.md \
     README.md \
     config/extraction.php \
+    docs/releasing.md \
     docs/verification.md \
     resources/prompts/extraction.txt \
     resources/schemas/document.json \
@@ -72,7 +74,7 @@ if (! is_array($package) || ! is_string($dist)) {
 $metadata = array_intersect_key($package, array_flip([
     "name", "description", "type", "license", "require", "autoload", "extra",
 ]));
-$metadata["version"] = "1.0.0";
+$metadata["version"] = "0.1.0-beta.1";
 $metadata["dist"] = ["type" => "zip", "url" => "file://".$dist];
 
 $consumer = [
@@ -81,7 +83,7 @@ $consumer = [
     "repositories" => [["type" => "package", "package" => $metadata]],
     "require" => [
         "php" => "^8.4",
-        "jkudish/laravel-document-extraction" => "1.0.0",
+        "jkudish/laravel-document-extraction" => "0.1.0-beta.1",
         "laravel/framework" => "^13.23",
     ],
     "require-dev" => [
