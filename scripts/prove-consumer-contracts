@@ -41,8 +41,10 @@ unzip -Z1 "$archive" | sed '/\/$/d' | sort > "$entries"
 for required in \
     CHANGELOG.md \
     composer.json \
+    CONTRIBUTING.md \
     LICENSE.md \
     README.md \
+    SECURITY.md \
     config/extraction.php \
     docs/releasing.md \
     docs/verification.md \
