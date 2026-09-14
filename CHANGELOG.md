@@ -4,6 +4,17 @@ All notable changes to Laravel Document Extraction are documented here.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-14
+
+The first stable release.
+
+### Changed
+
+- Reworked the README around installation, common examples, and the public API.
+- Moved the benchmark-tested OpenRouter grouping setup into an optional model guide.
+- Added concise contributor, security, verification, and release documentation.
+- Updated the default OpenAI configuration example to GPT-5.6 Luna.
+
 ## [0.1.0-beta.1] - 2026-09-09
 
 This first beta is intended for controlled integration in Laravel 13 applications. Consumer feedback
@@ -44,5 +55,6 @@ may change the API before a stable release.
 - This synchronous package does not silently repair invalid model JSON, truncate documents, convert
   currencies, or treat unavailable usage and pricing as zero.
 
-[Unreleased]: https://github.com/jkudish/laravel-document-extraction/compare/v0.1.0-beta.1...HEAD
+[Unreleased]: https://github.com/jkudish/laravel-document-extraction/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/jkudish/laravel-document-extraction/releases/tag/v0.1.0
 [0.1.0-beta.1]: https://github.com/jkudish/laravel-document-extraction/releases/tag/v0.1.0-beta.1
