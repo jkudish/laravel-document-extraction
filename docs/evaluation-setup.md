@@ -1,250 +1,144 @@
 # Evaluation setup
 
-The evaluation stack uses Pest Evals, Pest AI Benchmarks, Laravel AI Pricing, and the document
-extraction package's normal public API. It does not introduce another runner, scoring registry,
-workflow, or model-selection layer.
+The evaluation suite uses the package's public API with:
 
-## Execution flow
+- [Pest Evals](https://github.com/pestphp/pest-plugin-evals)
+- [Pest AI Benchmarks](https://github.com/jkudish/pest-plugin-ai-benchmarks)
+- [Laravel AI Pricing](https://github.com/jkudish/laravel-ai-pricing)
 
-Pest loads both plugins through their Composer `extra.pest.plugins` declarations. An explicitly
-selected benchmark configuration temporarily maps provider, model, options, and allowlisted settings
-onto `config/extraction.php`. The benchmark then calls `Extraction`, which follows the package's normal
-preparation and native Laravel AI agent path. Benchmark middleware observes each native AI attempt;
-Laravel AI Pricing prices that observation; and the benchmark-owned `toPassBenchmarkScorer()`
-expectation delegates scoring and pass/fail behavior to Pest Evals while recording the result. The
-benchmark plugin then records the trial and report. The configuration scope restores every overridden
-key in a `finally` block.
+All are installed from tagged public releases. The project has no VCS or local path repository.
 
-Extraction result totals are output data only. They are not ingested as another benchmark pricing
-observation, so one native attempt remains one pricing observation.
+## How it works
 
-## Published dependencies
+For each benchmark trial:
 
-The development stack uses stable public releases:
+1. The benchmark applies one provider and model configuration.
+2. It calls the normal `Extraction` API.
+3. Middleware records each native AI attempt once.
+4. Laravel AI Pricing records available pricing evidence.
+5. Pest Evals scores the result.
+6. Configuration is restored.
 
-- `jkudish/pest-plugin-ai-benchmarks` `^0.1.0`
-- `pestphp/pest-plugin-evals` `^5.0.2`
-- `jkudish/laravel-ai-pricing` `^0.1.0`
+Extraction totals are output only. They are not counted again as benchmark observations.
 
-Composer resolves all three from Packagist and public GitHub distributions. The package declares no
-VCS or local path repository, and `.agents/setup` installs the locked graph without Composer or GitHub
-credentials. The benchmark records Pest Evals scorer results through its own public expectation, so
-this package does not depend on an unreleased callback branch or maintained fork.
+## Offline smoke test
 
-## Offline proof before paid evaluations
+The smoke benchmark uses Laravel AI's fake and blocks stray HTTP. It checks plugin discovery, scoring, configuration cleanup, and call counting.
 
-The committed smoke benchmark is deliberately separate from future quality/spend suites. It uses
-Laravel AI's native agent fake, blocks stray Laravel HTTP requests, keeps the pricing catalog offline,
-and exercises direct text extraction independently of document grouping.
-
-Laravel AI marks the fake attempt as simulated, so both extraction and benchmark pricing correctly
-remain unavailable and no pricing resolver is invoked for that attempt. The smoke proves plugin
-discovery, production-path extraction, one native-attempt measurement, one recorded scorer result,
-configuration restoration, and absence of duplicate cost attribution; it is not measured-live pricing
-proof. The package's separate `NativeAiPricingTest` uses a controlled native gateway to prove measured
-usage is resolved and attributed once without a network request.
-
-Run the normal behavior check without `--evals`; the benchmark must be skipped and its execution marker
-must remain absent:
+First prove that normal Pest runs skip evaluations:
 
 ```sh
 proof_dir="$(mktemp -d)"
 mkdir -p "$proof_dir/home" "$proof_dir/tmp"
+
 env -i HOME="$proof_dir/home" TMPDIR="$proof_dir/tmp" \
   PATH=/usr/local/bin:/usr/bin:/bin PAO_DISABLE=1 \
   LDE_EVAL_EXECUTION_MARKER="$proof_dir/marker" \
   vendor/bin/pest tests/Evals/ExtractionBenchmarkTest.php --no-tia
+
 test ! -e "$proof_dir/marker"
 ```
 
-Then run only the dedicated offline smoke in eval mode; it must execute both configurations, record one
-target observation and explicit scorer result per trial, and create two marker lines:
+Then run the offline evaluation:
 
 ```sh
 env -i HOME="$proof_dir/home" TMPDIR="$proof_dir/tmp" \
   PATH=/usr/local/bin:/usr/bin:/bin PAO_DISABLE=1 \
   LDE_EVAL_EXECUTION_MARKER="$proof_dir/marker" \
   vendor/bin/pest tests/Evals/ExtractionBenchmarkTest.php --no-tia --evals
+
 test "$(wc -l < "$proof_dir/marker")" -eq 2
 rm -rf "$proof_dir"
 ```
 
-Never add `--evals` to the package's normal test command. Future paid evaluations need a separately
-reviewed corpus, provider credentials, model list, spend ceiling, and explicit authorization; none are
-part of this setup proof.
+Never add `--evals` to the normal test command.
 
-## Offline document-grouping scorecard
+## Offline grouping proof
 
-`tests/Evals/GroupingBenchmarkTest.php` is the credential-free gate before any live model screen. It
-runs both an offline production configuration and an offline candidate configuration over all eight
-synthetic PDFs (33 unique physical pages) through the public `detectDocuments()` API. The native
-Laravel AI fake uses manifest truth to construct simulated gateway output, and the scorer receives the
-same truth only after extraction. Assertions prove that manifest fixture IDs, split names, and
-answer-label terminology do not enter detector or extraction prompts; attachments remain the ordinary
-normalized source pages.
-
-Nine deterministic Pest Evals scorers separately cover exact group sets, merged page pairs, split page
-pairs, selected-page coverage, ambiguity, unassigned pages, invalid structured output, invalid
-membership, and provider failure. A tenth scorer checks native attempt identity and simulated cost
-evidence. Focused mutation cases prove that each metric fails independently instead of merely
-confirming the perfect fake response.
-
-The benchmark dependency fingerprint includes the complete package `src/` tree, scorer definitions,
-all fixture bytes and truth, configuration, Composer lock, and the locked benchmark/Evals execution
-owners. Configuration fingerprints include full provider/model/timeout, endpoint, routing, fallback,
-reasoning, preparation, and resource-limit settings. PHP, Imagick, ImageMagick, and Poppler versions
-are also part of each case identity, so runtime drift invalidates replay.
-
-Run the complete proof from the repository root:
+Run:
 
 ```sh
 scripts/prove-grouping-benchmark
 ```
 
-The script uses a credential-empty child environment, first proves normal mode skips all benchmark
-trials, then executes the offline `--evals` run, applies the benchmark plugin's complete stable
-scorecard validator, and cross-checks the private replay output. For each trial, the validator requires
-one target measurement per actual native call with matching model identity and token usage,
-simulated/unavailable pricing, no duplicate ingestion of extraction totals, all ten scorer results,
-and both configurations across eight fixtures / 33 pages. It rejects a deliberately tampered
-measurement/call identity, then changes the runtime fingerprint and proves the prior run cannot be
-replayed.
+This command uses eight synthetic PDFs and no provider credentials. It checks:
 
-The expected summary is 16 trials, 50 native attempts, and 176 results (the Pest test result plus ten
-scorers per trial). Generated run evidence is removed after validation. Set
-`LDE_KEEP_GROUPING_RUN=1` only when a local reviewer needs to inspect the synthetic run files; do not
-commit `replay.private.json`, and continue to treat replay payloads as private application data for any
-future real corpus.
+- The public `detectDocuments()` flow
+- 16 trials and 50 simulated native attempts
+- Exact groups, merge errors, split errors, and page coverage
+- Ambiguous and unassigned pages
+- Invalid schema, membership, and provider responses
+- Attempt identity and simulated pricing evidence
+- Configuration cleanup
+- Replay invalidation when code, fixtures, configuration, or native tools change
+- Removal of generated replay data
 
-This dry run proves wiring, deterministic scoring, custody, configuration restoration, evidence
-cardinality, and replay invalidation. Because every AI response is simulated, it does not establish
-semantic grouping quality, transport compatibility, billable cost, or a winning model. The documented
-live screen remains gated by its explicit live opt-in and total spend/data-routing controls.
+Set `LDE_KEEP_GROUPING_RUN=1` only for local inspection. Never commit `replay.private.json`.
 
-## Live OpenRouter grouping screen
+This proof tests wiring and scoring. It does not test model quality, live transport, or billable cost.
 
-`scripts/live-grouping-screen` is the only live entry point. An explicit stage is required even for a
-dry run. Each dry run makes no network request and prints its exact finalist routes, fixture split,
-repetitions, call count, privacy settings, confirmation, and $10 logical spend cap:
+## Live OpenRouter screen
+
+`scripts/live-grouping-screen` is the only live entry point. A dry run prints the routes, fixtures, repetitions, call count, privacy settings, confirmation text, and spend cap:
 
 ```sh
 scripts/live-grouping-screen --stage=development-repeats
 scripts/live-grouping-screen --stage=frozen-holdout
 ```
 
-The live mode is intentionally narrow. It requires the exact printed confirmation and an
-`OPENROUTER_API_KEY`; do not paste the key into the command line or logs. Before inference it verifies
-that the key has a finite monthly limit no larger than $50 and at least $10 remaining. It then fetches
-the current public catalog and rejects missing models, stale endpoints, unsupported image/structured
-output, endpoint price increases, unavailable routes, or missing ZDR where the selected route requires
-it. Every selected route requires ZDR and also pins `data_collection = deny`. Before any request
-carrying page content, the parent and isolated child both
-verify that the selected regular, non-symlink PDF remains inside the synthetic fixture directory and
-matches its approved size and SHA-256.
+Live mode requires the exact printed confirmation and `OPENROUTER_API_KEY`. Never put the key on the command line or in logs.
 
-```sh
-scripts/live-grouping-screen --stage=development-repeats --live \
-  --confirm=run-30-finalist-development-repeat-detector-calls
+Before every paid call, the script checks:
 
-scripts/live-grouping-screen --stage=frozen-holdout --live \
-  --confirm=run-27-frozen-holdout-detector-calls
-```
+- The key has a finite monthly limit and enough remaining allowance
+- The model and endpoint still exist
+- Image and structured output are supported
+- Price ceilings have not increased
+- Required zero-data-retention routing is available
+- `data_collection = deny` is set
+- Provider fallback is disabled
+- The selected synthetic PDF matches its approved path, size, and SHA-256
+- The next reservation fits within the stage's software spend cap
 
-The completed development-repeat stage was Gemini 2.5 Flash, Luna, and Haiku × all five
-`prompt-example` fixtures × two new repetitions: exactly 30 detector calls in a private authenticated
-v5 ledger under Git administrative storage. The completed holdout stage froze those same three model
-configurations and ran `same-issuer-invoices`, `ambiguous-orphan`, and `scan-like-raster` × three
-repetitions: exactly 27 detector calls in a separate authenticated v6 ledger. The holdout refused
-before network access unless the v5 ledger recorded the exact completed 30-call matrix and
-validated scorecard fingerprints for the same key, its authentication verified, and its development
-contract fingerprint still matched the prompt, schemas, rendering, routes/options, scorers,
-fixtures, lockfile, and execution owners. Any intervening configuration change therefore requires a
-new reviewed development gate rather than silently retuning on holdout.
+Each trial uses the public extraction flow. Grouped extraction remains faked, so only the detector call is paid.
 
-Each model/fixture/repetition runs as one separately validated Pest benchmark trial before the next paid
-request. The parent issues a random, single-use child capability only after persisting that trial's
-reservation. The benchmark claims that capability before enabling inference; invoking the Pest file
-directly with its public stage/model/fixture selectors therefore fails before HTTP. The public
-`Extraction::fromPath(...)->detectDocuments()->schema(...)->extract()` path sends
-the detector
-through OpenRouter with the exact model and endpoint, `allow_fallbacks = false`,
-`require_parameters = true`, a 512-token output limit, reasoning disabled where supported, and the
-recorded rate ceilings. The application extraction agent remains Laravel AI-faked, so each trial has
-exactly one paid detector request even when it detects several groups. Fixture IDs, split names,
-repetition labels, and expected grouping truth are never added to the provider prompt.
-After the completion, a bounded non-inference OpenRouter generation-metadata poll must confirm the
-model, provider, observed data-region value, standard service tier, and no model router. A newly
-completed generation can briefly return 404, so the poll retries only 404 with fixed 1s, 2s, 4s, 8s,
-and 15s delays; any other error or a sixth 404 fails. When OpenRouter exposes its nullable
-provider-response chain, it must contain exactly one successful response. The trial stops if that
-independent route evidence is absent or inconsistent; fallback prevention also remains pinned in the
-request and benchmark contract. OpenRouter does not document `data_region` as endpoint geography, so
-Luna's exact request remains `azure/eu` while its separately observed value is pinned to `global`.
+After each call, the script validates:
 
-Each stage enforces its own $10 software admission budget. Before each sequential request, reconciled spend
-plus a conservative reservation derived from the selected endpoint's full context capacity, the
-highest advertised base or override input/cache/image-token rate, 512 output and reasoning tokens,
-and the selected fixture's page count must fit under $10. Unbounded applicable charges, incomplete cost
-evidence, unknown pricing units, or reservation overruns stop the run. Immediately after each request, the runner refreshes
-the key allowance and uses validated provider-reported cost when available, otherwise the observed
-allowance depletion. Delayed allowance changes are not attributed to a later call's reservation; the
-cumulative allowance change and a persistent admission total are independently checked against $10.
-The admission total uses validated provider cost when available and otherwise retains the call's full
-catalog-derived reservation, including for technical failures, so delayed charges cannot create room
-for another request.
-This is a software safeguard, not a provider-level $10 cap: it cannot undo an in-flight provider charge,
-and unrelated use of the same key is conservatively counted against this screen.
-The private authorization ledgers and authentication key live under Git administrative storage, so
-ordinary worktree cleanup and `git clean` do not reset completed authorization. They survive command
-restarts, bind the run to the current key,
-the exact ordered model/fixture/repetition matrix, $10 cap, fixture identities, route options, and hashed execution
-dependencies, and record a reservation before dispatch. Each completed trial also records the SHA-256
-of the scorecard that passed the parent validator. A keyed authentication tag rejects accidental or
-partial ledger editing. This local control trusts the current OS user and Git administrative directory;
-it is not an external append-only authorization service and does not survive a fresh clone.
-A completed prefix
-can resume, but an unresolved in-flight call or a fully consumed stage authorization cannot be run
-again. The selected route and reservation are refreshed from the catalog immediately before every
-request.
+- Requested and effective model identity
+- Provider and route evidence
+- One detector measurement
+- Unique call numbering
+- All deterministic grouping scores
+- Available provider cost or allowance change
+- Private replay identity before cleanup
 
-The nine quality scorers deliberately use a zero threshold so weak models remain recorded evidence
-instead of aborting the screen; their numeric scores—not their `passed` flag—are the quality result.
+The script stops on route drift, invalid evidence, unknown applicable pricing units, or a spend-cap overrun.
 
-After every trial, the command applies the benchmark plugin's stable scorecard validator and checks
-fixture identity, all nine deterministic grouping scores, requested/effective model evidence, one
-live detector measurement, simulated grouped extraction measurements, and unique call ordinals. The
-runner also requires every scorer to reference the same target measurements and validates the private
-replay's trial fingerprint, fixture identity, source hash, page count, and audited route before cleanup. The
-production result's integrity scorer still requires one positive provider-reported USD cost with
-matching extraction totals. When the outer benchmark observer cannot expose response pricing after a
-locally rejected structured result, the command records the immediate key-allowance change instead of
-inventing a per-call quote. A one-attempt technical failure is retained as compatibility evidence and
-may have no observed charge; it does not acquire quality scores or effective-model evidence that the
-failed response did not supply. Negative or over-reservation spend, duplicate calls, invalid
-scorecard data, route drift, or reaching the logical spend cap stops the screen before the next model.
-The command removes private replay after validation and retains only the ignored scorecard path.
-Scorecards contain bounded metrics and call evidence, not source documents, prompts, or raw provider
-responses.
+## Spend and privacy limits
 
-The normal test suite never sets the confirmation and never makes these requests. Its focused offline
-test fakes both OpenRouter preflight and inference while exercising the same command, fixture
-selection, public extraction path, scorecard validation, replay cleanup, and fail-closed cases.
+- The software cap is not a provider billing cap. It cannot undo a request in progress.
+- Failed calls may still be billable.
+- Unknown cost stays unknown, not zero.
+- Delayed allowance changes are not assigned to later calls.
+- Ledgers live under Git administrative storage and survive worktree cleanup.
+- Ledgers trust the current OS user. They are not an external authorization service.
+- Real documents, prompts, provider responses, and credentials must not enter committed scorecards.
 
-The broad-screen run completed on **2026-09-08**. It consumed all 28 unique model/fixture pairs,
-produced 20 validated grouping scorecards and eight technical-evidence scorecards, and reconciled
-$0.091173548 of provider-reported spend under its $5 software cap. Its ignored v2 ledger remains fully
-consumed and separate from this stage. The prompt canary had fresh authorization for exactly
-four finalists × `blank-separator` and `mixed-document-lengths`, used an ignored v3 ledger, and changed
-only the detector instructions. It completed all eight calls with seven all-nine quality scorecards,
-one bounded technical failure, $0.037815190 of provider-reported spend, and a $0.140727190 conservative
-admission total. The v3 ledger is fully consumed and cannot repeat the matrix. Results and their limits
-are summarized in [`grouping-models.md`](grouping-models.md). The coverage screen then ran the same four
-models × `single-three-page-document`, `three-single-page-documents`, and
-`non-financial-documents`: 12 unique calls under a $4 software cap, using an ignored v4 ledger with no
-prompt or model-setting change. All 12 passed all nine quality checks. Provider-reported and admission
-spend were $0.051611365; the delayed key-allowance snapshot changed by $0.043508365. The v4 ledger is
-fully consumed and cannot repeat the matrix. The authenticated v5 stage then completed 30/30 all-nine
-development-repeat passes for $0.097322782 of provider-reported spend. The authenticated v6 frozen
-holdout completed 27/27 all-nine passes for $0.068312573. Both stages had zero technical failures,
-remained below their separate $10 caps, and are fully consumed. No additional provider calls are
-authorized by this evaluation plan.
+## Completed evaluation
+
+The completed stages are summarized in [`grouping-models.md`](grouping-models.md).
+
+- Finalist development repeats: 30 of 30 passed all grouping checks
+- Frozen holdout: 27 of 27 passed all grouping checks
+- Both stages had no technical failures
+- Grouped extraction and OCR remained simulated
+
+No additional provider calls are authorized by this evaluation plan.
+
+Any new paid evaluation requires:
+
+- Explicit authorization
+- A reviewed model and fixture list
+- A privacy decision
+- A spend limit
+- A fresh dry run

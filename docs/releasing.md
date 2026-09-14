@@ -1,18 +1,29 @@
 # Releasing
 
-This maintainer runbook prepares and publishes immutable GitHub prereleases for the Composer library.
-It does not authorize publication. A release requires explicit approval of its exact commit and tag.
+This runbook covers GitHub and Packagist releases. It does not authorize publication, a visibility change, or Packagist submission. Get approval for each external action.
 
-## Version policy
+## Choose a version
 
-Git tags supply Composer package versions, so `composer.json` intentionally has no `version` field.
-The first prerelease is `v0.1.0-beta.1`; subsequent beta corrections increment the final number rather
-than moving or replacing a published tag.
+Git tags provide Composer versions. Do not add a `version` field to `composer.json`.
 
-## Prepare an exact candidate
+Use an immutable SemVer tag:
 
-Start only after the release-preparation PR is merged. Fetch `main`, require a clean fast-forwarded
-checkout, and capture its full commit:
+```sh
+version=v0.1.0-beta.2 # or v0.1.0
+composer_version="${version#v}"
+```
+
+Never move a published tag. Publish a new version instead.
+
+## Prepare the candidate
+
+Start after the release-preparation PR is merged. Update the changelog with:
+
+- The version and release date
+- User-facing changes
+- Important compatibility or safety limits
+
+Capture a clean `main` commit:
 
 ```sh
 git fetch origin main
@@ -22,54 +33,96 @@ test -z "$(git status --porcelain)"
 release_sha="$(git rev-parse HEAD)"
 ```
 
-Run the credential-free package, compatibility, and distribution gates:
+Before making a private repository public:
+
+- Review all reachable commits, tags, and remote branches
+- Check for credentials, private documents, evaluation evidence, and internal files
+- Remove merged remote work branches that should not become public
+- Enable GitHub private vulnerability reporting
+- Check the description, topics, license, and support links
+
+A clean current tree does not prove the repository history is safe to publish.
+
+Run the release checks:
 
 ```sh
 composer verify
 composer test:matrix
 composer test:consumer
 
-rm -rf /tmp/laravel-document-extraction-beta
-mkdir -p /tmp/laravel-document-extraction-beta
-COMPOSER_ROOT_VERSION=0.1.0-beta.1 composer archive \
+archive_dir="$(mktemp -d)"
+COMPOSER_ROOT_VERSION="$composer_version" composer archive \
   --format=zip \
-  --dir=/tmp/laravel-document-extraction-beta \
-  --file=laravel-document-extraction-0.1.0-beta.1
-sha256sum /tmp/laravel-document-extraction-beta/laravel-document-extraction-0.1.0-beta.1.zip
+  --dir="$archive_dir" \
+  --file="laravel-document-extraction-$composer_version"
+sha256sum "$archive_dir/laravel-document-extraction-$composer_version.zip"
 ```
 
-`composer test:consumer` must report a clean installed copy and verify the archive allowlist and
-denylist. The archive includes runtime code, configuration, workers, prompts, schemas, license,
-README, changelog, and public docs. It excludes tests, scripts, contributor tooling, caches, private
-evaluation evidence, and the library development `composer.lock`.
+Record:
 
-## Create the draft prerelease
+- The full commit SHA
+- Archive checksum
+- Verification results
+- Known release limits
 
-Creating a draft does not authorize publication. Bind the draft to the captured full commit and use
-the matching changelog section as its notes:
+## Draft the GitHub release
 
-```sh
-gh release create v0.1.0-beta.1 \
+Prepare notes from the matching changelog entry. Use `--prerelease` for alpha, beta, and release candidates. Omit it for stable releases.
+
+```bash
+release_notes="$archive_dir/release-notes.md"
+release_flags=(--prerelease) # use () for a stable release
+
+gh release create "$version" \
   --repo jkudish/laravel-document-extraction \
   --target "$release_sha" \
-  --title "Laravel Document Extraction v0.1.0-beta.1" \
-  --notes-file /tmp/laravel-document-extraction-beta/release-notes.md \
-  --prerelease \
+  --title "Laravel Document Extraction $version" \
+  --notes-file "$release_notes" \
+  "${release_flags[@]}" \
   --draft
 ```
 
-Before requesting publication, verify the draft target, attach the exact archive if distribution by
-GitHub asset is desired, record its SHA-256, and confirm no tag ref was created prematurely. Do not
-include private ledgers, keys, scorecards, replays, prompts, provider responses, or source documents.
+Before publication:
 
-## Publish only after approval
+- Verify the draft targets `release_sha`
+- Attach the exact archive if desired
+- Record the attachment checksum
+- Confirm the notes contain no private names or data
 
-The publication request must identify the exact commit, `v0.1.0-beta.1` tag, archive checksum,
-verification results, known beta limits, and whether Packagist publication is also requested. GitHub
-release publication, Packagist submission, repository visibility changes, and production deployment
-are separate consequences.
+## Publish the GitHub release
 
-After publication, verify that the immutable tag resolves to the approved commit and that a clean
-consumer can install the tagged version. If a published beta is wrong, publish a new beta number;
-never retarget the existing tag. Before publication, update or remove only the draft and rebuild its
-evidence from the replacement exact candidate.
+Get explicit approval for the exact commit and version. Visibility and Packagist are separate approvals.
+
+Then publish and verify the tag:
+
+```sh
+gh release edit "$version" \
+  --repo jkudish/laravel-document-extraction \
+  --draft=false
+
+test "$(git ls-remote origin "refs/tags/$version^{}" | awk '{print $1}')" = "$release_sha" \
+  || test "$(git ls-remote origin "refs/tags/$version" | awk '{print $1}')" = "$release_sha"
+```
+
+If a published release is wrong, publish a new version. Never retarget the tag.
+
+## Publish on Packagist
+
+Packagist requires a public repository.
+
+1. Confirm the approved visibility change is complete.
+2. Check the public README, license, tag, and GitHub release.
+3. Submit the repository at <https://packagist.org/packages/submit>.
+4. Enable or verify the GitHub integration for future tags.
+5. Confirm Packagist points to the approved tag.
+
+Finally, test a clean public install without a VCS override:
+
+```sh
+composer require "jkudish/laravel-document-extraction:$composer_version"
+php artisan package:discover --ansi
+php artisan extraction:doctor
+composer show jkudish/laravel-document-extraction --locked
+```
+
+The package must resolve from Packagist and pass the consumer environment's native checks.
