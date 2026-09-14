@@ -114,7 +114,7 @@ Set your default provider and model in `.env`:
 
 ```dotenv
 EXTRACTION_PROVIDER=openai
-EXTRACTION_MODEL=gpt-5
+EXTRACTION_MODEL=gpt-5.6-luna
 ```
 
 Override them for one extraction when needed:
@@ -122,7 +122,7 @@ Override them for one extraction when needed:
 ```php
 $result = Extraction::fromPath($path)->text(
     provider: 'openai',
-    model: 'gpt-5',
+    model: 'gpt-5.6-luna',
 );
 ```
 
