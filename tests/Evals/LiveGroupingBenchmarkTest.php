@@ -23,7 +23,7 @@ use Jkudish\DocumentExtraction\Tests\TestCase;
 use Jkudish\PestAiBenchmarks\LaravelAi\BenchmarkAgentMiddleware;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 
 uses(TestCase::class);
@@ -88,7 +88,7 @@ beforeEach(function (): void {
         return new StructuredTextResponse(
             structured: $structured,
             text: json_encode($structured, JSON_THROW_ON_ERROR),
-            usage: new Usage(promptTokens: 17, completionTokens: 9),
+            usage: new TextUsage(inputTokens: 17, outputTokens: 9),
             meta: new Meta(provider: $provider->name(), model: $model),
         );
     })->preventStrayPrompts();

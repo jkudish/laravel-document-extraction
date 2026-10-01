@@ -11,8 +11,11 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 /** Keeps the checked native provider options identical to those used by the gateway. */
 final class FrozenGenerationOptions extends TextGenerationOptions
 {
+    /** @var array<string, mixed>|null */
+    public readonly ?array $providerOptions;
+
     /** @param array<string, mixed> $providerOptions */
-    public function __construct(TextGenerationOptions $options, private readonly array $providerOptions)
+    public function __construct(TextGenerationOptions $options, array $providerOptions)
     {
         foreach ([
             'model', 'modelId', 'input', 'messages', 'contents', 'system', 'system_instruction', 'instructions', 'prompt',
@@ -38,12 +41,13 @@ final class FrozenGenerationOptions extends TextGenerationOptions
             toolChoice: $options->toolChoice,
             cacheInstructions: $options->cacheInstructions,
             cacheToolDefinitions: $options->cacheToolDefinitions,
+            providerOptions: $providerOptions,
         );
     }
 
     /** @return array<string, mixed> */
     public function providerOptions(Lab|string $provider): array
     {
-        return $this->providerOptions;
+        return $this->providerOptions ?? [];
     }
 }

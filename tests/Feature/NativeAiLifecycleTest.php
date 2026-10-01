@@ -12,11 +12,13 @@ use Jkudish\DocumentExtraction\Exceptions\ConfigurationException;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Gateway\StepResponse;
+use Laravel\Ai\Gateway\StepResult;
+use Laravel\Ai\PendingStep;
 use Laravel\Ai\Promptable;
-use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
-use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 
 final class ReviewLifecycleAgent implements Agent, HasMiddleware, HasStructuredOutput
@@ -47,22 +49,24 @@ final class ReviewPostProcessMiddleware
 {
     public function __construct(private readonly string $text = '{"value":"post-processed"}') {}
 
-    public function handle(AgentPrompt $prompt, Closure $next): mixed
+    public function handle(PendingStep $prompt, Closure $next): mixed
     {
-        $response = $next($prompt);
+        $result = $next($prompt);
+        assert($result instanceof StepResult);
+        $response = $result->response();
 
-        if ($response instanceof StructuredAgentResponse) {
+        if ($response instanceof StepResponse) {
             $response->structured = ['value' => 'post-processed'];
             $response->text = $this->text;
         }
 
-        return $response;
+        return $result;
     }
 }
 
 final class ReviewSlowPostProcessMiddleware
 {
-    public function handle(AgentPrompt $prompt, Closure $next): mixed
+    public function handle(PendingStep $prompt, Closure $next): mixed
     {
         $response = $next($prompt);
 
@@ -74,14 +78,17 @@ final class ReviewSlowPostProcessMiddleware
 
 final class ReviewShortCircuitMiddleware
 {
-    public function handle(AgentPrompt $prompt, Closure $next): StructuredAgentResponse
+    public function __construct(private readonly string $text = '{"value":"short-circuited"}') {}
+
+    public function handle(PendingStep $prompt, Closure $next): StepResponse
     {
-        return new StructuredAgentResponse(
-            $prompt->invocationId ?? 'missing',
-            ['value' => 'short-circuited'],
-            '{"value":"short-circuited"}',
-            new Usage,
-            new Meta('middleware', 'cache'),
+        return new StepResponse(
+            text: $this->text,
+            toolCalls: [],
+            finishReason: FinishReason::Stop,
+            usage: new TextUsage,
+            meta: new Meta('middleware', 'cache'),
+            structured: ['value' => 'short-circuited'],
         );
     }
 }
@@ -92,7 +99,7 @@ final class ReviewPostForwardSameAgentMiddleware
 
     public ?ReviewLifecycleAgent $agent = null;
 
-    public function handle(AgentPrompt $prompt, Closure $next): mixed
+    public function handle(PendingStep $prompt, Closure $next): mixed
     {
         $response = $next($prompt);
 
@@ -198,17 +205,19 @@ it('preserves ordinary post-forward middleware response changes', function (): v
 
 it('honors structured-only middleware edits without repairing invalid original containers', function (string $provider, bool $valid): void {
     $original = '{"value":"old","details":'.($valid ? '{}' : '[]').',"lines":[]}';
-    config()->set('extraction.middleware', [function (AgentPrompt $prompt, Closure $next): mixed {
-        $response = $next($prompt);
-        assert($response instanceof StructuredAgentResponse);
-        $response['value'] = 'new';
+    config()->set('extraction.middleware', [function (PendingStep $prompt, Closure $next): mixed {
+        $result = $next($prompt);
+        assert($result instanceof StepResult);
+        $response = $result->response();
+        assert($response instanceof StepResponse);
+        $response->structured['value'] = 'new';
 
-        return $response;
+        return $result;
     }]);
 
     if ($provider === 'openai') {
         InlineSchemaAgent::fake([new StructuredTextResponse(
-            ['value' => 'old', 'details' => [], 'lines' => []], $original, new Usage, new Meta('openai', 'review-model'),
+            ['value' => 'old', 'details' => [], 'lines' => []], $original, new TextUsage, new Meta('openai', 'review-model'),
         )])->preventStrayPrompts();
     } else {
         config()->set('ai.providers.anthropic.key', 'test-key');
@@ -234,7 +243,7 @@ it('honors structured-only middleware edits without repairing invalid original c
 
 it('does not mistake an existing normalized fake response for a middleware edit', function (): void {
     ReviewLifecycleAgent::fake([new StructuredTextResponse(
-        ['value' => 'normalized-only'], '{"value":"original-json"}', new Usage, new Meta('openai', 'review-model'),
+        ['value' => 'normalized-only'], '{"value":"original-json"}', new TextUsage, new Meta('openai', 'review-model'),
     )])->preventStrayPrompts();
 
     $result = app(DocumentExtraction::class)->fromString('source', 'text/plain')
@@ -245,14 +254,16 @@ it('does not mistake an existing normalized fake response for a middleware edit'
 
 it('keeps original JSON authoritative for unchanged normalized fields during sibling edits', function (array $normalized, bool $valid): void {
     InlineSchemaAgent::fake([new StructuredTextResponse(
-        $normalized, '{"value":"raw-json","edited":"old"}', new Usage, new Meta('openai', 'review-model'),
+        $normalized, '{"value":"raw-json","edited":"old"}', new TextUsage, new Meta('openai', 'review-model'),
     )])->preventStrayPrompts();
-    config()->set('extraction.middleware', [function (AgentPrompt $prompt, Closure $next): mixed {
-        $response = $next($prompt);
-        assert($response instanceof StructuredAgentResponse);
-        $response['edited'] = 'new';
+    config()->set('extraction.middleware', [function (PendingStep $prompt, Closure $next): mixed {
+        $result = $next($prompt);
+        assert($result instanceof StepResult);
+        $response = $result->response();
+        assert($response instanceof StepResponse);
+        $response->structured['edited'] = 'new';
 
-        return $response;
+        return $result;
     }]);
 
     $result = app(DocumentExtraction::class)->fromString('source', 'text/plain')
@@ -271,15 +282,18 @@ it('keeps original JSON authoritative for unchanged normalized fields during sib
 ]);
 
 it('validates explicit structured-only mutations instead of merging removed or invalid fields back', function (array $replacement, bool $valid): void {
+    /** @var array<string, mixed> $replacement */
     InlineSchemaAgent::fake([new StructuredTextResponse(
-        ['value' => 'old', 'details' => []], '{"value":"old","details":{}}', new Usage, new Meta('openai', 'review-model'),
+        ['value' => 'old', 'details' => []], '{"value":"old","details":{}}', new TextUsage, new Meta('openai', 'review-model'),
     )])->preventStrayPrompts();
-    config()->set('extraction.middleware', [function (AgentPrompt $prompt, Closure $next) use ($replacement): mixed {
-        $response = $next($prompt);
-        assert($response instanceof StructuredAgentResponse);
+    config()->set('extraction.middleware', [function (PendingStep $prompt, Closure $next) use ($replacement): mixed {
+        $result = $next($prompt);
+        assert($result instanceof StepResult);
+        $response = $result->response();
+        assert($response instanceof StepResponse);
         $response->structured = $replacement;
 
-        return $response;
+        return $result;
     }]);
 
     $result = app(DocumentExtraction::class)
@@ -317,12 +331,14 @@ it('revalidates changed middleware JSON rather than trusting normalized structur
 it('bounds post-forward middleware output while retaining the completed provider evidence', function (bool $structuredOnly): void {
     config()->set('extraction.limits.retained_output_bytes', 32);
     ReviewLifecycleAgent::fake([['value' => 'provider']])->preventStrayPrompts();
-    $middleware = $structuredOnly ? function (AgentPrompt $prompt, Closure $next): mixed {
-        $response = $next($prompt);
-        assert($response instanceof StructuredAgentResponse);
-        $response['value'] = str_repeat('x', 33);
+    $middleware = $structuredOnly ? function (PendingStep $prompt, Closure $next): mixed {
+        $result = $next($prompt);
+        assert($result instanceof StepResult);
+        $response = $result->response();
+        assert($response instanceof StepResponse);
+        $response->structured['value'] = str_repeat('x', 33);
 
-        return $response;
+        return $result;
     } : new ReviewPostProcessMiddleware(str_repeat('x', 33));
 
     try {
@@ -340,7 +356,7 @@ it('bounds post-forward middleware output while retaining the completed provider
 
 it('retains provider evidence when post-forward middleware raises a configuration failure', function (): void {
     ReviewLifecycleAgent::fake([['value' => 'provider']])->preventStrayPrompts();
-    $middleware = function (AgentPrompt $prompt, Closure $next): never {
+    $middleware = function (PendingStep $prompt, Closure $next): never {
         $next($prompt);
 
         throw ConfigurationException::make('test_configuration', 'Post-forward configuration failure.');
@@ -359,19 +375,24 @@ it('retains provider evidence when post-forward middleware raises a configuratio
     }
 });
 
-it('validates ordinary middleware short-circuit output without inventing provider calls', function (): void {
+it('validates ordinary middleware short-circuit output without inventing provider calls', function (string $text, bool $valid): void {
     $result = app(DocumentExtraction::class)
         ->fromString('source', 'text/plain')
-        ->using(new ReviewLifecycleAgent([new ReviewShortCircuitMiddleware]))
+        ->using(new ReviewLifecycleAgent([new ReviewShortCircuitMiddleware($text)]))
         ->extract();
 
-    expect($result->data)->toBe(['value' => 'short-circuited'])
+    expect($result->data)->toBe($valid ? ['value' => 'short-circuited'] : null)
+        ->and($result->complete())->toBe($valid)
         ->and($result->calls)->toBeEmpty()
         ->and($result->cost->knownByCurrency)->toBeEmpty()
         ->and($result->cost->unpricedCalls)->toBeEmpty()
         ->and($result->cost->complete)->toBeTrue();
     Http::assertNothingSent();
-});
+})->with([
+    'valid JSON' => ['{"value":"short-circuited"}', true],
+    'wrong type despite normalized data' => ['{"value":3}', false],
+    'truncated JSON despite normalized data' => ['{"value":', false],
+]);
 
 it('permits unrelated same-agent calls after the outer gateway returns', function (): void {
     $middleware = new ReviewPostForwardSameAgentMiddleware;

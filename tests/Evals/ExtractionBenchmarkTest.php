@@ -12,7 +12,7 @@ use Jkudish\PestAiBenchmarks\Configuration;
 use Jkudish\PestAiBenchmarks\LaravelAi\BenchmarkAgentMiddleware;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Pest\Evals\Scorers\Scorer;
 use Pest\Evals\Scorers\ScorerResult;
@@ -80,7 +80,7 @@ beforeEach(function (): void {
         return new StructuredTextResponse(
             structured: ['document_type' => 'fixture', 'source_text' => 'fixture source'],
             text: '{"document_type":"fixture","source_text":"fixture source"}',
-            usage: new Usage(promptTokens: 11, completionTokens: 7),
+            usage: new TextUsage(inputTokens: 11, outputTokens: 7),
             meta: new Meta(provider: $provider->name(), model: $model),
         );
     })->preventStrayPrompts();
@@ -117,7 +117,7 @@ benchmark('extracts text through the production package path', function (): arra
     $result = $pending->extract();
 
     expect($result->calls)->toHaveCount(1)
-        ->and($result->calls->sole()->usage?->toArray())->toBe((new Usage(11, 7))->toArray())
+        ->and($result->calls->sole()->usage?->toArray())->toBe((new TextUsage(11, 7))->toArray())
         ->and($result->calls->sole()->cost)->toBeNull()
         ->and($result->cost->knownByCurrency)->toBeEmpty();
 

@@ -4,6 +4,15 @@ All notable changes to Laravel Document Extraction are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Require Laravel AI `^1.0.1` and Laravel AI Pricing `^0.2.1`.
+- Preserve native AI v1 `TextUsage` evidence: `input_tokens` and `output_tokens` are
+  inclusive totals; cache-read, cache-write, and reasoning counts are nullable subsets.
+  Call record usage no longer exposes `prompt_tokens` or `completion_tokens`.
+- Support native per-step middleware (`PendingStep` / `StepResult`), including
+  locally validated short circuits with no invented provider calls, and Anthropic replay blocks.
+
 ## [0.1.0] - 2026-09-14
 
 The first stable release.

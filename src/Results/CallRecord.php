@@ -10,7 +10,7 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Jkudish\LaravelAiPricing\ValueObjects\CostQuote;
 use JsonSerializable;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 /** @implements Arrayable<string, mixed> */
 final readonly class CallRecord implements Arrayable, JsonSerializable
@@ -41,7 +41,7 @@ final readonly class CallRecord implements Arrayable, JsonSerializable
         public ?string $requestedModel = null,
         public ?string $effectiveProvider = null,
         public ?string $effectiveModel = null,
-        public ?Usage $usage = null,
+        public ?TextUsage $usage = null,
         public ?DateTimeImmutable $startedAt = null,
     ) {
         if (trim($stage) === '' || trim($outcome) === '') {

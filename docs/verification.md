@@ -90,6 +90,12 @@ The matrix covers:
 
 The matrix runs in isolated installations. It proves the recorded Linux runtime only. It makes no Windows or macOS support claim.
 
+For the Laravel AI 1.x migration, Laravel 13.30.1 is the lowest secure framework
+version actually tested. The existing 13.23.0 minimum lane is blocked by Composer
+advisory `PKSA-d5tc-s1qs-h781` (CVE-2026-102279), which affects Laravel 13 versions
+before 13.30.0. The package's framework constraints are unchanged; this is not a
+minimum-lane pass. Do not disable Composer advisory protections to run that lane.
+
 Preparation tests use synthetic PDF and image fixtures. The compressed PDF bomb must only run under the suite's Linux memory limits.
 
 ## Faster local testing
