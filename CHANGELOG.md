@@ -4,8 +4,6 @@ All notable changes to Laravel Document Extraction are documented here.
 
 ## [0.2.0] - 2026-10-01
 
-Prepared release candidate; publication is pending.
-
 ### Changed
 
 - Require Laravel AI `^1.0.1` and Laravel AI Pricing `^0.2.1`.

@@ -6,8 +6,7 @@ Laravel Document Extraction works with PDFs, images, uploads, Laravel Storage, s
 
 ## Installation
 
-Version 0.2.0 is prepared for release but has not been published. After publication,
-install it with Composer:
+Install version 0.2 with Composer:
 
 ```sh
 composer require "jkudish/laravel-document-extraction:^0.2.0"
