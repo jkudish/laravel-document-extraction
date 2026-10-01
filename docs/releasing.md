@@ -15,6 +15,13 @@ composer_version="${version#v}"
 
 Never move a published tag. Publish a new version instead.
 
+The pending Laravel AI 1.x upgrade is intended for extraction 0.2.0, with consumer
+constraint `^0.2.0`. Its Laravel / Illuminate floor is `^13.30`: consumers on
+Laravel 13.23–13.29 must patch to at least 13.30.0 because of CVE-2026-102279.
+Include this compatibility boundary in the release notes and require all four
+PHP 8.4/8.5 × minimum 13.30.0/current Laravel 13 matrix cells before release.
+This version recommendation does not authorize a tag or publication.
+
 ## Prepare the candidate
 
 Start after the release-preparation PR is merged. Update the changelog with:

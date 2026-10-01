@@ -15,9 +15,15 @@ composer require "jkudish/laravel-document-extraction:^0.1@beta"
 The package requires:
 
 - PHP 8.4 or 8.5
-- Laravel 13.23 or newer
+- Laravel 13.30.0 or newer within Laravel 13
 - Linux with Imagick, Poppler, and util-linux
 - PHP's Fileinfo, Imagick, Mbstring, and XMLReader extensions
+
+The upcoming extraction 0.2.0 release requires Laravel AI 1.x and Laravel 13.30.0
+or newer. Applications on Laravel 13.23–13.29 must patch Laravel before upgrading;
+those versions are affected by [CVE-2026-102279](https://github.com/advisories/GHSA-jh5r-qr3c-85q8).
+After 0.2.0 is published, use the extraction constraint `^0.2.0`. The installation
+command above still targets the published 0.1.x line, not this unreleased upgrade.
 
 You may publish the configuration and check your server's native tools:
 

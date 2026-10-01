@@ -368,7 +368,7 @@ it('rejects a dirty tree or non-private receipt before status mutation', functio
     }
 })->with(['dirty', 'permissions'])->group('pr-workflow');
 
-it('rejects altered receipt evidence before status mutation', function (): void {
+it('rejects matrix versions outside the secure support policy before status mutation', function (int $cellIndex, string $version): void {
     $harness = workflowHarness();
 
     try {
@@ -378,22 +378,26 @@ it('rejects altered receipt evidence before status mutation', function (): void 
         assert(is_array($matrix));
         $cells = $matrix['cells'] ?? null;
         assert(is_array($cells));
-        $cell = $cells[0] ?? null;
+        $cell = $cells[$cellIndex] ?? null;
         assert(is_array($cell));
-        $cell['laravel'] = '13.24.0';
-        $cells[0] = $cell;
+        $cell['laravel'] = $version;
+        $cells[$cellIndex] = $cell;
         $matrix['cells'] = $cells;
         $receipt['matrix'] = $matrix;
         file_put_contents($result['receiptPath'], json_encode($receipt, JSON_THROW_ON_ERROR));
         chmod($result['receiptPath'], 0600);
 
         expect(fn () => $harness->workflow->signoff($harness->runner->sha))
-            ->toThrow(WorkflowException::class)
+            ->toThrow(WorkflowException::class, 'invalid Laravel version evidence')
             ->and($harness->runner->signoffCalls())->toBe(0);
     } finally {
         $harness->remove();
     }
-})->group('pr-workflow');
+})->with([
+    'minimum below patched boundary' => [0, '13.29.9'],
+    'minimum must be exact, not a later secure patch' => [0, '13.30.1'],
+    'current below patched boundary' => [1, '13.29.9'],
+])->group('pr-workflow');
 
 it('rejects a stale base or runtime before status mutation', function (string $drift): void {
     $harness = workflowHarness();

@@ -56,7 +56,7 @@ final readonly class VerificationPlan
             'laravel' => $laravel,
             'matrix' => [
                 'php' => ['8.4', '8.5'],
-                'laravel' => ['13.23.0', '^13.23'],
+                'laravel' => ['13.30.0', '^13.30'],
             ],
             'authoritativeTests' => '--no-tia',
         ];

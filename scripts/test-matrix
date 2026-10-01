@@ -45,9 +45,9 @@ for php_version in 8.4 8.5; do
         git -C "$target" checkout --quiet --detach HEAD
 
         if [[ "$laravel" == minimum ]]; then
-            framework_constraint='13.23.0'
+            framework_constraint='13.30.0'
         else
-            framework_constraint='^13.23'
+            framework_constraint='^13.30'
         fi
 
         echo "=== PHP $php_version / Laravel $laravel ($framework_constraint) ==="

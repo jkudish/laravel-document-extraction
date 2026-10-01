@@ -7,6 +7,10 @@ All notable changes to Laravel Document Extraction are documented here.
 ### Changed
 
 - Require Laravel AI `^1.0.1` and Laravel AI Pricing `^0.2.1`.
+- Raise the Laravel / Illuminate support floor to `^13.30`, with an exact
+  13.30.0 minimum verification lane. Laravel 13.23–13.29 applications must patch
+  Laravel before adopting extraction 0.2.0; earlier Laravel 13 patches are
+  affected by CVE-2026-102279 / `PKSA-d5tc-s1qs-h781`.
 - Preserve native AI v1 `TextUsage` evidence: `input_tokens` and `output_tokens` are
   inclusive totals; cache-read, cache-write, and reasoning counts are nullable subsets.
   Call record usage no longer exposes `prompt_tokens` or `completion_tokens`.

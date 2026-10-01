@@ -566,9 +566,9 @@ PHP;
             throw new WorkflowException('The compatibility matrix cell does not satisfy the runtime policy.');
         }
 
-        if (($laravelTarget === 'minimum' && $laravel !== '13.23.0')
+        if (($laravelTarget === 'minimum' && $laravel !== '13.30.0')
             || ($laravelTarget === 'current'
-                && (! version_compare($laravel, '13.23.0', '>=') || ! version_compare($laravel, '14.0.0', '<')))) {
+                && (! version_compare($laravel, '13.30.0', '>=') || ! version_compare($laravel, '14.0.0', '<')))) {
             throw new WorkflowException('The compatibility matrix cell has invalid Laravel version evidence.');
         }
     }
