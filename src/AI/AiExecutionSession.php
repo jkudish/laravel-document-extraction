@@ -16,7 +16,7 @@ use Jkudish\LaravelAiPricing\ResponseCostResolver;
 use Jkudish\LaravelAiPricing\ValueObjects\CostQuote;
 use Jkudish\LaravelAiPricing\ValueObjects\Money;
 use Laravel\Ai\Gateway\StepResponse;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Throwable;
 
 final class AiExecutionSession
@@ -226,7 +226,7 @@ final class AiExecutionSession
         return [$provider, $model];
     }
 
-    private function usage(?StepResponse $response): ?Usage
+    private function usage(?StepResponse $response): ?TextUsage
     {
         if ($response === null) {
             return null;
@@ -234,20 +234,22 @@ final class AiExecutionSession
 
         $usage = $response->usage;
         $values = [
-            $usage->promptTokens,
-            $usage->completionTokens,
-            $usage->cacheWriteInputTokens,
+            $usage->inputTokens,
+            $usage->outputTokens,
             $usage->cacheReadInputTokens,
+            $usage->cacheWriteInputTokens,
             $usage->reasoningTokens,
         ];
 
-        if (min($values) < 0 || max($values) === 0) {
-            // Laravel AI defaults every usage field to zero. Without a positive
+        $reported = array_filter($values, static fn (?int $value): bool => $value !== null);
+
+        if (min($reported) < 0 || max($reported) === 0) {
+            // Laravel AI defaults total usage to zero. Without a positive
             // unit there is no portable signal that a provider measured usage.
             return null;
         }
 
-        return new Usage(...$values);
+        return new TextUsage(...$values);
     }
 
     private function cost(

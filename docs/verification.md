@@ -82,13 +82,20 @@ composer test:matrix
 The matrix covers:
 
 - PHP 8.4 and 8.5
-- Laravel 13.23.0 and the newest supported Laravel 13 release
+- Laravel 13.30.0 and the newest supported Laravel 13 release
 - Platform checks
 - Full uncached Pest tests
 - Larastan level 10
 - Native Imagick smoke tests
 
 The matrix runs in isolated installations. It proves the recorded Linux runtime only. It makes no Windows or macOS support claim.
+
+For the extraction 0.2.0 / Laravel AI 1.x migration, the framework support floor
+is `^13.30` and the minimum lane installs exactly 13.30.0. Composer advisory
+[`PKSA-d5tc-s1qs-h781`](https://github.com/advisories/GHSA-jh5r-qr3c-85q8)
+(CVE-2026-102279) affects `>=13.0.0,<13.30.0`. Applications on 13.23–13.29 must
+patch Laravel before adopting this release. Keep Composer advisory protections
+enabled in both minimum and current lanes.
 
 Preparation tests use synthetic PDF and image fixtures. The compressed PDF bomb must only run under the suite's Linux memory limits.
 

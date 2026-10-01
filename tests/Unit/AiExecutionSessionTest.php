@@ -15,7 +15,7 @@ use Jkudish\LaravelAiPricing\ValueObjects\PricingObservation;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 it('prices each returned step once and sums exact subtotals independently by currency', function (): void {
     $quotes = [
@@ -48,9 +48,9 @@ it('prices each returned step once and sums exact subtotals independently by cur
         pricing: new ResponseCostResolver($resolver, new LaravelAiObservationAdapter),
     );
     $responses = [
-        new StepResponse('one', [], FinishReason::Stop, new Usage(1), new Meta('provider', 'model')),
-        new StepResponse('two', [], FinishReason::Stop, new Usage(1), new Meta('provider', 'model')),
-        new StepResponse('three', [], FinishReason::Stop, new Usage(1), new Meta('provider', 'model')),
+        new StepResponse('one', [], FinishReason::Stop, new TextUsage(1), new Meta('provider', 'model')),
+        new StepResponse('two', [], FinishReason::Stop, new TextUsage(1), new Meta('provider', 'model')),
+        new StepResponse('three', [], FinishReason::Stop, new TextUsage(1), new Meta('provider', 'model')),
     ];
 
     foreach ($responses as $index => $response) {

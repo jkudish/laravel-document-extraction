@@ -14,7 +14,7 @@ use Jkudish\LaravelAiPricing\Enums\CostCompleteness;
 use Jkudish\LaravelAiPricing\Enums\PricingSource;
 use Jkudish\LaravelAiPricing\ValueObjects\CostQuote;
 use Jkudish\LaravelAiPricing\ValueObjects\Money;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 it('derives ordinary data and text from its one document without duplicate mutable values', function (): void {
     $documents = collect([new DocumentResult(data: [])]);
@@ -145,7 +145,7 @@ it('distinguishes replayed evidence from new spend and strips pricing from publi
         requestedModel: 'requested-model',
         effectiveProvider: 'effective-provider',
         effectiveModel: 'effective-model',
-        usage: new Usage(2, 3),
+        usage: new TextUsage(2, 3),
         startedAt: new DateTimeImmutable('2026-09-06T00:00:00+00:00'),
     );
     $live = new ExtractionResult(

@@ -14,7 +14,7 @@ use Jkudish\DocumentExtraction\Results\ExtractionError;
 use Jkudish\DocumentExtraction\Results\ExtractionResult;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -268,7 +268,7 @@ final class GroupingBenchmarkCorpus
             return new StructuredTextResponse(
                 structured: $structured,
                 text: json_encode($structured, JSON_THROW_ON_ERROR),
-                usage: new Usage(promptTokens: 13, completionTokens: 5),
+                usage: new TextUsage(inputTokens: 13, outputTokens: 5),
                 meta: new Meta(provider: $provider->name(), model: $model),
             );
         };
@@ -291,7 +291,7 @@ final class GroupingBenchmarkCorpus
             return new StructuredTextResponse(
                 structured: $structured,
                 text: json_encode($structured, JSON_THROW_ON_ERROR),
-                usage: new Usage(promptTokens: 17, completionTokens: 9),
+                usage: new TextUsage(inputTokens: 17, outputTokens: 9, cacheReadInputTokens: 3, cacheWriteInputTokens: 5, reasoningTokens: 7),
                 meta: new Meta(provider: $provider->name(), model: $model),
             );
         };

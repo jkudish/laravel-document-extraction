@@ -34,10 +34,10 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\ObjectSchema;
+use Laravel\Ai\PendingStep;
 use Laravel\Ai\Promptable;
-use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 
 #[Provider('anthropic')]
@@ -84,9 +84,14 @@ final class NativeAuxiliaryAgent implements Agent
 
 final class PrefixNativePrompt
 {
-    public function handle(AgentPrompt $prompt, Closure $next): mixed
+    public function handle(PendingStep $prompt, Closure $next): mixed
     {
-        return $next($prompt->prepend('middleware-prefix'));
+        $messages = $prompt->messages;
+        $message = clone $messages[0];
+        $message->content = 'middleware-prefix'.$message->content;
+        $messages[0] = $message;
+
+        return $next($prompt->withMessages($messages));
     }
 }
 
@@ -94,7 +99,7 @@ final class PromptOtherAgent
 {
     public function __construct(private readonly NativeAuxiliaryAgent $other) {}
 
-    public function handle(AgentPrompt $prompt, Closure $next): mixed
+    public function handle(PendingStep $prompt, Closure $next): mixed
     {
         $this->other->prompt('unrelated nested call', provider: 'openai', model: 'aux-model');
 
@@ -108,7 +113,7 @@ final class PromptSameAgentBeforeForwarding
 
     public ?NativeStructuredAgent $agent = null;
 
-    public function handle(AgentPrompt $prompt, Closure $next): mixed
+    public function handle(PendingStep $prompt, Closure $next): mixed
     {
         if (! $this->nested) {
             $this->nested = true;
@@ -419,7 +424,7 @@ it('rejects swapped empty-object and empty-list identities before associative co
 
 it('preserves an original empty JSON object before associative conversion', function (): void {
     InlineSchemaAgent::fake([
-        new StructuredTextResponse([], '{}', new Usage, new Meta('openai', 'test-model')),
+        new StructuredTextResponse([], '{}', new TextUsage, new Meta('openai', 'test-model')),
     ])->preventStrayPrompts();
 
     $result = app(DocumentExtraction::class)

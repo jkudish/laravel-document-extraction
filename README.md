@@ -15,9 +15,15 @@ composer require "jkudish/laravel-document-extraction:^0.1@beta"
 The package requires:
 
 - PHP 8.4 or 8.5
-- Laravel 13.23 or newer
+- Laravel 13.30.0 or newer within Laravel 13
 - Linux with Imagick, Poppler, and util-linux
 - PHP's Fileinfo, Imagick, Mbstring, and XMLReader extensions
+
+The upcoming extraction 0.2.0 release requires Laravel AI 1.x and Laravel 13.30.0
+or newer. Applications on Laravel 13.23–13.29 must patch Laravel before upgrading;
+those versions are affected by [CVE-2026-102279](https://github.com/advisories/GHSA-jh5r-qr3c-85q8).
+After 0.2.0 is published, use the extraction constraint `^0.2.0`. The installation
+command above still targets the published 0.1.x line, not this unreleased upgrade.
 
 You may publish the configuration and check your server's native tools:
 
@@ -176,6 +182,11 @@ Configured storage adapters, stream wrappers, and executables remain trusted app
 
 Application agents keep their instructions, schema, provider options, attributes, and middleware. Agents with tools or saved conversation history are rejected before document content is sent.
 
+Laravel AI 1.x middleware receives a `PendingStep`, not an `AgentPrompt`. Forward it
+with `$next($step)` and use the returned `StepResult` to inspect or edit a step's
+response. Follow the [Laravel AI upgrade guide](https://github.com/laravel/ai/blob/v1.0.1/UPGRADE.md#upgrading-to-10-from-011)
+when migrating application middleware from 0.11.
+
 Structured extraction requires a provider path that preserves the original JSON response. OpenAI Responses and Anthropic's native and structured-tool paths are covered by offline fixtures. The current Bedrock structured path is rejected because it cannot preserve that response; Bedrock text and OCR are still supported.
 
 ## Results
@@ -203,6 +214,12 @@ Call records keep the requested and effective provider and model, duration, outc
 - Estimates are not provider invoices
 - Faked calls are marked as simulated and are not counted as live spend
 - Your application must persist results when it needs durable records
+
+Call usage is native Laravel AI `TextUsage`: `inputTokens` includes cache reads and
+writes, and `outputTokens` includes reasoning. Optional subset counters remain
+`null` when unreported. Serialized usage uses `input_tokens` and `output_tokens`,
+not the former `prompt_tokens` and `completion_tokens` keys. Pricing partitions
+these inclusive totals rather than charging their subsets twice.
 
 ## Handling errors
 

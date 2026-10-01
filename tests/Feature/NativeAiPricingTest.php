@@ -19,14 +19,14 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
+use Laravel\Ai\Gateway\StepResult;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\PendingStep;
 use Laravel\Ai\Promptable;
-use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
-use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 
 final class PricingEvidenceAgent implements Agent, HasMiddleware, HasStructuredOutput
@@ -55,17 +55,19 @@ final class PricingEvidenceAgent implements Agent, HasMiddleware, HasStructuredO
 
 final class PricingResponseMiddleware
 {
-    public function handle(AgentPrompt $prompt, Closure $next): mixed
+    public function handle(PendingStep $prompt, Closure $next): mixed
     {
-        $response = $next($prompt);
+        $result = $next($prompt);
+        assert($result instanceof StepResult);
+        $response = $result->response();
 
-        if (! $response instanceof StructuredAgentResponse) {
+        if (! $response instanceof StepResponse) {
             throw new LogicException('Pricing test middleware expected a structured response.');
         }
 
         $response->text = '{"value":"middleware"}';
 
-        return $response;
+        return $result;
     }
 }
 
@@ -127,7 +129,7 @@ beforeEach(function (): void {
 
 function evidenceStep(
     string $text,
-    Usage $usage,
+    TextUsage $usage,
     ?string $provider = 'effective-provider',
     ?string $model = 'effective-model',
     FinishReason $finishReason = FinishReason::Stop,
@@ -166,10 +168,15 @@ it('records and prices one returned native attempt with isolated identities and 
     configureEvidencePrice([
         'input_tokens' => ['amount' => '0.100000000000000001'],
         'output_tokens' => ['amount' => '0.010000000000000001'],
+        'cached_input_tokens' => ['amount' => '0.002'],
+        'cache_write_input_tokens' => ['amount' => '0.2'],
         'reasoning_tokens' => ['amount' => '0.001'],
     ]);
+    // 9 uncached + 3 cache-read + 5 cache-write inputs, and 6 ordinary + 7
+    // reasoning outputs: 0.900000000000000009 + 0.006 + 1
+    // + 0.060000000000000006 + 0.007 = 1.973000000000000015.
     $gateway = new EvidenceStepGateway([
-        evidenceStep('{"value":"provider"}', new Usage(2, 3, 0, 0, 4)),
+        evidenceStep('{"value":"provider"}', new TextUsage(17, 13, 3, 5, 7)),
     ]);
     installEvidenceGateway($gateway);
 
@@ -189,20 +196,20 @@ it('records and prices one returned native attempt with isolated identities and 
         ->and([$call->resolvedProvider, $call->resolvedModel])->toBe(['openai', 'requested-model'])
         ->and([$call->effectiveProvider, $call->effectiveModel])->toBe(['effective-provider', 'effective-model'])
         ->and($call->usage?->toArray())->toBe([
-            'prompt_tokens' => 2,
-            'completion_tokens' => 3,
-            'cache_write_input_tokens' => 0,
-            'cache_read_input_tokens' => 0,
-            'reasoning_tokens' => 4,
+            'input_tokens' => 17,
+            'output_tokens' => 13,
+            'cache_read_input_tokens' => 3,
+            'cache_write_input_tokens' => 5,
+            'reasoning_tokens' => 7,
         ])
         ->and($call->startedAt)->not->toBeNull()
         ->and($call->durationMilliseconds)->toBeInt()->toBeGreaterThanOrEqual(0)
         ->and($call->evidenceOrigin)->toBe(EvidenceOrigin::Live)
         ->and($call->cost?->completeness)->toBe(CostCompleteness::Complete)
         ->and($call->cost?->source)->toBe(PricingSource::Configured)
-        ->and((string) $call->cost?->cost?->amount)->toBe('0.234000000000000005')
+        ->and((string) $call->cost?->cost?->amount)->toBe('1.973000000000000015')
         ->and($call->cost?->toArray())->toBe($call->toArray()['cost_quote'])
-        ->and((string) $result->cost->knownByCurrency->get('USD')?->amount)->toBe('0.234000000000000005')
+        ->and((string) $result->cost->knownByCurrency->get('USD')?->amount)->toBe('1.973000000000000015')
         ->and($result->cost->complete)->toBeTrue()
         ->and($result->cost->unpricedCalls)->toBeEmpty();
 
@@ -219,7 +226,7 @@ it('retains usage and a quote once when locally invalid returned JSON is rejecte
         'output_tokens' => ['amount' => '0.01'],
     ]);
     $gateway = new EvidenceStepGateway([
-        evidenceStep('not-json', new Usage(2, 3)),
+        evidenceStep('not-json', new TextUsage(2, 3)),
     ]);
     installEvidenceGateway($gateway);
 
@@ -233,7 +240,7 @@ it('retains usage and a quote once when locally invalid returned JSON is rejecte
         ->and($result->complete())->toBeFalse()
         ->and($result->data)->toBeNull()
         ->and($call->outcome)->toBe('invalid_output')
-        ->and($call->usage?->promptTokens)->toBe(2)
+        ->and($call->usage?->inputTokens)->toBe(2)
         ->and((string) $call->cost?->cost?->amount)->toBe('0.23')
         ->and($result->cost->complete)->toBeTrue();
 });
@@ -242,7 +249,7 @@ it('preserves valid extraction when effective identity or catalog pricing is una
     $gateway = new EvidenceStepGateway([
         evidenceStep(
             '{"value":"safe"}',
-            new Usage(2, 3),
+            new TextUsage(2, 3),
             $effectiveIdentity ? 'effective-provider' : null,
             $effectiveIdentity ? 'effective-model' : null,
         ),
@@ -271,7 +278,7 @@ it('retains an exact partial subtotal while marking its call unpriced', function
         'input_tokens' => ['amount' => '0.100000000000000001'],
     ]);
     $gateway = new EvidenceStepGateway([
-        evidenceStep('{"value":"safe"}', new Usage(2, 3)),
+        evidenceStep('{"value":"safe"}', new TextUsage(2, 3)),
     ]);
     installEvidenceGateway($gateway);
 
@@ -296,7 +303,7 @@ it('does not report a false zero when native usage is the undocumented all-zero 
         'output_tokens' => ['amount' => '0.01'],
     ]);
     $gateway = new EvidenceStepGateway([
-        evidenceStep('{"value":"safe"}', new Usage),
+        evidenceStep('{"value":"safe"}', new TextUsage),
     ]);
     installEvidenceGateway($gateway);
 
@@ -321,7 +328,7 @@ it('keeps mixed known and failed-without-response spend honest across fallback',
     ]);
     $gateway = new EvidenceStepGateway([
         ProviderConnectionException::forProvider('openai'),
-        evidenceStep('{"value":"fallback"}', new Usage(2, 3)),
+        evidenceStep('{"value":"fallback"}', new TextUsage(2, 3)),
     ]);
     installEvidenceGateway($gateway);
 
@@ -352,8 +359,8 @@ it('prices continuation steps exactly once without pricing the aggregate respons
         'output_tokens' => ['amount' => '0.01'],
     ]);
     $gateway = new EvidenceStepGateway([
-        evidenceStep('continued', new Usage(1, 2), finishReason: FinishReason::Continue),
-        evidenceStep('{"value":"done"}', new Usage(3, 4)),
+        evidenceStep('continued', new TextUsage(1, 2), finishReason: FinishReason::Continue),
+        evidenceStep('{"value":"done"}', new TextUsage(3, 4)),
     ]);
     installEvidenceGateway($gateway);
 
@@ -380,7 +387,7 @@ it('keeps provider pricing evidence authoritative across post-forward middleware
         'output_tokens' => ['amount' => '0.01'],
     ]);
     $gateway = new EvidenceStepGateway([
-        evidenceStep('{"value":"provider"}', new Usage(2, 3)),
+        evidenceStep('{"value":"provider"}', new TextUsage(2, 3)),
     ]);
     installEvidenceGateway($gateway);
 
@@ -391,7 +398,13 @@ it('keeps provider pricing evidence authoritative across post-forward middleware
     $call = $result->calls->sole();
 
     expect($result->data)->toBe(['value' => 'middleware'])
-        ->and($call->usage?->toArray())->toBe((new Usage(2, 3))->toArray())
+        ->and($call->usage?->toArray())->toBe([
+            'input_tokens' => 2,
+            'output_tokens' => 3,
+            'cache_read_input_tokens' => null,
+            'cache_write_input_tokens' => null,
+            'reasoning_tokens' => null,
+        ])
         ->and((string) $call->cost?->cost?->amount)->toBe('0.23')
         ->and($result->calls)->toHaveCount(1);
 });
@@ -404,7 +417,7 @@ it('marks native agent fakes as simulated and never prices their synthetic usage
     PricingEvidenceAgent::fake([new StructuredTextResponse(
         ['value' => 'fake'],
         '{"value":"fake"}',
-        new Usage(2, 3),
+        new TextUsage(2, 3),
         new Meta('effective-provider', 'effective-model'),
     )])->preventStrayPrompts();
 
@@ -416,7 +429,7 @@ it('marks native agent fakes as simulated and never prices their synthetic usage
 
     expect($result->evidenceOrigin)->toBe(EvidenceOrigin::Simulated)
         ->and($call->evidenceOrigin)->toBe(EvidenceOrigin::Simulated)
-        ->and($call->usage?->promptTokens)->toBe(2)
+        ->and($call->usage?->inputTokens)->toBe(2)
         ->and($call->cost)->toBeNull()
         ->and($result->cost->knownByCurrency)->toBeEmpty()
         ->and($result->cost->unpricedCalls->all())->toBe([$call->reference()])
@@ -428,15 +441,9 @@ it('reports deterministic and middleware-only execution as zero actual calls and
     if ($shortCircuit) {
         $middleware = new class
         {
-            public function handle(AgentPrompt $prompt, Closure $next): StructuredAgentResponse
+            public function handle(PendingStep $prompt, Closure $next): StepResponse
             {
-                return new StructuredAgentResponse(
-                    $prompt->invocationId ?? 'middleware-only',
-                    ['value' => 'cache'],
-                    '{"value":"cache"}',
-                    new Usage,
-                    new Meta('middleware', 'cache'),
-                );
+                return evidenceStep('{"value":"cache"}', new TextUsage, 'middleware', 'cache');
             }
         };
         $result = app(DocumentExtraction::class)

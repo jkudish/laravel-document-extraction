@@ -86,7 +86,7 @@ $consumer = [
     "require" => [
         "php" => "^8.4",
         "jkudish/laravel-document-extraction" => "0.1.0-beta.1",
-        "laravel/framework" => "^13.23",
+        "laravel/framework" => "^13.30",
     ],
     "require-dev" => [
         "orchestra/testbench" => "^11.2",

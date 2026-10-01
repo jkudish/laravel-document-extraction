@@ -169,12 +169,21 @@ final class GroupingScorecardValidator
                 $effectiveIdentity = $this->object($call['effective_identity'] ?? null, 'call effective identity');
                 $measurementUsage = $this->object($measurement['usage'] ?? null, 'measurement usage');
                 $callUsage = $this->object($call['usage'] ?? null, 'call usage');
+                $nativeV1 = array_key_exists('input_tokens', $callUsage);
                 $expectedUsage = [
-                    'cached_input_tokens' => $callUsage['cache_read_input_tokens'] ?? null,
-                    'input_tokens' => $callUsage['prompt_tokens'] ?? null,
-                    'output_tokens' => $callUsage['completion_tokens'] ?? null,
-                    'reasoning_tokens' => $callUsage['reasoning_tokens'] ?? null,
+                    'cached_input_tokens' => $callUsage['cache_read_input_tokens'] ?? ($nativeV1 ? 0 : null),
+                    'input_tokens' => $nativeV1
+                        ? max(0, ($callUsage['input_tokens'] ?? 0) - ($callUsage['cache_read_input_tokens'] ?? 0) - ($callUsage['cache_write_input_tokens'] ?? 0))
+                        : ($callUsage['prompt_tokens'] ?? null),
+                    'output_tokens' => $callUsage[$nativeV1 ? 'output_tokens' : 'completion_tokens'] ?? null,
+                    'reasoning_tokens' => $callUsage['reasoning_tokens'] ?? ($nativeV1 ? 0 : null),
                 ];
+
+                if ($nativeV1 && ($callUsage['cache_write_input_tokens'] ?? 0) > 0) {
+                    $expectedUsage['cache_write_input_tokens'] = $callUsage['cache_write_input_tokens'];
+                }
+
+                ksort($expectedUsage);
 
                 if ($requestedModel !== $requestedIdentity
                     || $effectiveModel !== $effectiveIdentity

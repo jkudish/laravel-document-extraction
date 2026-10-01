@@ -203,7 +203,7 @@ final class FakeCommandRunner implements CommandRunner
                     'phpTarget' => $php,
                     'laravelTarget' => $laravelTarget,
                     'php' => $php === '8.4' ? '8.4.25' : '8.5.10',
-                    'laravel' => $laravelTarget === 'minimum' ? '13.23.0' : '13.30.1',
+                    'laravel' => $laravelTarget === 'minimum' ? '13.30.0' : '13.30.1',
                     'laravelAi' => '0.11.2',
                     'pricing' => '0.1.0',
                     'interventionImage' => '4.3.2',

@@ -131,16 +131,19 @@ final class AiCallScope
     {
         $this->session->remainingSeconds();
 
-        if ($this->invocationId === null) {
-            // A native middleware short circuit performs no provider dispatch.
-            $this->schema = $this->agent instanceof HasStructuredOutput
-                ? CompiledSchema::fromNative($this->agent->schema(new JsonSchemaTypeFactory))
-                : null;
-        } elseif ($this->invocationId !== $response->invocationId) {
+        if ($this->invocationId !== null && $this->invocationId !== $response->invocationId) {
             throw ConfigurationException::make(
                 'unsupported_agent_reentry',
                 'Extraction agent middleware must not prompt the same agent before forwarding the extraction invocation.',
             );
+        }
+
+        if ($this->startingProvider === null) {
+            // Step middleware can answer after PromptingAgent but before any
+            // StartingStep event or provider dispatch. Validate it locally.
+            $this->schema = $this->agent instanceof HasStructuredOutput
+                ? CompiledSchema::fromNative($this->agent->schema(new JsonSchemaTypeFactory))
+                : null;
         } elseif ($this->result === null) {
             throw ConfigurationException::make(
                 'unattributed_ai_invocation',

@@ -159,8 +159,8 @@ final readonly class ScopedTextGateway implements StepTextGateway
 
         $hasStructuredTool = false;
 
-        foreach ($response->providerContentBlocks as $block) {
-            if (($block['type'] ?? null) === 'tool_use' && ($block['name'] ?? null) === 'output_structured_data') {
+        foreach ($response->replayBlocks as $block) {
+            if (is_array($block) && ($block['type'] ?? null) === 'tool_use' && ($block['name'] ?? null) === 'output_structured_data') {
                 $hasStructuredTool = true;
             }
         }

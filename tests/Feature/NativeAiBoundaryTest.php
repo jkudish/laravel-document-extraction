@@ -15,17 +15,21 @@ use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\Image;
+use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\PendingStep;
 use Laravel\Ai\Promptable;
-use Laravel\Ai\Prompts\AgentPrompt;
 
 final class BoundaryAttachmentMiddleware
 {
-    public function handle(AgentPrompt $prompt, Closure $next): mixed
+    public function handle(PendingStep $prompt, Closure $next): mixed
     {
-        return $next($prompt->withAttachments([
-            ...$prompt->attachments->all(),
+        $message = $prompt->messages[0];
+        assert($message instanceof UserMessage);
+
+        return $next($prompt->withMessages([new UserMessage($message->content ?? '', [
+            ...$message->attachments->all(),
             Image::fromBase64(base64_encode(str_repeat('x', 64)), 'image/png'),
-        ]));
+        ])]));
     }
 }
 

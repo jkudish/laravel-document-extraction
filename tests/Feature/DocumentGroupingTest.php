@@ -16,20 +16,21 @@ use Jkudish\DocumentExtraction\Results\CallRecord;
 use Jkudish\DocumentExtraction\Results\EvidenceOrigin;
 use Jkudish\DocumentExtraction\Results\PageResult;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\PendingStep;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 
 final class GroupingPromptPrefix
 {
     public bool $handled = false;
 
-    public function handle(AgentPrompt $prompt, Closure $next): mixed
+    public function handle(PendingStep $prompt, Closure $next): mixed
     {
         $this->handled = true;
 
-        return $next($prompt->prepend('grouping-middleware'));
+        return $next($prompt->withInstructions('grouping-middleware'.$prompt->instructions));
     }
 }
 
@@ -274,7 +275,7 @@ it('preserves live detector pricing when the extractor is faked', function (): v
     InlineSchemaAgent::fake([new StructuredTextResponse(
         ['value' => 'fake extraction'],
         '{"value":"fake extraction"}',
-        new Usage(2, 3),
+        new TextUsage(2, 3),
         new Meta('openai', 'fixture-model'),
     )])->preventStrayPrompts();
 
