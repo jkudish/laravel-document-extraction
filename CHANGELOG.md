@@ -2,7 +2,9 @@
 
 All notable changes to Laravel Document Extraction are documented here.
 
-## [Unreleased]
+## [0.2.0] - 2026-10-01
+
+Prepared release candidate; publication is pending.
 
 ### Changed
 

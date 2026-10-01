@@ -6,10 +6,11 @@ Laravel Document Extraction works with PDFs, images, uploads, Laravel Storage, s
 
 ## Installation
 
-Install the current beta with Composer:
+Version 0.2.0 is prepared for release but has not been published. After publication,
+install it with Composer:
 
 ```sh
-composer require "jkudish/laravel-document-extraction:^0.1@beta"
+composer require "jkudish/laravel-document-extraction:^0.2.0"
 ```
 
 The package requires:
@@ -19,11 +20,9 @@ The package requires:
 - Linux with Imagick, Poppler, and util-linux
 - PHP's Fileinfo, Imagick, Mbstring, and XMLReader extensions
 
-The upcoming extraction 0.2.0 release requires Laravel AI 1.x and Laravel 13.30.0
+Version 0.2.0 requires Laravel AI 1.x and Laravel 13.30.0
 or newer. Applications on Laravel 13.23–13.29 must patch Laravel before upgrading;
 those versions are affected by [CVE-2026-102279](https://github.com/advisories/GHSA-jh5r-qr3c-85q8).
-After 0.2.0 is published, use the extraction constraint `^0.2.0`. The installation
-command above still targets the published 0.1.x line, not this unreleased upgrade.
 
 You may publish the configuration and check your server's native tools:
 
